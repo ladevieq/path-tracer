@@ -1,0 +1,17 @@
+[
+{
+  "directory": "/home/quentin/Projects/path-tracer/build/src",
+  "command": "/usr/bin/c++  -I/home/quentin/Projects/path-tracer/include  -o CMakeFiles/path-tracer.dir/main.cpp.o -c /home/quentin/Projects/path-tracer/src/main.cpp",
+  "file": "/home/quentin/Projects/path-tracer/src/main.cpp"
+},
+{
+  "directory": "/home/quentin/Projects/path-tracer/build/src",
+  "command": "/usr/bin/c++  -I/home/quentin/Projects/path-tracer/include  -o CMakeFiles/path-tracer.dir/vec3.cpp.o -c /home/quentin/Projects/path-tracer/src/vec3.cpp",
+  "file": "/home/quentin/Projects/path-tracer/src/vec3.cpp"
+},
+{
+  "directory": "/home/quentin/Projects/path-tracer/build/src",
+  "command": "/usr/bin/c++  -I/home/quentin/Projects/path-tracer/include  -o CMakeFiles/path-tracer.dir/color.cpp.o -c /home/quentin/Projects/path-tracer/src/color.cpp",
+  "file": "/home/quentin/Projects/path-tracer/src/color.cpp"
+}
+]

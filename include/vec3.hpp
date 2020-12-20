@@ -26,24 +26,26 @@ class vec3 {
 
     vec3 cross(vec3& vec);
 
-    vec3 unit_vector();
+    vec3 unit();
 
     double x, y, z;
 };
 
-vec3 operator+(vec3& u, vec3& v);
+vec3 lerp(vec3 u, vec3 v, double t);
 
-vec3 operator-(vec3& u, vec3& v);
+vec3 operator+(vec3 u, vec3 v);
 
-vec3 operator*(vec3& u, vec3& v);
+vec3 operator-(vec3 u, vec3 v);
 
-vec3 operator*(vec3& u, double scale);
+vec3 operator*(vec3 u, vec3 v);
 
-vec3 operator*(double scale, vec3& u);
+vec3 operator*(vec3 u, double scale);
 
-vec3 operator/(vec3& u, double scale);
+vec3 operator*(double scale, vec3 u);
 
-std::ostream& operator<<(std::ostream& out, vec3& vec);
+vec3 operator/(vec3 u, double scale);
+
+std::ostream& operator<<(std::ostream& out, vec3 vec);
 
 using point3 = vec3;
 using color = vec3;

@@ -53,34 +53,38 @@ vec3 vec3::cross(vec3& vec) {
             );
 }
 
-vec3 vec3::unit_vector() {
+vec3 vec3::unit() {
     return *this / length();
 }
 
-vec3 operator+(vec3& u, vec3& v) {
+// vec3 lerp(vec3 u, vec3 v, double t) {
+//     return (1.0 - t) 
+// }
+
+vec3 operator+(vec3 u, vec3 v) {
     return vec3(u.x + v.x, u.y + v.y, u.z + v.z);
 }
 
-vec3 operator-(vec3& u, vec3& v) {
+vec3 operator-(vec3 u, vec3 v) {
     return vec3(u.x - v.x, u.y - v.y, u.z - v.z);
 }
 
-vec3 operator*(vec3& u, vec3& v) {
+vec3 operator*(vec3 u, vec3 v) {
     return vec3(u.x * v.x, u.y * v.y, u.z * v.z);
 }
 
-vec3 operator*(vec3& u, double scale) {
+vec3 operator*(vec3 u, double scale) {
     return vec3(u.x * scale, u.y * scale, u.z * scale);
 }
 
-vec3 operator*(double scale, vec3& u) {
+vec3 operator*(double scale, vec3 u) {
     return u * scale;
 }
 
-vec3 operator/(vec3& u, double scale) {
-    return 1.0/scale * u;
+vec3 operator/(vec3 u, double scale) {
+    return (1.0 / scale) * u;
 }
 
-std::ostream& operator<<(std::ostream& out, vec3& vec) {
-    return std::cout << vec.x << ' ' << vec.y << ' ' << vec.z << std::endl;
+std::ostream& operator<<(std::ostream& out, vec3 vec) {
+    return out << vec.x << ' ' << vec.y << ' ' << vec.z << std::endl;
 }

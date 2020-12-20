@@ -1,7 +1,7 @@
 #include "color.hpp"
 
-void write_color(std::ostream& out, color pixel_color) {
-    out << pixel_color.x << ' '
-        << pixel_color.y << ' '
-        << pixel_color.z << ' ';
+void write_color(std::ostream& out, const color& pixel_color) {
+    out << static_cast<uint32_t>(255.0 * pixel_color.x) << ' '
+        << static_cast<uint32_t>(255.0 * pixel_color.y) << ' '
+        << static_cast<uint32_t>(255.0 * pixel_color.z) << std::endl;
 }
