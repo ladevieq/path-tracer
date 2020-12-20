@@ -10,7 +10,7 @@ class vec3 {
 
     vec3(double x, double y, double z);
 
-    void operator-();
+    vec3 operator-() const;
 
     vec3& operator+=(vec3& vec);
 
@@ -18,15 +18,15 @@ class vec3 {
 
     vec3& operator/=(double numerator);
 
-    double length();
+    double length() const;
 
-    double length_sq();
+    double length_sq() const;
 
     double dot(const vec3& vec) const;
 
     vec3 cross(const vec3& vec) const;
 
-    vec3 unit();
+    vec3 unit() const;
 
     double x, y, z;
 };

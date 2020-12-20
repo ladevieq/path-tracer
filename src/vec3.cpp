@@ -4,10 +4,12 @@ vec3::vec3(): x(0.0), y(0.0), z(0.0) {}
 
 vec3::vec3(double x, double y, double z): x(x), y(y), z(z) {}
 
-void vec3::operator-() {
-    x = -x;
-    y = -y;
-    z = -z;
+vec3 vec3::operator-() const {
+    return vec3 {
+        -x,
+        -y,
+        -z
+    };
 }
 
 vec3& vec3::operator+=(vec3& vec) {
@@ -34,11 +36,11 @@ vec3& vec3::operator/=(double numerator) {
     return *this;
 }
 
-double vec3::length() {
+double vec3::length() const {
     return sqrt(length_sq());
 }
 
-double vec3::length_sq() {
+double vec3::length_sq() const {
     return x * x + y * y + z * z;
 }
 
@@ -54,7 +56,7 @@ vec3 vec3::cross(const vec3& vec) const {
     );
 }
 
-vec3 vec3::unit() {
+vec3 vec3::unit() const {
     return *this / length();
 }
 

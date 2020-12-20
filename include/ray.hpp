@@ -8,7 +8,7 @@ class ray {
 
         ray(const point3& origin, const vec3& direction);
 
-        point3 at(double t);
+        point3 at(double t) const;
 
         point3 origin;
         vec3 direction;

@@ -3,6 +3,6 @@
 ray::ray(const point3& origin, const vec3& direction): origin(origin), direction(direction)
 {}
 
-point3 ray::at(double t) {
+point3 ray::at(double t) const {
     return origin + direction * t;
 }
