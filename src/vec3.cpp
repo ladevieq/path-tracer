@@ -12,7 +12,7 @@ vec3 vec3::operator-() const {
     };
 }
 
-vec3& vec3::operator+=(vec3& vec) {
+vec3& vec3::operator+=(vec3 vec) {
     x += vec.x;
     y += vec.y;
     z += vec.z;

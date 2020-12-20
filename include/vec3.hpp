@@ -12,7 +12,7 @@ class vec3 {
 
     vec3 operator-() const;
 
-    vec3& operator+=(vec3& vec);
+    vec3& operator+=(vec3 vec);
 
     vec3& operator*=(double scale);
 
