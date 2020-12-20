@@ -42,17 +42,7 @@ int main() {
     const vec3 vertical { 0.0, viewport_height / height, 0.0 };
 
     // We use a right handed coord system
-    const point3 eye_pos {};
-    const double focal_length = 1.0;
-
-    const point3 viewport_first_pixel {
-        -viewport_width / 2.0,
-        -viewport_height / 2.0,
-        -focal_length
-    };
-
-    const point3 first_pixel = eye_pos + viewport_first_pixel;
-    std::cerr << viewport_first_pixel << std::endl;
+    camera camera { {}, aspect_ratio, 1.0 };
 
     // PPM format header
     std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;
@@ -60,18 +50,14 @@ int main() {
     std::cerr << "Generating image" << std::endl;
 
     for (ssize_t row = height - 1; row >= 0; row--) {
-        std::cerr << row << " lines remaining" << std::endl;
+        // std::cerr << row << " lines remaining" << std::endl;
         for (size_t column = 0; column < width; column++) {
-            vec3 x = horizontal * column;
-            vec3 y = vertical * row;
+            auto u = double(column) / (width - 1.0);
+            auto v = double(row) / (height - 1.0);
+            auto ray = camera.get_ray(u, v);
 
-            vec3 pixel_pos = first_pixel + x + y;
-            vec3 direction = pixel_pos - eye_pos;
-
-            ray ray { eye_pos, direction };
-
-            write_color(std::cout, ray_color(ray, world));
-            // write_color(std::cout, color(direction.unit().y, direction.unit().y, direction.unit().y));
+            write_color(std::cout, ray_color(ray, world), 1.0);
+            // write_color(std::cout, color(ray.direction.unit().y, ray.direction.unit().y, ray.direction.unit().y));
             // write_color(std::cout, color(y.y, y.y, y.y));
         }
     }

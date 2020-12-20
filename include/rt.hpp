@@ -19,10 +19,17 @@ inline double randd(double min, double max) {
     return min + randd() * (max - min);
 }
 
+inline double clamp(double x, double min, double max) {
+    if (x < min) return min;
+    if (x > max) return max;
+    return x;
+}
+
 
 #include "vec3.hpp"
 #include "ray.hpp"
 #include "color.hpp"
 #include "sphere.hpp"
+#include "camera.hpp"
 
 #endif // !__RT_HPP_
