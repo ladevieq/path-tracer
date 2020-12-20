@@ -42,15 +42,16 @@ double vec3::length_sq() {
     return x * x + y * y + z * z;
 }
 
-double vec3::dot(vec3& vec) {
-    return x * vec.x + y + vec.y + z + vec.z;
+double vec3::dot(const vec3& vec) const {
+    return x * vec.x + y * vec.y + z * vec.z;
 }
 
-vec3 vec3::cross(vec3& vec) {
-    return vec3(y * vec.z - z * vec.y,
-                z * vec.x - x * vec.z,
-                x * vec.y - y * vec.y
-            );
+vec3 vec3::cross(const vec3& vec) const {
+    return vec3(
+        y * vec.z - z * vec.y,
+        z * vec.x - x * vec.z,
+        x * vec.y - y * vec.y
+    );
 }
 
 vec3 vec3::unit() {
@@ -74,7 +75,11 @@ vec3 operator*(vec3 u, vec3 v) {
 }
 
 vec3 operator*(vec3 u, double scale) {
-    return vec3(u.x * scale, u.y * scale, u.z * scale);
+    return vec3(
+        u.x * scale,
+        u.y * scale,
+        u.z * scale
+    );
 }
 
 vec3 operator*(double scale, vec3 u) {

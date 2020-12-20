@@ -22,9 +22,9 @@ class vec3 {
 
     double length_sq();
 
-    double dot(vec3& vec);
+    double dot(const vec3& vec) const;
 
-    vec3 cross(vec3& vec);
+    vec3 cross(const vec3& vec) const;
 
     vec3 unit();
 
