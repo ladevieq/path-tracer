@@ -8,7 +8,7 @@ color ray_color(ray& r) {
     auto unit_dir = r.direction.unit();
     auto t = (unit_dir.y + 1.0) * 0.5;
 
-    return (1.0 - t) * color(1.0, 1.0, 1.0) + t * color(0.5, 0.7, 1.0);
+    return lerp(color(1.0, 1.0, 1.0), color(0.5, 0.7, 1.0), t);
 }
 
 int main() {
@@ -47,7 +47,7 @@ int main() {
     std::cerr << "Generating image" << std::endl;
 
     for (ssize_t row = height - 1; row >= 0; row--) {
-        std::cerr << height - row << " lines remaining" << std::endl;
+        std::cerr << row << " lines remaining" << std::endl;
         for (size_t column = 0; column < width; column++) {
             vec3 x = horizontal * column;
             vec3 y = vertical * row;

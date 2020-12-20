@@ -57,9 +57,9 @@ vec3 vec3::unit() {
     return *this / length();
 }
 
-// vec3 lerp(vec3 u, vec3 v, double t) {
-//     return (1.0 - t) 
-// }
+vec3 lerp(vec3 u, vec3 v, double t) {
+    return (1.0 - t) * u + t * v;
+}
 
 vec3 operator+(vec3 u, vec3 v) {
     return vec3(u.x + v.x, u.y + v.y, u.z + v.z);
