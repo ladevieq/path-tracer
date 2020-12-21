@@ -1,6 +1,7 @@
 #include "sphere.hpp"
 
-sphere::sphere(point3 center, double radius) : center(center), radius(radius)
+sphere::sphere(point3 center, double radius, std::shared_ptr<material> material)
+    : center(center), radius(radius), mat_ptr(material)
 {}
 
 bool sphere::hit(const ray& r, double t_min, double t_max, struct hit_info& info) const {
@@ -29,6 +30,7 @@ bool sphere::hit(const ray& r, double t_min, double t_max, struct hit_info& info
 
     info.t = t;
     info.point = r.at(t);
+    info.mat_ptr = mat_ptr;
 
     vec3 out_normal = (info.point - center).unit();
     info.set_face_normal(r, out_normal);

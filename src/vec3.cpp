@@ -61,6 +61,12 @@ vec3 vec3::unit() const {
     return *this / length();
 }
 
+bool vec3::near_zero() const {
+    const auto s = 1e-8;
+
+    return (fabs(x) < s) && (fabs(y) < s) && (fabs(z) < s);
+}
+
 vec3 vec3::random() {
     return vec3 { randd(), randd(), randd() };
 }
@@ -99,6 +105,10 @@ vec3 operator*(double scale, vec3 u) {
 
 vec3 operator/(vec3 u, double scale) {
     return (1.0 / scale) * u;
+}
+
+vec3 reflect(vec3 v, vec3 n) {
+    return v - 2 * v.dot(n) * n;
 }
 
 std::ostream& operator<<(std::ostream& out, vec3 vec) {

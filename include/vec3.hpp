@@ -28,6 +28,8 @@ class vec3 {
 
     vec3 unit() const;
 
+    bool near_zero() const;
+
     static vec3 random();
 
     static vec3 random(double min, double max);
@@ -48,6 +50,8 @@ vec3 operator*(vec3 u, double scale);
 vec3 operator*(double scale, vec3 u);
 
 vec3 operator/(vec3 u, double scale);
+
+vec3 reflect(vec3 v, vec3 n);
 
 std::ostream& operator<<(std::ostream& out, vec3 vec);
 

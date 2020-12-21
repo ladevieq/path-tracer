@@ -10,24 +10,21 @@ color ray_color(ray& r, const hittable& world, uint32_t depth) {
     if (depth <= 0) {
         return color{};
     }
-    sphere sphere { { 0.0, 0.0, -1.0 }, 0.5 };
-
-    auto unit_dir = r.direction.unit();
-    auto t = (unit_dir.y + 1.0) * 0.5;
-
-    auto c = lerp(ground_color, sky_color, t);
 
     struct hit_info info;
     if (world.hit(r, 0.001, infinity, info)) {
-        // point3 target = info.point + info.normal + random_in_unit_sphere();
-        // point3 target = info.point + info.normal + random_unit_vector();
-        point3 target = info.point + info.normal + random_in_hemisphere(info.normal);
-        ray reflect { info.point, target - info.point };
-        c = 0.5 * ray_color(reflect, world, depth - 1);
-        // c = 0.5 * (target - info.point + vec3{ 1.0, 1.0, 1.0 });
+        color attenuation;
+        ray scattered {};
+
+        if (info.mat_ptr->scatter(r, info, attenuation, scattered)) {
+            return attenuation * ray_color(scattered, world, depth - 1);
+        }
+        return color{};
     }
 
-    return c;
+    auto unit_dir = r.direction.unit();
+    auto t = (unit_dir.y + 1.0) * 0.5;
+    return lerp(ground_color, sky_color, t);
 }
 
 int main() {
@@ -42,8 +39,16 @@ int main() {
 
     // World hittable objects
     hittable_list world {};
-    world.add(std::make_shared<sphere>(point3(0,0,-1), 0.5));
-    world.add(std::make_shared<sphere>(point3(0,-100.5,-1), 100));
+
+    auto material_ground = std::make_shared<lambertian>(color(0.8, 0.8, 0.0));
+    auto material_center = std::make_shared<lambertian>(color(0.7, 0.3, 0.3));
+    auto material_left   = std::make_shared<metal>(color(0.8, 0.8, 0.8), 0.3);
+    auto material_right  = std::make_shared<metal>(color(0.8, 0.6, 0.2), 1.0);
+
+    world.add(std::make_shared<sphere>(point3( 0.0, -100.5, -1.0), 100.0, material_ground));
+    world.add(std::make_shared<sphere>(point3( 0.0,    0.0, -1.0),   0.5, material_center));
+    world.add(std::make_shared<sphere>(point3(-1.0,    0.0, -1.0),   0.5, material_left));
+    world.add(std::make_shared<sphere>(point3( 1.0,    0.0, -1.0),   0.5, material_right));
 
     // PPM format header
     std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;

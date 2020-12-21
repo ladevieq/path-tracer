@@ -31,5 +31,8 @@ inline double clamp(double x, double min, double max) {
 #include "color.hpp"
 #include "sphere.hpp"
 #include "camera.hpp"
+#include "material.hpp"
+#include "lambertian.hpp"
+#include "metal.hpp"
 
 #endif // !__RT_HPP_
