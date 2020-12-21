@@ -53,6 +53,8 @@ vec3 operator/(vec3 u, double scale);
 
 vec3 reflect(vec3 v, vec3 n);
 
+vec3 refract(const vec3& uv, const vec3& n, double etai_over_etat);
+
 std::ostream& operator<<(std::ostream& out, vec3 vec);
 
 vec3 random_in_unit_sphere();

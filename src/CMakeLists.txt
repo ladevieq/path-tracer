@@ -11,4 +11,5 @@ add_executable(
     camera.cpp
     lambertian.cpp
     metal.cpp
+    dielectric.cpp
 )
