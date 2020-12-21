@@ -1,4 +1,5 @@
 #include "vec3.hpp"
+#include "rt.hpp"
 
 vec3::vec3(): x(0.0), y(0.0), z(0.0) {}
 
@@ -60,6 +61,14 @@ vec3 vec3::unit() const {
     return *this / length();
 }
 
+vec3 vec3::random() {
+    return vec3 { randd(), randd(), randd() };
+}
+
+vec3 vec3::random(double min, double max) {
+    return vec3 { randd(min, max), randd(min, max), randd(min, max) };
+}
+
 vec3 lerp(vec3 u, vec3 v, double t) {
     return (1.0 - t) * u + t * v;
 }
@@ -94,4 +103,25 @@ vec3 operator/(vec3 u, double scale) {
 
 std::ostream& operator<<(std::ostream& out, vec3 vec) {
     return out << vec.x << ' ' << vec.y << ' ' << vec.z << std::endl;
+}
+
+// TODO: Use something else to find random point onto a sphere
+vec3 random_in_unit_sphere() {
+    while (true) {
+        auto p = vec3::random(-1,1);
+        if (p.length_sq() >= 1) continue;
+        return p;
+    }
+}
+
+vec3 random_unit_vector() {
+    return random_in_unit_sphere().unit();
+}
+
+vec3 random_in_hemisphere(const vec3& normal) {
+    vec3 in_unit_sphere = random_in_unit_sphere();
+    if (in_unit_sphere.dot(normal) > 0.0) // In the same hemisphere as the normal
+        return in_unit_sphere;
+    else
+        return -in_unit_sphere;
 }

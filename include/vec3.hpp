@@ -28,6 +28,10 @@ class vec3 {
 
     vec3 unit() const;
 
+    static vec3 random();
+
+    static vec3 random(double min, double max);
+
     double x, y, z;
 };
 
@@ -46,6 +50,12 @@ vec3 operator*(double scale, vec3 u);
 vec3 operator/(vec3 u, double scale);
 
 std::ostream& operator<<(std::ostream& out, vec3 vec);
+
+vec3 random_in_unit_sphere();
+
+vec3 random_unit_vector();
+
+vec3 random_in_hemisphere(const vec3& normal);
 
 using point3 = vec3;
 using color = vec3;
