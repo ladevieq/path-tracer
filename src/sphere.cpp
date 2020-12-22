@@ -32,7 +32,7 @@ bool sphere::hit(const ray& r, double t_min, double t_max, struct hit_info& info
     info.point = r.at(t);
     info.mat_ptr = mat_ptr;
 
-    vec3 out_normal = (info.point - center).unit();
+    vec3 out_normal = (info.point - center) / radius;
     info.set_face_normal(r, out_normal);
 
     return true;

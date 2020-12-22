@@ -35,7 +35,7 @@ int main() {
     const uint32_t samples_per_pixel = 100;
     const uint32_t max_depth = 100;
 
-    camera camera { { /*-2.0, 2.0, 1.0*/ }, { 0.0, 0.0, -1.0 }, 90.0, aspect_ratio };
+    camera camera { { -2.0, 2.0, 1.0 }, { 0.0, 0.0, -1.0 }, 20.0, aspect_ratio };
 
     // World hittable objects
     hittable_list world {};
@@ -48,7 +48,7 @@ int main() {
     world.add(std::make_shared<sphere>(point3( 0.0, -100.5, -1.0), 100.0, material_ground));
     world.add(std::make_shared<sphere>(point3( 0.0,    0.0, -1.0),   0.5, material_center));
     world.add(std::make_shared<sphere>(point3(-1.0,    0.0, -1.0),   0.5, material_left));
-    world.add(std::make_shared<sphere>(point3(-1.0,    0.0, -1.0),  -0.4, material_left));
+    world.add(std::make_shared<sphere>(point3(-1.0,    0.0, -1.0),  -0.49, material_left));
     world.add(std::make_shared<sphere>(point3( 1.0,    0.0, -1.0),   0.5, material_right));
 
     // PPM format header
