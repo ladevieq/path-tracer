@@ -63,6 +63,8 @@ vec3 random_unit_vector();
 
 vec3 random_in_hemisphere(const vec3& normal);
 
+vec3 random_in_unit_disk();
+
 using point3 = vec3;
 using color = vec3;
 

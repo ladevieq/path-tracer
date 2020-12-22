@@ -143,3 +143,11 @@ vec3 random_in_hemisphere(const vec3& normal) {
     else
         return -in_unit_sphere;
 }
+
+vec3 random_in_unit_disk() {
+    while (true) {
+        auto p = vec3(randd(-1, 1), randd(-1, 1), 0);
+        if (p.length_sq() >= 1) continue;
+        return p;
+    }
+}
