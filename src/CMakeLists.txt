@@ -1,4 +1,5 @@
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${Vulkan_INCLUDE_DIRS})
 
 add_executable(
     path-tracer
@@ -12,4 +13,9 @@ add_executable(
     lambertian.cpp
     metal.cpp
     dielectric.cpp
+    vulkan-loader.cpp
 )
+
+if(UNIX)
+    target_link_libraries(path-tracer ${CMAKE_DL_LIBS})
+endif()
