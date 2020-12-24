@@ -5,4 +5,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(path-tracer VERSION 1.0 LANGUAGES CXX)
 
+find_package(Vulkan REQUIRED)
+
 add_subdirectory(src)
