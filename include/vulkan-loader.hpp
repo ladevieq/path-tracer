@@ -30,13 +30,17 @@
     X(vkGetPhysicalDeviceMemoryProperties)       \
     X(vkCreateDevice)                            \
     X(vkEnumerateDeviceExtensionProperties)      \
+    X(vkCreateDebugUtilsMessengerEXT)            \
+    X(vkDestroyDebugUtilsMessengerEXT)
+
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#define VULKAN_SURFACE_FUNCTIONS                 \
     X(vkDestroySurfaceKHR)                       \
     X(vkGetPhysicalDeviceSurfaceSupportKHR)      \
     X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
     X(vkGetPhysicalDeviceSurfaceFormatsKHR)      \
-    X(vkGetPhysicalDeviceSurfacePresentModesKHR) \
-    X(vkCreateDebugUtilsMessengerEXT)            \
-    X(vkDestroyDebugUtilsMessengerEXT)
+    X(vkGetPhysicalDeviceSurfacePresentModesKHR)
+#endif
 
 #if defined(WINDOWS)
 #define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateWin32SurfaceKHR)
@@ -48,12 +52,7 @@
     X(vkGetDeviceQueue)               \
     X(vkDestroyDevice)                \
     X(vkDeviceWaitIdle)               \
-    X(vkCreateSwapchainKHR)           \
-    X(vkGetSwapchainImagesKHR)        \
-    X(vkAcquireNextImageKHR)          \
-    X(vkDestroySwapchainKHR)          \
     X(vkQueueSubmit)                  \
-    X(vkQueuePresentKHR)              \
     X(vkCreateSemaphore)              \
     X(vkDestroySemaphore)             \
     X(vkCreateCommandPool)            \
@@ -115,6 +114,13 @@
     X(vkDestroyImage)                 \
     X(vkDestroyBuffer)                \
     X(vkDestroyRenderPass)
+
+// Depends on the swapchain extension
+//     X(vkCreateSwapchainKHR)           \
+//     X(vkGetSwapchainImagesKHR)        \
+//     X(vkAcquireNextImageKHR)          \
+//     X(vkDestroySwapchainKHR)          \
+//     X(vkQueuePresentKHR)              \
 
 #define X(name) extern PFN_##name name;
     VULKAN_EXPORTED_FUNCTIONS
