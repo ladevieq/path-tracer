@@ -45,10 +45,10 @@ void Load_##name()                                                              
 VULKAN_APPLICATION_FUNCTIONS
 #undef X
 
-#define X(name)                                                                       \
-void Load_##name(VkInstance _instance)                                            \
+#define X(name)                                                                   \
+void Load_##name(VkInstance instance)                                             \
 {                                                                                 \
-    name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(_instance, #name)); \
+    name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(instance, #name));  \
     if (!name) {                                                                  \
         std::cout << "Cannot load vulkan function " << #name << std::endl;        \
     }                                                                             \
@@ -57,10 +57,10 @@ VULKAN_INSTANCE_FUNCTIONS
 PLATFORM_VULKAN_INSTANCE_FUNCTIONS
 #undef X
 
-#define X(name)                                                                   \
-void Load_##name(VkDevice _device)                                            \
+#define X(name)                                                               \
+void Load_##name(VkDevice device)                                             \
 {                                                                             \
-    name = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(_device, #name)); \
+    name = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(device, #name)); \
     if (!name) {                                                              \
         std::cout << "Cannot load vulkan function " << #name << std::endl;    \
     }                                                                         \
@@ -84,7 +84,7 @@ void load_instance_functions(VkInstance instance) {
 }
 
 void load_device_functions(VkDevice device) {
-#define X(name) void Load_##name(VkDevice _device);
+#define X(name) Load_##name(device);
     VULKAN_DEVICE_FUNCTIONS
 #undef X
 }

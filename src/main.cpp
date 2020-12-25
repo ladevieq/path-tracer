@@ -203,22 +203,25 @@ void create_device() {
     vkGetDeviceQueue(device, compute_queue_index, 0, &compute_queue);
 }
 
-VkComputePipeline compute_pipeline;
+VkPipeline compute_pipeline;
 void create_pipeline() {
-    File* fd = fopen("compute.shader", "r");
+    FILE* f = fopen("compute.spv", "r");
+    if (f == nullptr) {
+        std::cerr << "Cannot open compute shader file !" << std::endl;
+    }
 
-    if (fseek(fd, 0, SEEK_END) != 0) {
+    if (fseek(f, 0, SEEK_END) != 0) {
         exit(1);
     }
 
-    long len = ftell(fd);
-    const uint32_t* compute_shader_code = (uint32_t*) malloc(len * sizeof(uint32_t));
+    long len = ftell(f);
+    const uint32_t* compute_shader_code = (uint32_t*) malloc(len);
 
-    if (fseek(fd, 0, SEEK_SET) != 0) {
+    if (fseek(f, 0, SEEK_SET) != 0) {
         exit(1);
     }
 
-    if (fread((void*) compute_shader_code, len * sizeof(uint32_t), len, fd) != len) {
+    if (fread((void*) compute_shader_code, sizeof(uint32_t), len / sizeof(uint32_t), f) != len / sizeof(uint32_t)) {
         std::cerr << "Reading shader code failed" << std::endl;
         exit(1);
     }
@@ -228,7 +231,7 @@ void create_pipeline() {
     shader_create_info.sType                        = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shader_create_info.pNext                        = nullptr;
     shader_create_info.flags                        = 0;
-    shader_create_info.codeSize                     = len * sizeof(uint32_t);
+    shader_create_info.codeSize                     = len;
     shader_create_info.pCode                        = compute_shader_code;
 
     vkCreateShaderModule(device, &shader_create_info, nullptr, &compute_shader_module);
@@ -278,7 +281,7 @@ void create_pipeline() {
     create_info.layout                              = pipeline_layout;
 
     vkCreateComputePipelines(
-        device, 
+        device,
         VK_NULL_HANDLE,
         1,
         &create_info,
