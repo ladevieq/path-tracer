@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <cstring>
+#include <cstdio>
 
 #include "vulkan-loader.hpp"
 #include "rt.hpp"
@@ -201,9 +203,94 @@ void create_device() {
     vkGetDeviceQueue(device, compute_queue_index, 0, &compute_queue);
 }
 
+VkComputePipeline compute_pipeline;
+void create_pipeline() {
+    File* fd = fopen("compute.shader", "r");
+
+    if (fseek(fd, 0, SEEK_END) != 0) {
+        exit(1);
+    }
+
+    long len = ftell(fd);
+    const uint32_t* compute_shader_code = (uint32_t*) malloc(len * sizeof(uint32_t));
+
+    if (fseek(fd, 0, SEEK_SET) != 0) {
+        exit(1);
+    }
+
+    if (fread((void*) compute_shader_code, len * sizeof(uint32_t), len, fd) != len) {
+        std::cerr << "Reading shader code failed" << std::endl;
+        exit(1);
+    }
+
+    VkShaderModule compute_shader_module;
+    VkShaderModuleCreateInfo shader_create_info     = {};
+    shader_create_info.sType                        = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_create_info.pNext                        = nullptr;
+    shader_create_info.flags                        = 0;
+    shader_create_info.codeSize                     = len * sizeof(uint32_t);
+    shader_create_info.pCode                        = compute_shader_code;
+
+    vkCreateShaderModule(device, &shader_create_info, nullptr, &compute_shader_module);
+
+    VkPipelineShaderStageCreateInfo stage_create_info = {};
+    stage_create_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage_create_info.pNext                         = nullptr;
+    stage_create_info.flags                         = 0;
+    stage_create_info.stage                         = VK_SHADER_STAGE_COMPUTE_BIT;
+    stage_create_info.module                        = compute_shader_module;
+    stage_create_info.pName                         = "main";
+    stage_create_info.pSpecializationInfo           = nullptr;
+
+    VkDescriptorSetLayoutBinding binding            = {};
+    binding.binding                                 = 1;
+    binding.descriptorType                          = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.stageFlags                              = VK_SHADER_STAGE_COMPUTE_BIT;
+    binding.pImmutableSamplers                      = 0;
+
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
+    descriptor_set_layout_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_set_layout_create_info.pNext         = nullptr;
+    descriptor_set_layout_create_info.flags         = 0;
+    descriptor_set_layout_create_info.bindingCount  = 1;
+    descriptor_set_layout_create_info.pBindings     = &binding;
+
+    VkDescriptorSetLayout layout;
+    vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &layout);
+
+    VkPipelineLayoutCreateInfo layout_create_info   = {};
+    layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_create_info.pNext                        = nullptr;
+    layout_create_info.flags                        = 0;
+    layout_create_info.setLayoutCount               = 1;
+    layout_create_info.pSetLayouts                  = &layout;
+    layout_create_info.pushConstantRangeCount       = 0;
+    layout_create_info.pPushConstantRanges          = nullptr;
+
+    VkPipelineLayout pipeline_layout;
+    vkCreatePipelineLayout(device, &layout_create_info, nullptr, &pipeline_layout);
+
+    VkComputePipelineCreateInfo create_info         = {};
+    create_info.sType                               = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    create_info.pNext                               = nullptr;
+    create_info.flags                               = 0;
+    create_info.stage                               = stage_create_info;
+    create_info.layout                              = pipeline_layout;
+
+    vkCreateComputePipelines(
+        device, 
+        VK_NULL_HANDLE,
+        1,
+        &create_info,
+        nullptr,
+        &compute_pipeline
+    );
+}
+
 void init_vk() {
     create_instance();
     create_device();
+    create_pipeline();
 }
 
 int main() {

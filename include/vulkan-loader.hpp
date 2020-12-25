@@ -84,6 +84,7 @@
     X(vkCreateShaderModule)           \
     X(vkCreatePipelineLayout)         \
     X(vkCreateGraphicsPipelines)      \
+    X(vkCreateComputePipelines)       \
     X(vkCreateFence)                  \
     X(vkCreateDescriptorSetLayout)    \
     X(vkCreateDescriptorPool)         \
