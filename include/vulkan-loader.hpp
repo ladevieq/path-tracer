@@ -72,6 +72,7 @@
     X(vkCmdCopyBufferToImage)         \
     X(vkCmdDraw)                      \
     X(vkCmdDrawIndexed)               \
+    X(vkCmdDispatch)                  \
     X(vkCmdEndRenderPass)             \
     X(vkEndCommandBuffer)             \
     X(vkCreateRenderPass)             \
