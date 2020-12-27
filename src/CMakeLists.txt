@@ -14,6 +14,7 @@ add_executable(
     metal.cpp
     dielectric.cpp
     vulkan-loader.cpp
+    utils.cpp
 )
 
 if(UNIX)
