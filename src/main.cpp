@@ -120,7 +120,7 @@ void create_instance() {
     app_info.applicationVersion  = VK_MAKE_VERSION(1, 0, 0);
     app_info.pEngineName         = "gpu-path-tracer";
     app_info.engineVersion       = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion          = VK_API_VERSION_1_0;
+    app_info.apiVersion          = VK_API_VERSION_1_2;
 
 
     const char* layers[1] = {
@@ -141,6 +141,8 @@ void create_instance() {
 
     load_instance_functions(instance);
     create_debugger(instance);
+
+    std::cerr << "Instance ready" << std::endl;
 }
 
 void select_physical_device() {
@@ -201,28 +203,14 @@ void create_device() {
     load_device_functions(device);
 
     vkGetDeviceQueue(device, compute_queue_index, 0, &compute_queue);
+
+    std::cerr << "Device ready" << std::endl;
 }
 
 VkPipeline compute_pipeline;
 void create_pipeline() {
-    FILE* f = fopen("compute.spv", "r");
-    if (f == nullptr) {
-        std::cerr << "Cannot open compute shader file !" << std::endl;
-    }
-
-    if (fseek(f, 0, SEEK_END) != 0) {
-        exit(1);
-    }
-
-    long len = ftell(f);
-    const uint32_t* compute_shader_code = (uint32_t*) malloc(len);
-
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        exit(1);
-    }
-
-    if (fread((void*) compute_shader_code, sizeof(uint32_t), len / sizeof(uint32_t), f) != len / sizeof(uint32_t)) {
-        std::cerr << "Reading shader code failed" << std::endl;
+    std::vector<uint8_t> shader_code = get_shader_code("./shaders/compute.comp.spv");
+    if (shader_code.size() == 0) {
         exit(1);
     }
 
@@ -231,8 +219,8 @@ void create_pipeline() {
     shader_create_info.sType                        = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shader_create_info.pNext                        = nullptr;
     shader_create_info.flags                        = 0;
-    shader_create_info.codeSize                     = len;
-    shader_create_info.pCode                        = compute_shader_code;
+    shader_create_info.codeSize                     = shader_code.size();
+    shader_create_info.pCode                        = (uint32_t*)shader_code.data();
 
     vkCreateShaderModule(device, &shader_create_info, nullptr, &compute_shader_module);
 
@@ -288,6 +276,8 @@ void create_pipeline() {
         nullptr,
         &compute_pipeline
     );
+
+    std::cerr << "Compute pipeline ready" << std::endl;
 }
 
 void init_vk() {
@@ -317,28 +307,31 @@ int main() {
     hittable_list world = random_scene();
 
     // PPM format header
-    std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;
+    // std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;
 
-    std::cerr << "Generating image" << std::endl;
+    // std::cerr << "Generating image" << std::endl;
 
-    for (ssize_t row = height - 1; row >= 0; row--) {
-        std::cerr << row << " lines remaining" << std::endl;
-        for (size_t column = 0; column < width; column++) {
-            color pixel_color;
+    // --------------------------
+    // CPU path tracer loop
+    // -------------------------
+    // for (ssize_t row = height - 1; row >= 0; row--) {
+    //     std::cerr << row << " lines remaining" << std::endl;
+    //     for (size_t column = 0; column < width; column++) {
+    //         color pixel_color;
 
-            for (size_t sample_index = 0; sample_index < samples_per_pixel; sample_index++) {
-                auto u = double(column + randd()) / (width - 1.0);
-                auto v = double(row + randd()) / (height - 1.0);
-                auto ray = camera.get_ray(u, v);
+    //         for (size_t sample_index = 0; sample_index < samples_per_pixel; sample_index++) {
+    //             auto u = double(column + randd()) / (width - 1.0);
+    //             auto v = double(row + randd()) / (height - 1.0);
+    //             auto ray = camera.get_ray(u, v);
 
-                pixel_color += ray_color(ray, world, max_depth);
-            }
+    //             pixel_color += ray_color(ray, world, max_depth);
+    //         }
 
-            write_color(std::cout, pixel_color, samples_per_pixel);
-        }
-    }
+    //         write_color(std::cout, pixel_color, samples_per_pixel);
+    //     }
+    // }
 
-    std::cerr << "Done !" << std::endl;
+    // std::cerr << "Done !" << std::endl;
 
     return 0;
 }
