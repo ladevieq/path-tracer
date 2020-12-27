@@ -4,6 +4,10 @@
 #include <cstdio>
 
 #include "vulkan-loader.hpp"
+
+#define VMA_IMPLEMENTATION
+#include "thirdparty/vk_mem_alloc.h"
+
 #include "rt.hpp"
 #include "hittable_list.hpp"
 
@@ -207,7 +211,9 @@ void create_device() {
     std::cerr << "Device ready" << std::endl;
 }
 
-VkPipeline compute_pipeline;
+VkPipeline compute_pipeline                         = nullptr;
+VkDescriptorSetLayout compute_shader_input_layout   = nullptr;
+VkPipelineLayout compute_pipeline_layout            = nullptr;
 void create_pipeline() {
     std::vector<uint8_t> shader_code = get_shader_code("./shaders/compute.comp.spv");
     if (shader_code.size() == 0) {
@@ -234,8 +240,9 @@ void create_pipeline() {
     stage_create_info.pSpecializationInfo           = nullptr;
 
     VkDescriptorSetLayoutBinding binding            = {};
-    binding.binding                                 = 1;
+    binding.binding                                 = 0;
     binding.descriptorType                          = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.descriptorCount                         = 1;
     binding.stageFlags                              = VK_SHADER_STAGE_COMPUTE_BIT;
     binding.pImmutableSamplers                      = 0;
 
@@ -246,27 +253,25 @@ void create_pipeline() {
     descriptor_set_layout_create_info.bindingCount  = 1;
     descriptor_set_layout_create_info.pBindings     = &binding;
 
-    VkDescriptorSetLayout layout;
-    vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &layout);
+    vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &compute_shader_input_layout);
 
     VkPipelineLayoutCreateInfo layout_create_info   = {};
     layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_create_info.pNext                        = nullptr;
     layout_create_info.flags                        = 0;
     layout_create_info.setLayoutCount               = 1;
-    layout_create_info.pSetLayouts                  = &layout;
+    layout_create_info.pSetLayouts                  = &compute_shader_input_layout;
     layout_create_info.pushConstantRangeCount       = 0;
     layout_create_info.pPushConstantRanges          = nullptr;
 
-    VkPipelineLayout pipeline_layout;
-    vkCreatePipelineLayout(device, &layout_create_info, nullptr, &pipeline_layout);
+    vkCreatePipelineLayout(device, &layout_create_info, nullptr, &compute_pipeline_layout);
 
     VkComputePipelineCreateInfo create_info         = {};
     create_info.sType                               = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     create_info.pNext                               = nullptr;
     create_info.flags                               = 0;
     create_info.stage                               = stage_create_info;
-    create_info.layout                              = pipeline_layout;
+    create_info.layout                              = compute_pipeline_layout;
 
     vkCreateComputePipelines(
         device,
@@ -280,10 +285,142 @@ void create_pipeline() {
     std::cerr << "Compute pipeline ready" << std::endl;
 }
 
+VmaAllocator allocator = nullptr;
+void create_memory_allocator() {
+    VmaAllocatorCreateInfo allocator_info = {};
+    allocator_info.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocator_info.physicalDevice = physical_device;
+    allocator_info.device = device;
+    allocator_info.instance = instance;
+     
+    vmaCreateAllocator(&allocator_info, &allocator);
+}
+
+VkCommandPool command_pool  = nullptr;
+VkCommandBuffer cmd_buf     = nullptr;
+void create_command_buffer() {
+    VkCommandPoolCreateInfo cmd_pool_create_info    = {};
+    cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmd_pool_create_info.pNext                      = nullptr;
+    cmd_pool_create_info.flags                      = 0;
+    cmd_pool_create_info.queueFamilyIndex           = compute_queue_index;
+
+    vkCreateCommandPool(device, &cmd_pool_create_info, nullptr, &command_pool);
+
+    VkCommandBufferAllocateInfo cmd_buf_allocate_info   = {};
+    cmd_buf_allocate_info.sType                         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_buf_allocate_info.pNext                         = nullptr;
+    cmd_buf_allocate_info.commandPool                   = command_pool;
+    cmd_buf_allocate_info.level                         = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_buf_allocate_info.commandBufferCount            = 1;
+
+    vkAllocateCommandBuffers(device, &cmd_buf_allocate_info, &cmd_buf);
+}
+
+VkDescriptorPool descriptor_pool            = nullptr;
+VkDescriptorSet compute_shader_input_set    = nullptr;
+void create_descriptor_set() {
+    VkDescriptorPoolSize descriptor_pool_size               = {};
+    descriptor_pool_size.type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptor_pool_size.descriptorCount                    = 1;
+
+    VkDescriptorPoolCreateInfo descriptor_pool_create_info  = {};
+    descriptor_pool_create_info.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    descriptor_pool_create_info.pNext                       = nullptr;
+    descriptor_pool_create_info.flags                       = 0;
+    descriptor_pool_create_info.maxSets                     = 1;
+    descriptor_pool_create_info.poolSizeCount               = 1;
+    descriptor_pool_create_info.pPoolSizes                  = &descriptor_pool_size;
+
+    vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool);
+
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info    = {};
+    descriptor_set_allocate_info.sType                          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    descriptor_set_allocate_info.pNext                          = nullptr;
+    descriptor_set_allocate_info.descriptorPool                 = descriptor_pool;
+    descriptor_set_allocate_info.descriptorSetCount             = 1;
+    descriptor_set_allocate_info.pSetLayouts                    = &compute_shader_input_layout;
+
+    vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, &compute_shader_input_set);
+}
+
+VkBuffer compute_shader_input_buffer;
+void fill_descriptor_set() {
+    VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    buffer_info.size = 65536;
+    buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+     
+    VmaAllocationCreateInfo alloc_create_info = {};
+    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_create_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+     
+    VmaAllocation allocation;
+    vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_input_buffer, &allocation, nullptr);
+
+    vec3 sphere_position = {};
+    void* mappedData;
+    vmaMapMemory(allocator, allocation, &mappedData);
+    memcpy(mappedData, &sphere_position, sizeof(vec3));
+    vmaUnmapMemory(allocator, allocation);
+
+    VkDescriptorBufferInfo descriptor_buf_info      = {};
+    descriptor_buf_info.buffer                      = compute_shader_input_buffer;
+    descriptor_buf_info.offset                      = 0;
+    descriptor_buf_info.range                       = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet write_descriptor_set       = {};
+    write_descriptor_set.sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor_set.pNext                      = nullptr;
+    write_descriptor_set.dstSet                     = compute_shader_input_set;
+    write_descriptor_set.dstBinding                 = 0;
+    write_descriptor_set.dstArrayElement            = 0;
+    write_descriptor_set.descriptorCount            = 1;
+    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write_descriptor_set.pImageInfo                 = nullptr;
+    write_descriptor_set.pBufferInfo                = &descriptor_buf_info;
+    write_descriptor_set.pTexelBufferView           = nullptr;
+
+    vkUpdateDescriptorSets(device, 1, &write_descriptor_set, 0, nullptr);
+}
+
 void init_vk() {
     create_instance();
     create_device();
     create_pipeline();
+    create_command_buffer();
+    create_descriptor_set();
+    create_memory_allocator();
+    fill_descriptor_set();
+}
+
+void compute() {
+    VkCommandBufferBeginInfo cmd_buf_begin_info = {};
+    cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_buf_begin_info.pNext                    = nullptr;
+    cmd_buf_begin_info.flags                    = 0;
+    cmd_buf_begin_info.pInheritanceInfo         = nullptr;
+
+    vkBeginCommandBuffer(cmd_buf, &cmd_buf_begin_info);
+
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline_layout, 0, 1, &compute_shader_input_set, 0, nullptr);
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
+
+    vkCmdDispatch(cmd_buf, 1, 1, 1);
+
+    vkEndCommandBuffer(cmd_buf);
+
+    VkSubmitInfo submit_info            = {};
+    submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pNext                   = nullptr;
+    submit_info.waitSemaphoreCount      = 0;
+    submit_info.pWaitSemaphores         = nullptr;
+    submit_info.signalSemaphoreCount    = 0;
+    submit_info.pSignalSemaphores       = nullptr;
+    submit_info.commandBufferCount      = 1;
+    submit_info.pCommandBuffers         = &cmd_buf;
+
+    vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE);
 }
 
 int main() {
@@ -294,8 +431,9 @@ int main() {
     const double aspect_ratio = 16.0 / 9.0;
     const size_t width = 1920;
     const size_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 1000;
+    const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 100;
+    std::vector<std::vector<color>> image { height, std::vector<color> { width, color {} } };
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -307,13 +445,24 @@ int main() {
     hittable_list world = random_scene();
 
     // PPM format header
-    // std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;
+    std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;
 
-    // std::cerr << "Generating image" << std::endl;
+    std::cerr << "Generating image" << std::endl;
 
-    // --------------------------
+    compute();
+
+    //-------------------------
+    // GPU path tracer
+    //-------------------------
+    for (ssize_t row = height - 1; row >= 0; row--) {
+        for (size_t column = 0; column < width; column++) {
+            write_color(std::cout, image[row][column], samples_per_pixel);
+        }
+    }
+
+    //---------------------------
     // CPU path tracer loop
-    // -------------------------
+    //--------------------------
     // for (ssize_t row = height - 1; row >= 0; row--) {
     //     std::cerr << row << " lines remaining" << std::endl;
     //     for (size_t column = 0; column < width; column++) {
