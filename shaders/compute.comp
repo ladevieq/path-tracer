@@ -1,7 +1,15 @@
 layout(set = 0, binding = 0) buffer Inputs {
-    vec3 [] positions;
-} spheres_positions;
+    vec3 sky_color;
+    vec3 ground_color;
+    vec3 [1920 * 1080] image;
+};
 
 void main() {
-    spheres_positions.positions[0] = vec3(0.0);
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    uint width = gl_NumWorkGroups.x;
+    uint height = gl_NumWorkGroups.y;
+
+    // image[y * width + x] = vec3(x / width, y / height, 0.0);
+    image[y * width + x] = vec3(255.0, 255.0, 0.0);
 }
