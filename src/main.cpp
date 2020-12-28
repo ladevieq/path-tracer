@@ -344,24 +344,30 @@ void create_descriptor_set() {
     vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, &compute_shader_input_set);
 }
 
+struct path_tracer_data {
+    struct input_data {
+        color sky_color;
+        color ground_color;
+    } inputs;
+    struct output_data {
+        color* image;
+    } outputs;
+};
+struct path_tracer_data* mapped_data;
 VkBuffer compute_shader_input_buffer;
-void fill_descriptor_set() {
-    VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buffer_info.size = 65536;
-    buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+void fill_descriptor_set(path_tracer_data& data) {
+    VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    buffer_info.size                = sizeof(path_tracer_data);
+    buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    alloc_create_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU ;
      
     VmaAllocation allocation;
     vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_input_buffer, &allocation, nullptr);
 
-    vec3 sphere_position = {};
-    void* mappedData;
-    vmaMapMemory(allocator, allocation, &mappedData);
-    memcpy(mappedData, &sphere_position, sizeof(vec3));
-    vmaUnmapMemory(allocator, allocation);
+    vmaMapMemory(allocator, allocation, (void**) &mapped_data);
+    memcpy(mapped_data, &data, sizeof(path_tracer_data));
 
     VkDescriptorBufferInfo descriptor_buf_info      = {};
     descriptor_buf_info.buffer                      = compute_shader_input_buffer;
@@ -390,10 +396,9 @@ void init_vk() {
     create_command_buffer();
     create_descriptor_set();
     create_memory_allocator();
-    fill_descriptor_set();
 }
 
-void compute() {
+void compute(size_t width, size_t height) {
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
     cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_buf_begin_info.pNext                    = nullptr;
@@ -406,7 +411,7 @@ void compute() {
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
 
-    vkCmdDispatch(cmd_buf, 1, 1, 1);
+    vkCmdDispatch(cmd_buf, width, height, 1);
 
     vkEndCommandBuffer(cmd_buf);
 
@@ -421,6 +426,8 @@ void compute() {
     submit_info.pCommandBuffers         = &cmd_buf;
 
     vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE);
+
+    vkDeviceWaitIdle(device);
 }
 
 int main() {
@@ -433,7 +440,7 @@ int main() {
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 100;
-    std::vector<std::vector<color>> image { height, std::vector<color> { width, color {} } };
+    std::vector<color> image { height * width };
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -449,14 +456,20 @@ int main() {
 
     std::cerr << "Generating image" << std::endl;
 
-    compute();
+    struct path_tracer_data data = {
+        .inputs { .sky_color = sky_color, .ground_color = ground_color },
+        .outputs { .image = image.data() }
+    };
+    fill_descriptor_set(data);
+
+    compute(width, height);
 
     //-------------------------
     // GPU path tracer
     //-------------------------
-    for (ssize_t row = height - 1; row >= 0; row--) {
+    for (ssize_t row = 0; row < height; row++) {
         for (size_t column = 0; column < width; column++) {
-            write_color(std::cout, image[row][column], samples_per_pixel);
+            write_color(std::cout, mapped_data->outputs.image[row * width + column], samples_per_pixel);
         }
     }
 
