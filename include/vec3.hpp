@@ -34,7 +34,8 @@ class vec3 {
 
     static vec3 random(double min, double max);
 
-    double x, y, z;
+    float x, y, z;
+    float padding;
 };
 
 vec3 lerp(vec3 u, vec3 v, double t);
