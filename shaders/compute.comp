@@ -10,6 +10,5 @@ void main() {
     uint width = gl_NumWorkGroups.x;
     uint height = gl_NumWorkGroups.y;
 
-    // image[y * width + x] = vec3(x / width, y / height, 0.0);
-    image[y * width + x] = vec3(255.0, 255.0, 0.0);
+    image[y * width + x] = vec3(float (x) / width, float (y) / height, 0.0);
 }

@@ -349,25 +349,25 @@ struct path_tracer_data {
         color sky_color;
         color ground_color;
     } inputs;
-    struct output_data {
-        color* image;
-    } outputs;
+    color output_image[1920 * 1080];
 };
+
 struct path_tracer_data* mapped_data;
 VkBuffer compute_shader_input_buffer;
-void fill_descriptor_set(path_tracer_data& data) {
+void fill_descriptor_set() {
     VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buffer_info.size                = sizeof(path_tracer_data);
+    buffer_info.size                = sizeof(color) * 2 + (sizeof(color) * 1920 * 1080);
     buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU ;
+    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
      
     VmaAllocation allocation;
     vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_input_buffer, &allocation, nullptr);
 
     vmaMapMemory(allocator, allocation, (void**) &mapped_data);
-    memcpy(mapped_data, &data, sizeof(path_tracer_data));
+    std::memcpy(&mapped_data->inputs.sky_color, &sky_color, sizeof(color));
+    std::memcpy(&mapped_data->inputs.ground_color, &ground_color, sizeof(color));
 
     VkDescriptorBufferInfo descriptor_buf_info      = {};
     descriptor_buf_info.buffer                      = compute_shader_input_buffer;
@@ -440,7 +440,6 @@ int main() {
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 100;
-    std::vector<color> image { height * width };
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -450,27 +449,20 @@ int main() {
 
     // World hittable objects
     hittable_list world = random_scene();
+    fill_descriptor_set();
 
     // PPM format header
-    std::cout << "P3\n" << width << '\n' << height << "\n 255" << std::endl;
+    std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;
 
     std::cerr << "Generating image" << std::endl;
-
-    struct path_tracer_data data = {
-        .inputs { .sky_color = sky_color, .ground_color = ground_color },
-        .outputs { .image = image.data() }
-    };
-    fill_descriptor_set(data);
 
     compute(width, height);
 
     //-------------------------
     // GPU path tracer
     //-------------------------
-    for (ssize_t row = 0; row < height; row++) {
-        for (size_t column = 0; column < width; column++) {
-            write_color(std::cout, mapped_data->outputs.image[row * width + column], samples_per_pixel);
-        }
+    for (size_t index = 0; index < height * width; index++) {
+        write_color(std::cout, mapped_data->output_image[index], samples_per_pixel);
     }
 
     //---------------------------
@@ -493,7 +485,7 @@ int main() {
     //     }
     // }
 
-    // std::cerr << "Done !" << std::endl;
+    std::cerr << "Done !" << std::endl;
 
     return 0;
 }
