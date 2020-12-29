@@ -15,6 +15,7 @@ add_executable(
     dielectric.cpp
     vulkan-loader.cpp
     utils.cpp
+    vk-renderer.cpp
 )
 
 if(UNIX)

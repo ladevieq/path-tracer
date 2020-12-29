@@ -35,6 +35,6 @@ inline double clamp(double x, double min, double max) {
 #include "lambertian.hpp"
 #include "metal.hpp"
 #include "dielectric.hpp"
-#include "utils.hpp"
+#include "hittable_list.hpp"
 
 #endif // !__RT_HPP_
