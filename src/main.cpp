@@ -344,19 +344,24 @@ void create_descriptor_set() {
     vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, &compute_shader_input_set);
 }
 
+struct input_data {
+    color sky_color;
+    color ground_color;
+    float viewport_width;
+    float viewport_height;
+    float pad1;
+    float pad2;
+};
 struct path_tracer_data {
-    struct input_data {
-        color sky_color;
-        color ground_color;
-    } inputs;
+    struct input_data inputs;
     color output_image[1920 * 1080];
 };
 
 struct path_tracer_data* mapped_data;
 VkBuffer compute_shader_input_buffer;
-void fill_descriptor_set() {
+void fill_descriptor_set(const input_data& inputs) {
     VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buffer_info.size                = sizeof(color) * 2 + (sizeof(color) * 1920 * 1080);
+    buffer_info.size                = sizeof(path_tracer_data);
     buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
@@ -366,8 +371,7 @@ void fill_descriptor_set() {
     vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_input_buffer, &allocation, nullptr);
 
     vmaMapMemory(allocator, allocation, (void**) &mapped_data);
-    std::memcpy(&mapped_data->inputs.sky_color, &sky_color, sizeof(color));
-    std::memcpy(&mapped_data->inputs.ground_color, &ground_color, sizeof(color));
+    std::memcpy(&mapped_data->inputs, &inputs, sizeof(inputs));
 
     VkDescriptorBufferInfo descriptor_buf_info      = {};
     descriptor_buf_info.buffer                      = compute_shader_input_buffer;
@@ -446,10 +450,16 @@ int main() {
     const double aperture = 0.1;
     const double distance_to_focus = 10;
     camera camera { camera_position, camera_target, 20.0, aspect_ratio, aperture, distance_to_focus };
+    struct input_data inputs = {
+        .sky_color = sky_color,
+        .ground_color = ground_color,
+        .viewport_width = camera.viewport_width,
+        .viewport_height = camera.viewport_height
+    };
 
     // World hittable objects
     hittable_list world = random_scene();
-    fill_descriptor_set();
+    fill_descriptor_set(inputs);
 
     // PPM format header
     std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;

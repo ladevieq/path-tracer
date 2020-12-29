@@ -16,8 +16,8 @@ camera::camera(
     up = forward.cross(right).unit();
 
     auto h = tan(deg_to_rad(v_fov) / 2.0);
-    auto viewport_height = 2.0 * h;
-    auto viewport_width = viewport_height * aspect_ratio;
+    viewport_height = 2.0 * h;
+    viewport_width = viewport_height * aspect_ratio;
 
     horizontal  = focus_dist * viewport_width * right;
     vertical    = focus_dist * viewport_height * up;
