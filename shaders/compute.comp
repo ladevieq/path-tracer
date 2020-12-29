@@ -1,6 +1,9 @@
 layout(set = 0, binding = 0) buffer Inputs {
     vec3 sky_color;
     vec3 ground_color;
+    float viewport_width;
+    float viewport_height;
+    vec2 padding;
     vec3 [1920 * 1080] image;
 };
 
@@ -10,5 +13,8 @@ void main() {
     uint width = gl_NumWorkGroups.x;
     uint height = gl_NumWorkGroups.y;
 
-    image[y * width + x] = vec3(float (x) / width, float (y) / height, 0.0);
+    vec2 uv = vec2(float(x) / width, 1.0 - float(y) / height);
+    vec2 ndc = vec2(uv * 2.0 - 1.0);
+
+    image[y * width + x] = mix(ground_color, sky_color, uv.y);
 }

@@ -19,6 +19,9 @@ class camera {
         point3 position;
         double lens_radius;
 
+        float viewport_width;
+        float viewport_height;
+
         vec3 horizontal;
         vec3 vertical;
 
