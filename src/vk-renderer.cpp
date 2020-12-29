@@ -8,12 +8,14 @@
 #include <vector>
 #include <cstring>
 
-VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT _severity,
-                                             VkDebugUtilsMessageTypeFlagsEXT _type,
-                                             const VkDebugUtilsMessengerCallbackDataEXT *_data,
-                                             void *_userData)
+#define VKRESULT(result) assert(result == VK_SUCCESS);
+
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                             VkDebugUtilsMessageTypeFlagsEXT type,
+                                             const VkDebugUtilsMessengerCallbackDataEXT *data,
+                                             void *userData)
 {
-    std::cerr << _data->pMessage << std::endl;
+    std::cerr << data->pMessage << std::endl;
     return VK_FALSE;
 }
 
@@ -93,7 +95,7 @@ void vkrenderer::create_instance() {
     instance_create_info.enabledExtensionCount      = extensions.size();
     instance_create_info.ppEnabledExtensionNames    = extensions.data();
 
-    vkCreateInstance(&instance_create_info, nullptr, &instance);
+    VKRESULT(vkCreateInstance(&instance_create_info, nullptr, &instance))
 
     load_instance_functions(instance);
 
@@ -115,12 +117,12 @@ void vkrenderer::create_debugger() {
         nullptr,
     };
 
-    vkCreateDebugUtilsMessengerEXT(
+    VKRESULT(vkCreateDebugUtilsMessengerEXT(
         instance,
         &debugUtilsMessengeCreateInfo,
         nullptr,
         &debugMessenger
-    );
+    ))
 }
 
 void vkrenderer::create_device() {
@@ -145,7 +147,7 @@ void vkrenderer::create_device() {
     device_create_info.enabledExtensionCount    = 0; // None yet
     device_create_info.enabledLayerCount        = 0; // Deprecated https://www.khronos.org/registry/vulkan/specs/1.2/html/chap31.html#extendingvulkan-layers-devicelayerdeprecation
 
-    vkCreateDevice(physical_device, &device_create_info, nullptr, &device);
+    VKRESULT(vkCreateDevice(physical_device, &device_create_info, nullptr, &device))
 
     load_device_functions(device);
 
@@ -168,7 +170,7 @@ void vkrenderer::create_pipeline() {
     shader_create_info.codeSize                     = shader_code.size();
     shader_create_info.pCode                        = (uint32_t*)shader_code.data();
 
-    vkCreateShaderModule(device, &shader_create_info, nullptr, &compute_shader_module);
+    VKRESULT(vkCreateShaderModule(device, &shader_create_info, nullptr, &compute_shader_module))
 
     VkPipelineShaderStageCreateInfo stage_create_info = {};
     stage_create_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -193,7 +195,7 @@ void vkrenderer::create_pipeline() {
     descriptor_set_layout_create_info.bindingCount  = 1;
     descriptor_set_layout_create_info.pBindings     = &binding;
 
-    vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &compute_shader_input_layout);
+    VKRESULT(vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &compute_shader_input_layout))
 
     VkPipelineLayoutCreateInfo layout_create_info   = {};
     layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -204,7 +206,7 @@ void vkrenderer::create_pipeline() {
     layout_create_info.pushConstantRangeCount       = 0;
     layout_create_info.pPushConstantRanges          = nullptr;
 
-    vkCreatePipelineLayout(device, &layout_create_info, nullptr, &compute_pipeline_layout);
+    VKRESULT(vkCreatePipelineLayout(device, &layout_create_info, nullptr, &compute_pipeline_layout))
 
     VkComputePipelineCreateInfo create_info         = {};
     create_info.sType                               = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -213,14 +215,14 @@ void vkrenderer::create_pipeline() {
     create_info.stage                               = stage_create_info;
     create_info.layout                              = compute_pipeline_layout;
 
-    vkCreateComputePipelines(
+    VKRESULT(vkCreateComputePipelines(
         device,
         VK_NULL_HANDLE,
         1,
         &create_info,
         nullptr,
         &compute_pipeline
-    );
+    ))
 
     std::cerr << "Compute pipeline ready" << std::endl;
 }
@@ -242,7 +244,7 @@ void vkrenderer::create_command_buffer() {
     cmd_pool_create_info.flags                      = 0;
     cmd_pool_create_info.queueFamilyIndex           = compute_queue_index;
 
-    vkCreateCommandPool(device, &cmd_pool_create_info, nullptr, &command_pool);
+    VKRESULT(vkCreateCommandPool(device, &cmd_pool_create_info, nullptr, &command_pool))
 
     VkCommandBufferAllocateInfo cmd_buf_allocate_info   = {};
     cmd_buf_allocate_info.sType                         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -266,7 +268,7 @@ void vkrenderer::create_descriptor_set() {
     descriptor_pool_create_info.poolSizeCount               = 1;
     descriptor_pool_create_info.pPoolSizes                  = &descriptor_pool_size;
 
-    vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool);
+    VKRESULT(vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
 
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info    = {};
     descriptor_set_allocate_info.sType                          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;

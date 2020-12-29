@@ -115,26 +115,6 @@ int main() {
         write_color(std::cout, output_image[index], samples_per_pixel);
     }
 
-    //---------------------------
-    // CPU path tracer loop
-    //--------------------------
-    // for (ssize_t row = height - 1; row >= 0; row--) {
-    //     std::cerr << row << " lines remaining" << std::endl;
-    //     for (size_t column = 0; column < width; column++) {
-    //         color pixel_color;
-
-    //         for (size_t sample_index = 0; sample_index < samples_per_pixel; sample_index++) {
-    //             auto u = double(column + randd()) / (width - 1.0);
-    //             auto v = double(row + randd()) / (height - 1.0);
-    //             auto ray = camera.get_ray(u, v);
-
-    //             pixel_color += ray_color(ray, world, max_depth);
-    //         }
-
-    //         write_color(std::cout, pixel_color, samples_per_pixel);
-    //     }
-    // }
-
     std::cerr << "Done !" << std::endl;
 
     return 0;
