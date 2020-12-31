@@ -9,11 +9,14 @@
 struct input_data {
     color sky_color;
     color ground_color;
+    vec3 camera_pos;
 
     float viewport_width;
     float viewport_height;
-    float pad1;
-    float pad2;
+    float proj_plane_distance;
+    float pad;
+
+    vec3 sphere_position;
 };
 struct path_tracer_data {
     struct input_data inputs;

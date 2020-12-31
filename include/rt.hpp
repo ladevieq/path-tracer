@@ -4,22 +4,22 @@
 #include <limits>
 #include <cstdlib>
 
-const double pi = 3.1415926535897932385;
-const double infinity = std::numeric_limits<double>::infinity();
+const float pi = 3.1415926535897932385f;
+const float infinity = std::numeric_limits<float>::infinity();
 
-inline double deg_to_rad(double deg) {
+inline float deg_to_rad(float deg) {
     return deg * pi / 180.0;
 }
 
-inline double randd() {
+inline float randd() {
     return rand() / (RAND_MAX + 1.0);
 }
 
-inline double randd(double min, double max) {
+inline float randd(float min, float max) {
     return min + randd() * (max - min);
 }
 
-inline double clamp(double x, double min, double max) {
+inline float clamp(float x, float min, float max) {
     if (x < min) return min;
     if (x > max) return max;
     return x;
