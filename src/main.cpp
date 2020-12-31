@@ -81,20 +81,26 @@ int main() {
     vkrenderer renderer {};
 
     // Image dimensions
-    const double aspect_ratio = 16.0 / 9.0;
+    const float aspect_ratio = 16.0 / 9.0;
     const size_t width = 1920;
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 100;
 
-    const vec3 camera_position{ 13.0, 2.0, 3.0 };
-    const vec3 camera_target{ 0.0, 0.0, 0.0 };
+    // const vec3 camera_position{ 13.0, 2.0, 3.0 };
+    const vec3 camera_position{ 0.0, 0.0, 0.0 };
+    const vec3 camera_target{ 0.0, 0.0, 1.0 };
     const double aperture = 0.1;
     const double distance_to_focus = 10;
     camera camera { camera_position, camera_target, 20.0, aspect_ratio, aperture, distance_to_focus };
     struct input_data inputs = {
         .sky_color = sky_color,
         .ground_color = ground_color,
+        .camera_pos = camera_position,
+        .viewport_width = 2.f * aspect_ratio,
+        .viewport_height = 2.f,
+        .proj_plane_distance = 1.f,
+        .sphere_position = { 0.f, 0.f, -1.f },
     };
 
     // World hittable objects

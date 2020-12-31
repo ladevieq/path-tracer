@@ -8,21 +8,21 @@ class vec3 {
     public:
     vec3();
 
-    vec3(double x, double y, double z);
+    vec3(float x, float y, float z);
 
     vec3 operator-() const;
 
     vec3& operator+=(vec3 vec);
 
-    vec3& operator*=(double scale);
+    vec3& operator*=(float scale);
 
-    vec3& operator/=(double numerator);
+    vec3& operator/=(float numerator);
 
-    double length() const;
+    float length() const;
 
-    double length_sq() const;
+    float length_sq() const;
 
-    double dot(const vec3& vec) const;
+    float dot(const vec3& vec) const;
 
     vec3 cross(const vec3& vec) const;
 
@@ -32,13 +32,13 @@ class vec3 {
 
     static vec3 random();
 
-    static vec3 random(double min, double max);
+    static vec3 random(float min, float max);
 
     float x, y, z;
     float padding;
 };
 
-vec3 lerp(vec3 u, vec3 v, double t);
+vec3 lerp(vec3 u, vec3 v, float t);
 
 vec3 operator+(vec3 u, vec3 v);
 
@@ -46,15 +46,15 @@ vec3 operator-(vec3 u, vec3 v);
 
 vec3 operator*(vec3 u, vec3 v);
 
-vec3 operator*(vec3 u, double scale);
+vec3 operator*(vec3 u, float scale);
 
-vec3 operator*(double scale, vec3 u);
+vec3 operator*(float scale, vec3 u);
 
-vec3 operator/(vec3 u, double scale);
+vec3 operator/(vec3 u, float scale);
 
 vec3 reflect(vec3 v, vec3 n);
 
-vec3 refract(const vec3& uv, const vec3& n, double etai_over_etat);
+vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat);
 
 std::ostream& operator<<(std::ostream& out, vec3 vec);
 

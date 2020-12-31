@@ -1,11 +1,34 @@
+struct ray {
+    vec3 origin;
+    vec3 direction;
+};
+
 layout(set = 0, binding = 0) buffer Inputs {
-    vec3 sky_color;
-    vec3 ground_color;
+    vec4 sky_color;
+    vec4 ground_color;
+    vec4 camera_pos;
+
     float viewport_width;
     float viewport_height;
-    vec2 padding;
-    vec3 [1920 * 1080] image;
+    float proj_plane_distance;
+    float padding;
+
+    vec4 sphere_position;
+
+    vec4 [1920 * 1080] image;
 };
+
+bool hit_sphere(vec3 position, float radius, ray r) {
+    // Vector from the ray origin to sphere position
+    vec3 origin_center = r.origin - position;
+
+    float a = dot(r.direction, r.direction);
+    float half_b = dot(r.direction, origin_center);
+    float c = dot(origin_center, origin_center) - radius * radius;
+    float discriminant = half_b * half_b - a * c;
+
+    return (discriminant > 0);
+}
 
 void main() {
     uint x = gl_GlobalInvocationID.x;
@@ -13,8 +36,16 @@ void main() {
     uint width = gl_NumWorkGroups.x;
     uint height = gl_NumWorkGroups.y;
 
-    vec2 uv = vec2(float(x) / width, 1.0 - float(y) / height);
-    vec2 ndc = vec2(uv * 2.0 - 1.0);
+    vec2 uv = vec2(float(x) / (width - 1), float(y) / (height - 1));
 
-    image[y * width + x] = mix(ground_color, sky_color, uv.y);
+    vec3 first = camera_pos.xyz - vec3(viewport_width / 2.0, viewport_height / 2.0, proj_plane_distance);
+    vec3 proj_plane_pos = first + vec3(uv.x * viewport_width, uv.y * viewport_height, 0.0);
+
+    ray r = ray(camera_pos.xyz, proj_plane_pos - camera_pos.xyz);
+    if (hit_sphere(sphere_position.xyz, 0.5, r)) {
+        image[y * width + x] = vec4(1.0, 0.0, 0.0, 0.0);
+        return;
+    }
+
+    image[y * width + x] = mix(sky_color, ground_color, uv.y);
 }
