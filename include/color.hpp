@@ -5,6 +5,6 @@
 
 #include "vec3.hpp"
 
-void write_color(std::ostream& out, const color& pixel_color, uint32_t samples_per_pixel);
+void write_color(std::ostream& out, const color& pixel_color);
 
 #endif // !__COLOR_HPP_
