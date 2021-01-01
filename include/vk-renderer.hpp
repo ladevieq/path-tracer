@@ -18,9 +18,10 @@ struct input_data {
 
     vec3 sphere_position;
 };
+
 struct path_tracer_data {
     struct input_data inputs;
-    color output_image[1920 * 1080];
+    color first_pixel;
 };
 
 class vkrenderer {
@@ -50,7 +51,7 @@ class vkrenderer {
 
         void select_compute_queue();
 
-        void fill_descriptor_set(const input_data& data);
+        void fill_descriptor_set(const input_data& data, size_t width, size_t height);
 
         uint32_t            compute_queue_index;
 
