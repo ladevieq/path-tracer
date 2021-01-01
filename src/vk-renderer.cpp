@@ -32,7 +32,7 @@ vkrenderer::vkrenderer() {
 }
 
 void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) {
-    fill_descriptor_set(inputs);
+    fill_descriptor_set(inputs, width, height);
 
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
     cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -66,7 +66,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
 }
 
 const color* const vkrenderer::output_image() {
-    return mapped_data->output_image;
+    return &mapped_data->first_pixel;
 }
 
 
@@ -313,9 +313,9 @@ void vkrenderer::select_compute_queue() {
     exit(1);
 }
 
-void vkrenderer::fill_descriptor_set(const input_data& inputs) {
+void vkrenderer::fill_descriptor_set(const input_data& inputs, size_t width, size_t height) {
     VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buffer_info.size                = sizeof(path_tracer_data);
+    buffer_info.size                = sizeof(struct input_data) + sizeof(color) * width * height;
     buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
