@@ -11,10 +11,12 @@ struct input_data {
     color ground_color;
     vec3 camera_pos;
 
+    uint32_t samples_per_pixel;
     float viewport_width;
     float viewport_height;
     float proj_plane_distance;
-    float pad;
+
+    float random_numbers[200];
 
     struct sphere {
         vec3 position;

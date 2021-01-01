@@ -15,24 +15,26 @@ struct sphere {
     float radius;
 };
 
-vec3 at(ray r, float t) {
-    return r.origin + r.direction * t;
-}
-
 layout(set = 0, binding = 0) buffer Inputs {
     vec4 sky_color;
     vec4 ground_color;
     vec4 camera_pos;
 
+    uint samples_per_pixel;
     float viewport_width;
     float viewport_height;
     float proj_plane_distance;
-    float padding;
+
+    float[200] random_numbers;
 
     sphere s;
 
     vec4[] image;
 };
+
+vec3 at(ray r, float t) {
+    return r.origin + r.direction * t;
+}
 
 bool hit_sphere(ray r, out hit_info info) {
     // Vector from the ray origin to sphere position
@@ -65,20 +67,26 @@ void main() {
     uint height = gl_NumWorkGroups.y;
 
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
-
     vec3 first = camera_pos.xyz - vec3(viewport_width / 2.0, viewport_height / 2.0, proj_plane_distance);
-    vec3 proj_plane_pos = first + vec3(uv.x * viewport_width, uv.y * viewport_height, 0.0);
 
-    ray r = ray(camera_pos.xyz, proj_plane_pos - camera_pos.xyz);
-    hit_info info;
+    image[y * width + x] = vec4(0.0);
 
-    if (hit_sphere(r, info)) {
-        vec3 hit_normal = normalize(info.normal);
-        hit_normal = (hit_normal + 1.0) * 0.5;
+    for (uint sample_index = 0; sample_index < samples_per_pixel; sample_index++) {
+        vec2 jittered_uvs = uv + vec2(random_numbers[sample_index * 2] / (width - 1), random_numbers[sample_index * 2 + 1] / (height - 1));
+        vec3 proj_plane_pos = first + vec3(jittered_uvs.x * viewport_width, jittered_uvs.y * viewport_height, 0.0);
 
-        image[y * width + x] = vec4(hit_normal, 0.0);
-        return;
+        ray r = ray(camera_pos.xyz, proj_plane_pos - camera_pos.xyz);
+        hit_info info;
+
+        if (hit_sphere(r, info)) {
+            vec3 hit_normal = normalize(info.normal);
+            hit_normal = (hit_normal + 1.0) * 0.5;
+
+            image[y * width + x] += vec4(hit_normal, 0.0);
+        } else {
+            image[y * width + x] += mix(ground_color, sky_color, uv.y);
+        }
     }
 
-    image[y * width + x] = mix(ground_color, sky_color, uv.y);
+    image[y * width + x] /= samples_per_pixel;
 }

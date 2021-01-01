@@ -85,7 +85,7 @@ int main() {
     const float aspect_ratio = 1.0 / 1.0;
     const size_t width = 400;
     const size_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 1;
+    const uint32_t samples_per_pixel = 100;
     const uint32_t max_depth = 100;
 
     // const vec3 camera_position{ 13.0, 2.0, 3.0 };
@@ -98,12 +98,17 @@ int main() {
         .sky_color = sky_color,
         .ground_color = ground_color,
         .camera_pos = camera_position,
+        .samples_per_pixel = samples_per_pixel,
         .viewport_width = 2.f * aspect_ratio,
         .viewport_height = 2.f,
         .proj_plane_distance = 1.f,
         .sphere = { { 0.f, 0.f, -1.f }, 0.5f },
         // .sphere = { { 0.f, -100.5f, -1.f }, 100.f },
     };
+
+    for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index++) {
+        inputs.random_numbers[rand_number_index] = randd();
+    }
 
     // World hittable objects
     hittable_list world = random_scene();
@@ -120,7 +125,7 @@ int main() {
     //-------------------------
     auto output_image = renderer.output_image();
     for (size_t index = 0; index < height * width; index++) {
-        write_color(std::cout, output_image[index], samples_per_pixel);
+        write_color(std::cout, output_image[index]);
     }
 
     std::cerr << "Done !" << std::endl;
