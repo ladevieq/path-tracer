@@ -16,7 +16,11 @@ struct input_data {
     float proj_plane_distance;
     float pad;
 
-    vec3 sphere_position;
+    struct sphere {
+        vec3 position;
+        float radius;
+        float padding[3];
+    } sphere;
 };
 
 struct path_tracer_data {
