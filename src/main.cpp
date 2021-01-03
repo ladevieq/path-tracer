@@ -81,9 +81,9 @@ int main() {
     vkrenderer renderer {};
 
     // Image dimensions
-    // const float aspect_ratio = 16.0 / 9.0;
-    const float aspect_ratio = 1.0;
-    const size_t width = 400;
+    const float aspect_ratio = 16.0 / 9.0;
+    // const float aspect_ratio = 1.0;
+    const size_t width = 1920;
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 100;
     const uint32_t max_depth = 100;
@@ -106,11 +106,15 @@ int main() {
             { { 0.f, 0.f, -1.f }, { { 0.f, 0.f, 1.f }, }, 0.5f },
             { { 0.f, -100.5f, -1.f }, { { 0.f, 1.f, 0.f }, }, 100.f }
         },
-        .max_bounce = 50,
+        .max_bounce = max_depth,
     };
 
     for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index++) {
         inputs.random_numbers[rand_number_index] = randd();
+    }
+
+    for (size_t rand_number_index = 0; rand_number_index < max_depth * 10; rand_number_index++) {
+        inputs.random_in_sphere[rand_number_index] = random_in_unit_sphere();
     }
 
     // World hittable objects
