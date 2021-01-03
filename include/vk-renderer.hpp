@@ -17,6 +17,7 @@ struct input_data {
     float proj_plane_distance;
 
     float random_numbers[200];
+    vec3 random_in_sphere[1000];
 
     struct sphere {
         vec3 position;
