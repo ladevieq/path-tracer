@@ -20,9 +20,15 @@ struct input_data {
 
     struct sphere {
         vec3 position;
+        struct material {
+            color albedo;
+        } material;
         float radius;
         float padding[3];
-    } sphere;
+    } spheres[2];
+
+    uint32_t max_bounce;
+    float padding[3];
 };
 
 struct path_tracer_data {

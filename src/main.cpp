@@ -82,7 +82,7 @@ int main() {
 
     // Image dimensions
     // const float aspect_ratio = 16.0 / 9.0;
-    const float aspect_ratio = 1.0 / 1.0;
+    const float aspect_ratio = 1.0;
     const size_t width = 400;
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 100;
@@ -102,8 +102,11 @@ int main() {
         .viewport_width = 2.f * aspect_ratio,
         .viewport_height = 2.f,
         .proj_plane_distance = 1.f,
-        .sphere = { { 0.f, 0.f, -1.f }, 0.5f },
-        // .sphere = { { 0.f, -100.5f, -1.f }, 100.f },
+        .spheres = { 
+            { { 0.f, 0.f, -1.f }, { { 0.f, 0.f, 1.f }, }, 0.5f },
+            { { 0.f, -100.5f, -1.f }, { { 0.f, 1.f, 0.f }, }, 100.f }
+        },
+        .max_bounce = 50,
     };
 
     for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index++) {
