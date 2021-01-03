@@ -10,9 +10,15 @@ struct hit_info {
     bool front_face;
 };
 
+struct material {
+    vec4 color;
+};
+
 struct sphere {
     vec4 position;
+    material mat;
     float radius;
+    float[3] padding;
 };
 
 layout(set = 0, binding = 0) buffer Inputs {
@@ -27,7 +33,10 @@ layout(set = 0, binding = 0) buffer Inputs {
 
     float[200] random_numbers;
 
-    sphere s;
+    sphere[2] spheres;
+
+    uint max_bounce;
+    float [3] padding;
 
     vec4[] image;
 };
@@ -36,8 +45,33 @@ vec3 at(ray r, float t) {
     return r.origin + r.direction * t;
 }
 
-bool hit_sphere(ray r, out hit_info info) {
-    // Vector from the ray origin to sphere position
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+float rand(vec2 co, float min, float max){
+    return min + (max - min) * rand(co);
+}
+
+vec3 rand_vec3(vec2 co) {
+    return vec3(rand(co), rand(vec2(co.y, co.x)), rand(vec2(co.x, co.x)));
+}
+
+vec3 rand_vec3(vec2 co, float min, float max) {
+    return vec3(rand(co, min, max), rand(co.xy * co.x, min, max), rand(co.xy * co.y, min, max));
+}
+
+vec3 rand_unit_sphere(vec2 co) {
+    uint i = 0;
+    while(true) {
+        vec3 vec = rand_vec3(i++ * co, -1.0, 1.0);
+        if (length(vec) <= 1.0) {
+            return vec;
+        }
+    }
+}
+
+bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     vec3 origin_center = r.origin - s.position.xyz;
 
     float a = dot(r.direction, r.direction);
@@ -46,11 +80,20 @@ bool hit_sphere(ray r, out hit_info info) {
     float discriminant = half_b * half_b - a * c;
 
     if (discriminant < 0) {
-        info.t = -1.0;
         return false;
     }
 
-    info.t = (-half_b - sqrt(discriminant)) / a;
+    float sqrt_discriminant = sqrt(discriminant);
+    float root = (-half_b - sqrt_discriminant) / a;
+    if (root < min_t || root > max_t) {
+        root = (-half_b + sqrt_discriminant) / a;
+
+        if (root < min_t || root > max_t) {
+            return false;
+        }
+    }
+
+    info.t = root;
     info.point = at(r, info.t);
 
     vec3 outward_normal = (info.point - s.position.xyz) / s.radius;
@@ -58,6 +101,45 @@ bool hit_sphere(ray r, out hit_info info) {
     info.normal = info.front_face ? outward_normal : -outward_normal;
 
     return true;
+}
+
+bool hit_spheres(ray r, out hit_info info) {
+    float min_t = 1e20;
+    hit_info temp_info;
+    bool hit = false;
+    for (uint sphere_index = 0; sphere_index < 2; sphere_index++) {
+        if (hit_sphere(spheres[sphere_index], r, 0.0, min_t, temp_info)) {
+            info = temp_info;
+            min_t = temp_info.t;
+            hit = true;
+        }
+    }
+
+    return hit;
+}
+
+vec4 ray_color(ray r, uint sample_index) {
+    hit_info info;
+    uint bounces = 0;
+
+    while (hit_spheres(r, info) && bounces < max_bounce) {
+        vec3 target = info.point + info.normal + rand_unit_sphere(info.point.xy);
+        r = ray(info.point, target - info.point);
+        bounces++;
+    }
+
+    if (bounces == max_bounce) {
+        return vec4(0.0);
+    }
+
+    return pow(0.5, bounces) * mix(ground_color, sky_color, (normalize(r.direction).y + 1.0) * 0.5);
+
+    // No lambertian
+    // if (hit_spheres(r, info)) {
+    //     return vec4(0.5 * (info.normal + vec3(1.0)), 0.0);
+    // }
+
+    // return mix(ground_color, sky_color, (normalize(r.direction).y + 1.0) * 0.5);
 }
 
 void main() {
@@ -75,17 +157,7 @@ void main() {
         vec2 jittered_uvs = uv + vec2(random_numbers[sample_index * 2] / (width - 1), random_numbers[sample_index * 2 + 1] / (height - 1));
         vec3 proj_plane_pos = first + vec3(jittered_uvs.x * viewport_width, jittered_uvs.y * viewport_height, 0.0);
 
-        ray r = ray(camera_pos.xyz, proj_plane_pos - camera_pos.xyz);
-        hit_info info;
-
-        if (hit_sphere(r, info)) {
-            vec3 hit_normal = normalize(info.normal);
-            hit_normal = (hit_normal + 1.0) * 0.5;
-
-            image[y * width + x] += vec4(hit_normal, 0.0);
-        } else {
-            image[y * width + x] += mix(ground_color, sky_color, uv.y);
-        }
+        image[y * width + x] += ray_color(ray(camera_pos.xyz, proj_plane_pos - camera_pos.xyz), sample_index);
     }
 
     image[y * width + x] /= samples_per_pixel;
