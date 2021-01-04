@@ -3,11 +3,16 @@ struct ray {
     vec3 direction;
 };
 
+const uint LAMBERTIAN_MATERIAL = 0;
+const uint METAL_MATERIAL = 1;
+const uint DIELECTRIC_MATERIAL = 2;
+
 struct material {
     vec4 albedo;
     float fuzz;
+    float ior;
     uint type;
-    uint[2] padding;
+    uint padding;
 };
 
 struct hit_info {
@@ -39,7 +44,7 @@ layout(set = 0, binding = 0) buffer Inputs {
 
     vec4[1000] random_in_sphere;
 
-    sphere[4] spheres;
+    sphere[5] spheres;
 
     uint max_bounce;
     float [3] padding;
@@ -100,7 +105,7 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
     bool hit = false;
-    for (uint sphere_index = 0; sphere_index < 4; sphere_index++) {
+    for (uint sphere_index = 0; sphere_index < 5; sphere_index++) {
         if (hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
             info = temp_info;
             closest_t = temp_info.t;
@@ -130,6 +135,34 @@ bool metal_scattering(material mat, ray incident, vec2 seed, hit_info info, out 
     return (dot(scattered.direction, info.normal) > 0.0);
 }
 
+float reflectance(float cosine, float eta) {
+    // Use Schlick's approximation for reflectance.
+    float r0 = (1 - eta) / (1 + eta);
+    r0 = r0 * r0;
+    return r0 + (1 - r0) * pow((1 - cosine), 5);
+}
+
+bool dielectric_scattering(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
+    attenuation = vec4(1.0);
+
+    vec3 unit_dir = normalize(incident.direction);
+    float cos_theta = min(dot(-unit_dir, info.normal), 1.0);
+    float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
+    float eta = info.front_face ? 1.0 / mat.ior : mat.ior;
+    vec3 direction;
+
+    if (eta * sin_theta > 1.0 || reflectance(cos_theta, eta) > rand(seed)) {
+        direction = reflect(unit_dir, info.normal);
+    } else {
+        direction = refract(unit_dir, info.normal, eta);
+    }
+
+    scattered = ray(info.point, direction); 
+
+    return true;
+}
+
 vec4 ray_color(ray r, uint sample_index) {
     hit_info info;
     uint bounces = 0;
@@ -140,8 +173,9 @@ vec4 ray_color(ray r, uint sample_index) {
         vec2 seed = vec2(info.point.x * sample_index, info.point.y * bounces) * gl_GlobalInvocationID.xy;
         ray scattered;
         vec4 attenuation;
-        if (info.mat.type == 0 && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered) ||
-        info.mat.type == 1 && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) {
+        if (info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered) ||
+        info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered) ||
+        info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) {
             final_color *= attenuation;
             current_ray = scattered;
         } else {

@@ -9,6 +9,7 @@
 enum MATERIAL_TYPE: uint32_t {
     LAMBERTIAN,
     METAL,
+    DIELECTRIC,
 };
 
 struct input_data {
@@ -29,12 +30,13 @@ struct input_data {
         struct material {
             color albedo;
             float fuzz;
+            float ior;
             uint32_t type;
-            uint32_t padding[2];
+            uint32_t padding;
         } material;
         float radius;
         float padding[3];
-    } spheres[4];
+    } spheres[5];
 
     uint32_t max_bounce;
     float padding[3];
