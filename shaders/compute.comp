@@ -5,6 +5,9 @@ struct ray {
 
 struct material {
     vec4 albedo;
+    float fuzz;
+    uint type;
+    uint[2] padding;
 };
 
 struct hit_info {
@@ -36,7 +39,7 @@ layout(set = 0, binding = 0) buffer Inputs {
 
     vec4[1000] random_in_sphere;
 
-    sphere[2] spheres;
+    sphere[4] spheres;
 
     uint max_bounce;
     float [3] padding;
@@ -97,7 +100,7 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
     bool hit = false;
-    for (uint sphere_index = 0; sphere_index < 2; sphere_index++) {
+    for (uint sphere_index = 0; sphere_index < 4; sphere_index++) {
         if (hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
             info = temp_info;
             closest_t = temp_info.t;
@@ -108,13 +111,23 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     return hit;
 }
 
-bool lambertian_scatter(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
+bool lambertian_scattering(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
     vec3 unit_hemisphere_vec = to_hemisphere_vec(random_in_sphere[uint(rand(seed) * 999.0)].xyz, info.normal);
 
     attenuation = mat.albedo;
     scattered = ray(info.point, info.normal + unit_hemisphere_vec);
 
     return true;
+}
+
+bool metal_scattering(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
+    vec3 reflected = reflect(normalize(incident.direction), info.normal);
+    vec3 unit_sphere_vec = random_in_sphere[uint(rand(seed) * 999.0)].xyz;
+
+    attenuation = mat.albedo;
+    scattered = ray(info.point, reflected + mat.fuzz * unit_sphere_vec); 
+
+    return (dot(scattered.direction, info.normal) > 0.0);
 }
 
 vec4 ray_color(ray r, uint sample_index) {
@@ -127,7 +140,8 @@ vec4 ray_color(ray r, uint sample_index) {
         vec2 seed = vec2(info.point.x * sample_index, info.point.y * bounces) * gl_GlobalInvocationID.xy;
         ray scattered;
         vec4 attenuation;
-        if (lambertian_scatter(info.mat, current_ray, seed, info, attenuation, scattered)) {
+        if (info.mat.type == 0 && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered) ||
+        info.mat.type == 1 && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) {
             final_color *= attenuation;
             current_ray = scattered;
         } else {
