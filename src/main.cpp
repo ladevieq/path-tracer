@@ -103,10 +103,11 @@ int main() {
         .viewport_height = 2.f,
         .proj_plane_distance = 1.f,
         .spheres = { 
-            { { -1.f, 0.f, -1.f },      { { 0.8f, 0.8f, 0.8f }, 0.3, MATERIAL_TYPE::METAL },  0.5f },
-            { { 0.f, 0.f, -1.f },       { { 0.7f, 0.3f, 0.3f }, MATERIAL_TYPE::LAMBERTIAN },  0.5f },
-            { { 1.f, 0.f, -1.f },       { { 0.8f, 0.6f, 0.2f }, 1.0, MATERIAL_TYPE::METAL },  0.5f },
-            { { 0.f, -100.5f, -1.f },   { { 0.8f, 0.8f, 0.f }, MATERIAL_TYPE::LAMBERTIAN },   100.f }
+            { { -1.f, 0.f, -1.f },      { { 0.8f, 0.8f, 0.8f }, 0.3, 1.5, MATERIAL_TYPE::DIELECTRIC },  0.5f },
+            { { -1.f, 0.f, -1.f },      { { 0.8f, 0.8f, 0.8f }, 0.3, 1.5, MATERIAL_TYPE::DIELECTRIC },  -0.4f },
+            { { 0.f, 0.f, -1.f },       { { 0.7f, 0.3f, 0.3f }, 0.0, 1.5, MATERIAL_TYPE::DIELECTRIC },  0.5f },
+            { { 1.f, 0.f, -1.f },       { { 0.8f, 0.6f, 0.2f }, 1.0, 0.0, MATERIAL_TYPE::METAL },  0.5f },
+            { { 0.f, -100.5f, -1.f },   { { 0.8f, 0.8f, 0.f }, 0.0, 0.0, MATERIAL_TYPE::LAMBERTIAN },   100.f }
         },
         .max_bounce = max_depth,
     };
