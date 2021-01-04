@@ -103,8 +103,8 @@ int main() {
         .viewport_height = 2.f,
         .proj_plane_distance = 1.f,
         .spheres = { 
-            { { 0.f, 0.f, -1.f }, { { 0.f, 0.f, 1.f }, }, 0.5f },
-            { { 0.f, -100.5f, -1.f }, { { 0.f, 1.f, 0.f }, }, 100.f }
+            { { 0.f, 0.f, -1.f },       { { 0.7f, 0.7f, 0.3f }, },  0.5f },
+            { { 0.f, -100.5f, -1.f },   { { 0.8f, 0.8f, 0.f }, },   100.f }
         },
         .max_bounce = max_depth,
     };

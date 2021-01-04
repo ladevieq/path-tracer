@@ -3,15 +3,16 @@ struct ray {
     vec3 direction;
 };
 
+struct material {
+    vec4 albedo;
+};
+
 struct hit_info {
     float t;
     vec3 point;
     vec3 normal;
+    material mat;
     bool front_face;
-};
-
-struct material {
-    vec4 color;
 };
 
 struct sphere {
@@ -87,6 +88,7 @@ bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     vec3 outward_normal = (info.point - s.position.xyz) / s.radius;
     info.front_face = dot(outward_normal, r.direction) < 0.0;
     info.normal = info.front_face ? outward_normal : -outward_normal;
+    info.mat = s.mat;
 
     return true;
 }
@@ -106,16 +108,32 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     return hit;
 }
 
+bool lambertian_scatter(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
+    vec3 unit_hemisphere_vec = to_hemisphere_vec(random_in_sphere[uint(rand(seed) * 999.0)].xyz, info.normal);
+
+    attenuation = mat.albedo;
+    scattered = ray(info.point, info.normal + unit_hemisphere_vec);
+
+    return true;
+}
+
 vec4 ray_color(ray r, uint sample_index) {
     hit_info info;
     uint bounces = 0;
 
+    vec4 final_color = vec4(1.0);
     ray current_ray = r;
     while (hit_spheres(current_ray, 0.0001, 1e15, info) && bounces < max_bounce) {
         vec2 seed = vec2(info.point.x * sample_index, info.point.y * bounces) * gl_GlobalInvocationID.xy;
-        vec3 unit_hemisphere_vec = to_hemisphere_vec(random_in_sphere[uint(rand(seed) * 999.0)].xyz, info.normal);
-        vec3 target = info.point + info.normal + unit_hemisphere_vec;
-        current_ray = ray(info.point, target - info.point);
+        ray scattered;
+        vec4 attenuation;
+        if (lambertian_scatter(info.mat, current_ray, seed, info, attenuation, scattered)) {
+            final_color *= attenuation;
+            current_ray = scattered;
+        } else {
+            return vec4(0.0);
+        }
+
         bounces++;
     }
 
@@ -123,7 +141,7 @@ vec4 ray_color(ray r, uint sample_index) {
         return vec4(0.0);
     }
 
-    return pow(0.5, bounces) * mix(ground_color, sky_color, (normalize(r.direction).y + 1.0) * 0.5);
+    return final_color * mix(ground_color, sky_color, (normalize(r.direction).y + 1.0) * 0.5);
 }
 
 void main() {
