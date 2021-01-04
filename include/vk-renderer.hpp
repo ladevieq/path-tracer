@@ -6,6 +6,11 @@
 
 #include "vec3.hpp"
 
+enum MATERIAL_TYPE: uint32_t {
+    LAMBERTIAN,
+    METAL,
+};
+
 struct input_data {
     color sky_color;
     color ground_color;
@@ -23,10 +28,13 @@ struct input_data {
         vec3 position;
         struct material {
             color albedo;
+            float fuzz;
+            uint32_t type;
+            uint32_t padding[2];
         } material;
         float radius;
         float padding[3];
-    } spheres[2];
+    } spheres[4];
 
     uint32_t max_bounce;
     float padding[3];
