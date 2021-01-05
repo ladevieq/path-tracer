@@ -30,24 +30,31 @@ struct sphere {
     float[3] padding;
 };
 
+struct camera {
+    vec4 position;
+    vec4 up;
+    vec4 right;
+    vec4 forward;
+    float viewport_width;
+    float viewport_height;
+    float lens_radius;
+    float focus_distance;
+};
+
 layout(set = 0, binding = 0) buffer Inputs {
     vec4 sky_color;
     vec4 ground_color;
-    vec4 camera_pos;
+    camera cam;
 
-    uint samples_per_pixel;
-    float viewport_width;
-    float viewport_height;
-    float proj_plane_distance;
-
-    float[200] random_numbers;
-
+    vec2[100] random_offset;
+    vec2[100] random_disk;
     vec4[1000] random_in_sphere;
 
-    sphere[5] spheres;
+    sphere[512] spheres;
 
     uint max_bounce;
-    float [3] padding;
+    uint samples_per_pixel;
+    float [2] padding;
 
     vec4[] image;
 };
@@ -105,7 +112,7 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
     bool hit = false;
-    for (uint sphere_index = 0; sphere_index < 5; sphere_index++) {
+    for (uint sphere_index = 0; sphere_index < 512; sphere_index++) {
         if (hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
             info = temp_info;
             closest_t = temp_info.t;
@@ -199,15 +206,19 @@ void main() {
     uint height = gl_NumWorkGroups.y;
 
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
-    vec3 first = camera_pos.xyz - vec3(viewport_width / 2.0, viewport_height / 2.0, proj_plane_distance);
+    vec3 horizontal = cam.focus_distance * cam.right.xyz * cam.viewport_width;
+    vec3 vertical = cam.focus_distance * cam.up.xyz * cam.viewport_height;
+    vec3 first = cam.position.xyz - horizontal / 2.0 - vertical / 2.0 + cam.focus_distance * cam.forward.xyz;
 
     image[y * width + x] = vec4(0.0);
 
     for (uint sample_index = 0; sample_index < samples_per_pixel; sample_index++) {
-        vec2 jittered_uvs = uv + vec2(random_numbers[sample_index * 2] / (width - 1), random_numbers[sample_index * 2 + 1] / (height - 1));
-        vec3 proj_plane_pos = first + vec3(jittered_uvs.x * viewport_width, jittered_uvs.y * viewport_height, 0.0);
+        vec2 jittered_uvs = uv + vec2(random_disk[sample_index].x / (width - 1), random_disk[sample_index].y / (height - 1));
+        vec2 lens_disk = random_disk[sample_index] * cam.lens_radius;
+        vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
+        vec3 proj_plane_pos = first + jittered_uvs.x * horizontal + jittered_uvs.y * vertical;
 
-        image[y * width + x] += ray_color(ray(camera_pos.xyz, proj_plane_pos - camera_pos.xyz), sample_index);
+        image[y * width + x] += ray_color(ray(cam.position.xyz + offset, proj_plane_pos - cam.position.xyz - offset), sample_index);
     }
 
     float spp_scale = (1.0 / samples_per_pixel);

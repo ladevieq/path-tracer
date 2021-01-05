@@ -10,11 +10,12 @@
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
 
-hittable_list random_scene() {
-    hittable_list world;
+void random_scene(sphere *world) {
+    material ground_material = { { 0.5, 0.5, 0.5 } };
+    ground_material.type = MATERIAL_TYPE::LAMBERTIAN;
+    world[0] = sphere{ { 0,-1000,0 }, ground_material, 1000 };
 
-    auto ground_material = std::make_shared<lambertian>(color{ 0.5, 0.5, 0.5 });
-    world.add(std::make_shared<sphere>(point3{ 0,-1000,0 }, 1000, ground_material));
+    uint32_t world_sphere_index = 1;
 
     for (int a = -11; a < 11; a++) {
         for (int b = -11; b < 11; b++) {
@@ -22,59 +23,44 @@ hittable_list random_scene() {
             point3 center(a + 0.9 * randd(), 0.2, b + 0.9 * randd());
 
             if ((center - point3{ 4, 0.2, 0 }).length() > 0.9) {
-                std::shared_ptr<material> sphere_material;
+                material sphere_material = {};
 
                 if (choose_mat < 0.8) {
                     // diffuse
-                    auto albedo = color::random() * color::random();
-                    sphere_material = std::make_shared<lambertian>(albedo);
-                    world.add(std::make_shared<sphere>(center, 0.2, sphere_material));
+                    sphere_material.albedo = color::random() * color::random();
+                    sphere_material.type = MATERIAL_TYPE::LAMBERTIAN;
                 } else if (choose_mat < 0.95) {
                     // metal
-                    auto albedo = color::random(0.5, 1);
-                    auto fuzz = randd(0, 0.5);
-                    sphere_material = std::make_shared<metal>(albedo, fuzz);
-                    world.add(std::make_shared<sphere>(center, 0.2, sphere_material));
+                    sphere_material.albedo = color::random(0.5, 1);
+                    sphere_material.fuzz = randd(0, 0.5);
+                    sphere_material.type = MATERIAL_TYPE::METAL;
                 } else {
                     // glass
-                    sphere_material = std::make_shared<dielectric>(1.5);
-                    world.add(std::make_shared<sphere>(center, 0.2, sphere_material));
+                    sphere_material.ior = 1.5;
+                    sphere_material.type = MATERIAL_TYPE::DIELECTRIC;
                 }
+
+                world[world_sphere_index] = { center, sphere_material, 0.2 };
+                world_sphere_index++;
             }
         }
     }
 
-    auto material1 = std::make_shared<dielectric>(1.5);
-    world.add(std::make_shared<sphere>(point3{ 0, 1, 0 }, 1.0, material1));
+    material material1 = {};
+    material1.ior = 1.5;
+    material1.type = MATERIAL_TYPE::DIELECTRIC;
+    world[world_sphere_index] = { { 0, 1, 0 }, material1, 1.0 };
 
-    auto material2 = std::make_shared<lambertian>(color{ 0.4, 0.2, 0.1 });
-    world.add(std::make_shared<sphere>(point3{ -4, 1, 0 }, 1.0, material2));
+    material material2 = {};
+    material2.albedo = color{ 0.4, 0.2, 0.1 };
+    material2.type = MATERIAL_TYPE::LAMBERTIAN;
+    world[world_sphere_index + 1] = { { -4, 1, 0 }, material2, 1.0 };
 
-    auto material3 = std::make_shared<metal>(color{ 0.7, 0.6, 0.5 }, 0.0);
-    world.add(std::make_shared<sphere>(point3{ 4, 1, 0 }, 1.0, material3));
-
-    return world;
-}
-
-color ray_color(ray& r, const hittable& world, uint32_t depth) {
-    if (depth <= 0) {
-        return color{};
-    }
-
-    struct hit_info info;
-    if (world.hit(r, 0.001, infinity, info)) {
-        color attenuation;
-        ray scattered {};
-
-        if (info.mat_ptr->scatter(r, info, attenuation, scattered)) {
-            return attenuation * ray_color(scattered, world, depth - 1);
-        }
-        return color{};
-    }
-
-    auto unit_dir = r.direction.unit();
-    auto t = (unit_dir.y + 1.0) * 0.5;
-    return lerp(ground_color, sky_color, t);
+    material material3 = {};
+    material3.albedo = color{ 0.7, 0.6, 0.5 };
+    material3.fuzz = 0.0;
+    material3.type = MATERIAL_TYPE::METAL;
+    world[world_sphere_index + 2] = { { 4, 1, 0 }, material3, 1.0 };
 }
 
 int main() {
@@ -82,38 +68,34 @@ int main() {
 
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
-    // const float aspect_ratio = 1.0;
     const size_t width = 1920;
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 100;
     const uint32_t max_depth = 100;
 
-    // const vec3 camera_position{ 13.0, 2.0, 3.0 };
-    const vec3 camera_position{ 0.0, 0.0, 0.0 };
-    const vec3 camera_target{ 0.0, 0.0, 1.0 };
-    const double aperture = 0.1;
-    const double distance_to_focus = 10;
+    const vec3 camera_position{ 13.0, 2.0, 3.0 };
+    const vec3 camera_target{ 0.0, 0.0, 0.0 };
+    const float aperture = 0.1;
+    const float distance_to_focus = 10;
     camera camera { camera_position, camera_target, 20.0, aspect_ratio, aperture, distance_to_focus };
     struct input_data inputs = {
         .sky_color = sky_color,
         .ground_color = ground_color,
-        .camera_pos = camera_position,
-        .samples_per_pixel = samples_per_pixel,
-        .viewport_width = 2.f * aspect_ratio,
-        .viewport_height = 2.f,
-        .proj_plane_distance = 1.f,
-        .spheres = { 
-            { { -1.f, 0.f, -1.f },      { { 0.8f, 0.8f, 0.8f }, 0.3, 1.5, MATERIAL_TYPE::DIELECTRIC },  0.5f },
-            { { -1.f, 0.f, -1.f },      { { 0.8f, 0.8f, 0.8f }, 0.3, 1.5, MATERIAL_TYPE::DIELECTRIC },  -0.4f },
-            { { 0.f, 0.f, -1.f },       { { 0.7f, 0.3f, 0.3f }, 0.0, 1.5, MATERIAL_TYPE::DIELECTRIC },  0.5f },
-            { { 1.f, 0.f, -1.f },       { { 0.8f, 0.6f, 0.2f }, 1.0, 0.0, MATERIAL_TYPE::METAL },  0.5f },
-            { { 0.f, -100.5f, -1.f },   { { 0.8f, 0.8f, 0.f }, 0.0, 0.0, MATERIAL_TYPE::LAMBERTIAN },   100.f }
-        },
+        .cam = { camera_position, camera.up, camera.right, camera.forward, camera.viewport_width, camera.viewport_height, camera.lens_radius, distance_to_focus },
+        .spheres = {},
         .max_bounce = max_depth,
+        .samples_per_pixel = samples_per_pixel,
     };
 
-    for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index++) {
-        inputs.random_numbers[rand_number_index] = randd();
+    for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index += 2) {
+        inputs.random_offset[rand_number_index] = randd();
+        inputs.random_offset[rand_number_index + 1] = randd();
+    }
+
+    for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index += 2) {
+        vec3 random_unit_disk = random_in_unit_disk();
+        inputs.random_disk[rand_number_index] = random_unit_disk.x;
+        inputs.random_disk[rand_number_index + 1] = random_unit_disk.y;
     }
 
     for (size_t rand_number_index = 0; rand_number_index < max_depth * 10; rand_number_index++) {
@@ -121,7 +103,7 @@ int main() {
     }
 
     // World hittable objects
-    hittable_list world = random_scene();
+    random_scene(inputs.spheres);
 
     // PPM format header
     std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;

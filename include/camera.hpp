@@ -17,7 +17,7 @@ class camera {
         ray get_ray(double u, double v) const;
 
         point3 position;
-        double lens_radius;
+        float lens_radius;
 
         float viewport_width;
         float viewport_height;
