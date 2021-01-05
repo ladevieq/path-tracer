@@ -12,34 +12,46 @@ enum MATERIAL_TYPE: uint32_t {
     DIELECTRIC,
 };
 
+struct material {
+    color albedo;
+    float fuzz;
+    float ior;
+    uint32_t type;
+    uint32_t padding;
+};
+
+struct sphere {
+    vec3 position;
+    material mat;
+    float radius;
+    float padding[3];
+};
+
 struct input_data {
     color sky_color;
     color ground_color;
-    vec3 camera_pos;
 
-    uint32_t samples_per_pixel;
-    float viewport_width;
-    float viewport_height;
-    float proj_plane_distance;
+    struct camera {
+        vec3 position;
+        vec3 up;
+        vec3 right;
+        vec3 forward;
+        float viewport_width;
+        float viewport_height;
+        float lens_radius;
+        float focus_distance;
+    } cam;
 
-    float random_numbers[200];
+    float random_offset[200];
+    float random_disk[200];
     vec3 random_in_sphere[1000];
 
-    struct sphere {
-        vec3 position;
-        struct material {
-            color albedo;
-            float fuzz;
-            float ior;
-            uint32_t type;
-            uint32_t padding;
-        } material;
-        float radius;
-        float padding[3];
-    } spheres[5];
+    sphere spheres[512];
 
     uint32_t max_bounce;
-    float padding[3];
+    uint32_t samples_per_pixel;
+
+    float padding[2];
 };
 
 struct path_tracer_data {

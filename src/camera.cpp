@@ -11,9 +11,9 @@ camera::camera(
         double focus_dist
     ) : position(position), lens_radius(aperture / 2.0) {
 
-    forward = (position - target).unit();
-    right = vec3{ 0.0, 1.0, 0.0 }.cross(forward).unit();
-    up = forward.cross(right).unit();
+    forward = (target - position).unit();
+    right = forward.cross(vec3{ 0.0, 1.0, 0.0 }).unit();
+    up = right.cross(forward).unit();
 
     auto h = tan(deg_to_rad(v_fov) / 2.0);
     viewport_height = 2.0 * h;

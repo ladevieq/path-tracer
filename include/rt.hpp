@@ -29,12 +29,12 @@ inline float clamp(float x, float min, float max) {
 #include "vec3.hpp"
 #include "ray.hpp"
 #include "color.hpp"
-#include "sphere.hpp"
+// #include "sphere.hpp"
 #include "camera.hpp"
-#include "material.hpp"
-#include "lambertian.hpp"
-#include "metal.hpp"
-#include "dielectric.hpp"
-#include "hittable_list.hpp"
+// #include "material.hpp"
+// #include "lambertian.hpp"
+// #include "metal.hpp"
+// #include "dielectric.hpp"
+// #include "hittable_list.hpp"
 
 #endif // !__RT_HPP_
