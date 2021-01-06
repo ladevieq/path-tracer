@@ -2,10 +2,12 @@
 #include <vector>
 #include <cstring>
 #include <cstdio>
+#include <dlfcn.h>
 
 #include "vk-renderer.hpp"
 
 #include "rt.hpp"
+#include "thirdparty/renderdoc_app.h"
 
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
@@ -64,11 +66,22 @@ void random_scene(sphere *world) {
 }
 
 int main() {
+    RENDERDOC_API_1_1_2 *rdoc_api = NULL;
+
+    // At init, on linux/android.
+    // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
+    if(void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
+    {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
+        std::cerr << "Cannot get renderdoc API" << std::endl;
+    }
     vkrenderer renderer {};
 
     // Image dimensions
-    const float aspect_ratio = 16.0 / 9.0;
-    const size_t width = 1920;
+    // const float aspect_ratio = 16.0 / 9.0;
+    const float aspect_ratio = 1.f;
+    const size_t width = 400;
     const size_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 100;
     const uint32_t max_depth = 100;
@@ -103,6 +116,7 @@ int main() {
     }
 
     // World hittable objects
+    std::memset(inputs.spheres, 0, sizeof(inputs.spheres));
     random_scene(inputs.spheres);
 
     // PPM format header
@@ -110,7 +124,16 @@ int main() {
 
     std::cerr << "Generating image" << std::endl;
 
+    // To start a frame capture, call StartFrameCapture.
+    // You can specify NULL, NULL for the device to capture on if you have only one device and
+    // either no windows at all or only one window, and it will capture from that device.
+    // See the documentation below for a longer explanation
+    if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+
     renderer.compute(inputs, width, height);
+
+    // stop the capture
+    if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 
     //-------------------------
     // GPU path tracer
