@@ -112,8 +112,8 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
     bool hit = false;
-    for (uint sphere_index = 0; sphere_index < 512; sphere_index++) {
-        if (hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
+    for (uint sphere_index = 0; sphere_index < 200; sphere_index++) {
+        if (spheres[sphere_index].radius > 0.0 && hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
             info = temp_info;
             closest_t = temp_info.t;
             hit = true;
