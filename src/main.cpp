@@ -8,7 +8,7 @@
 #include "vk-renderer.hpp"
 
 #include "rt.hpp"
-#include "thirdparty/renderdoc_app.h"
+#include "thirdparty/renderdoc.h"
 
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
@@ -74,8 +74,9 @@ int main() {
     if(void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
     {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_1, (void **)&rdoc_api);
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
         assert(ret == 1);
+    }
     vkrenderer renderer {};
 
     // Image dimensions
@@ -83,7 +84,7 @@ int main() {
     const float aspect_ratio = 1.f;
     const size_t width = 400;
     const size_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 100;
+    const uint32_t samples_per_pixel = 10;
     const uint32_t max_depth = 100;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
