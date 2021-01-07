@@ -1,6 +1,5 @@
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${Vulkan_INCLUDE_DIRS})
-link_directories(${CMAKE_SOURCE_DIR}/lib)
 
 add_executable(
     path-tracer
@@ -22,5 +21,3 @@ add_executable(
 if(UNIX)
     target_link_libraries(path-tracer ${CMAKE_DL_LIBS})
 endif()
-
-target_link_libraries(path-tracer renderdoc)

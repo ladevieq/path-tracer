@@ -84,7 +84,8 @@ void vkrenderer::create_instance() {
         "VK_LAYER_KHRONOS_validation",
     };
     std::vector<const char*> extensions = {
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        "VK_KHR_surface"
     };
 
     VkInstanceCreateInfo instance_create_info       = {};

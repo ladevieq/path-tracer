@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstring>
 #include <cstdio>
+#include <cassert>
 #include <dlfcn.h>
 
 #include "vk-renderer.hpp"
@@ -73,9 +74,8 @@ int main() {
     if(void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
     {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
-        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
-        std::cerr << "Cannot get renderdoc API" << std::endl;
-    }
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_1, (void **)&rdoc_api);
+        assert(ret == 1);
     vkrenderer renderer {};
 
     // Image dimensions
