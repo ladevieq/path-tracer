@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <chrono>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
@@ -77,13 +78,14 @@ int main() {
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
         assert(ret == 1);
     }
+
     vkrenderer renderer {};
 
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
     const size_t width = 1920;
     const size_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 40;
+    const uint32_t samples_per_pixel = 20;
     const uint32_t max_depth = 20;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
@@ -91,6 +93,7 @@ int main() {
     const float aperture = 0.1;
     const float distance_to_focus = 10;
     camera camera { camera_position, camera_target, 20.0, aspect_ratio, aperture, distance_to_focus };
+
     struct input_data inputs = {
         .sky_color = sky_color,
         .ground_color = ground_color,
@@ -135,7 +138,11 @@ int main() {
     // See the documentation below for a longer explanation
     if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
+    auto start = std::chrono::high_resolution_clock::now();
     renderer.compute(inputs, width, height);
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
     // stop the capture
     if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
