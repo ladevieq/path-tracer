@@ -7,9 +7,9 @@
 #include "vec3.hpp"
 
 enum MATERIAL_TYPE: uint32_t {
-    LAMBERTIAN,
-    METAL,
-    DIELECTRIC,
+    LAMBERTIAN  = 0,
+    METAL       = 1,
+    DIELECTRIC  = 2,
 };
 
 struct material {
@@ -51,7 +51,9 @@ struct input_data {
     uint32_t max_bounce;
     uint32_t samples_per_pixel;
 
-    float padding[2];
+    // Output image resolution
+    uint32_t width;
+    uint32_t height;
 };
 
 struct path_tracer_data {

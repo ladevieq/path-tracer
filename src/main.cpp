@@ -80,12 +80,11 @@ int main() {
     vkrenderer renderer {};
 
     // Image dimensions
-    // const float aspect_ratio = 16.0 / 9.0;
-    const float aspect_ratio = 1.f;
-    const size_t width = 400;
+    const float aspect_ratio = 16.0 / 9.0;
+    const size_t width = 1920;
     const size_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 10;
-    const uint32_t max_depth = 100;
+    const uint32_t samples_per_pixel = 25;
+    const uint32_t max_depth = 50;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -95,12 +94,18 @@ int main() {
     struct input_data inputs = {
         .sky_color = sky_color,
         .ground_color = ground_color,
+
         .cam = { camera_position, camera.up, camera.right, camera.forward, camera.viewport_width, camera.viewport_height, camera.lens_radius, distance_to_focus },
+
         .spheres = {},
+
         .max_bounce = max_depth,
         .samples_per_pixel = samples_per_pixel,
+        .width = (uint32_t)width,
+        .height = (uint32_t)height
     };
 
+    // Random numbers pools
     for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index += 2) {
         inputs.random_offset[rand_number_index] = randd();
         inputs.random_offset[rand_number_index + 1] = randd();
@@ -117,7 +122,6 @@ int main() {
     }
 
     // World hittable objects
-    std::memset(inputs.spheres, 0, sizeof(inputs.spheres));
     random_scene(inputs.spheres);
 
     // PPM format header
