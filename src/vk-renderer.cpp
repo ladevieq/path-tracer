@@ -46,7 +46,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
 
-    vkCmdDispatch(command_buffer, width, height, 1);
+    vkCmdDispatch(command_buffer, width / 8, height / 8, 1);
 
     vkEndCommandBuffer(command_buffer);
 
@@ -60,9 +60,9 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffer;
 
-    vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE);
+    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE));
 
-    vkDeviceWaitIdle(device);
+    VKRESULT(vkDeviceWaitIdle(device));
 }
 
 const color* const vkrenderer::output_image() {
