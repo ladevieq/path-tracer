@@ -42,8 +42,8 @@ struct input_data {
         float focus_distance;
     } cam;
 
-    float random_offset[200];
-    float random_disk[200];
+    float random_offset[2000];
+    float random_disk[2000];
     vec3 random_in_sphere[1000];
 
     sphere spheres[512];

@@ -83,8 +83,8 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     const size_t width = 1920;
     const size_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 25;
-    const uint32_t max_depth = 50;
+    const uint32_t samples_per_pixel = 40;
+    const uint32_t max_depth = 20;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -106,18 +106,18 @@ int main() {
     };
 
     // Random numbers pools
-    for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index += 2) {
+    for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index += 2) {
         inputs.random_offset[rand_number_index] = randd();
         inputs.random_offset[rand_number_index + 1] = randd();
     }
 
-    for (size_t rand_number_index = 0; rand_number_index < samples_per_pixel * 2; rand_number_index += 2) {
+    for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index += 2) {
         vec3 random_unit_disk = random_in_unit_disk();
         inputs.random_disk[rand_number_index] = random_unit_disk.x;
         inputs.random_disk[rand_number_index + 1] = random_unit_disk.y;
     }
 
-    for (size_t rand_number_index = 0; rand_number_index < max_depth * 10; rand_number_index++) {
+    for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index++) {
         inputs.random_in_sphere[rand_number_index] = random_in_unit_sphere();
     }
 

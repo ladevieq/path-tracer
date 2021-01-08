@@ -5,9 +5,9 @@ struct ray {
     vec3 direction;
 };
 
-const uint LAMBERTIAN_MATERIAL = 0;
-const uint METAL_MATERIAL = 1;
-const uint DIELECTRIC_MATERIAL = 2;
+const uint LAMBERTIAN_MATERIAL  = 0;
+const uint METAL_MATERIAL       = 1;
+const uint DIELECTRIC_MATERIAL  = 2;
 
 struct material {
     vec4 albedo;
@@ -48,8 +48,8 @@ layout(set = 0, binding = 0) buffer Inputs {
     vec4 ground_color;
     camera cam;
 
-    vec2[100] random_offset;
-    vec2[100] random_disk;
+    vec2[1000] random_offset;
+    vec2[1000] random_disk;
     vec4[1000] random_in_sphere;
 
     sphere[512] spheres;
@@ -183,9 +183,9 @@ vec4 ray_color(ray r, uint sample_index) {
         vec2 seed = vec2(info.point.x * sample_index, info.point.y * bounces) * gl_GlobalInvocationID.xy;
         ray scattered;
         vec4 attenuation;
-        if (info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered) ||
-        info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered) ||
-        info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) {
+        if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
+        (info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
+        (info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered))) {
             final_color *= attenuation;
             current_ray = scattered;
         } else {
