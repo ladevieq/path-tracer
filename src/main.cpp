@@ -98,7 +98,7 @@ int main() {
         .sky_color = sky_color,
         .ground_color = ground_color,
 
-        .cam = { camera_position, camera.up, camera.right, camera.forward, camera.viewport_width, camera.viewport_height, camera.lens_radius, distance_to_focus },
+        .cam = camera,
 
         .spheres = {},
 

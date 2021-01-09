@@ -34,13 +34,16 @@ struct sphere {
 
 struct camera {
     vec4 position;
+
     vec4 up;
     vec4 right;
-    vec4 forward;
-    float viewport_width;
-    float viewport_height;
+
+    vec4 horizontal;
+    vec4 vertical;
+    vec4 first_pixel;
+
     float lens_radius;
-    float focus_distance;
+    float[3] padding;
 };
 
 layout(set = 0, binding = 0) buffer Inputs {
@@ -207,9 +210,6 @@ void main() {
     uint y = gl_GlobalInvocationID.y;
 
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
-    vec3 horizontal = cam.focus_distance * cam.right.xyz * cam.viewport_width;
-    vec3 vertical = cam.focus_distance * cam.up.xyz * cam.viewport_height;
-    vec3 first = cam.position.xyz - horizontal / 2.0 - vertical / 2.0 + cam.focus_distance * cam.forward.xyz;
 
     vec4 out_color = vec4(0.0);
 
@@ -217,9 +217,9 @@ void main() {
         vec2 jittered_uvs = uv + vec2(random_disk[sample_index].x / (width - 1), random_disk[sample_index].y / (height - 1));
         vec2 lens_disk = random_disk[sample_index] * cam.lens_radius;
         vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
-        vec3 proj_plane_pos = first + jittered_uvs.x * horizontal + jittered_uvs.y * vertical;
+        vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
 
-        out_color += ray_color(ray(cam.position.xyz + offset, proj_plane_pos - cam.position.xyz - offset), sample_index);
+        out_color += ray_color(ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset), sample_index);
     }
 
     float spp_scale = (1.0 / samples_per_pixel);

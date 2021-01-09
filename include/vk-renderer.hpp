@@ -5,42 +5,14 @@
 #include "thirdparty/vk_mem_alloc.h"
 
 #include "vec3.hpp"
-
-enum MATERIAL_TYPE: uint32_t {
-    LAMBERTIAN  = 0,
-    METAL       = 1,
-    DIELECTRIC  = 2,
-};
-
-struct material {
-    color albedo;
-    float fuzz;
-    float ior;
-    uint32_t type;
-    uint32_t padding;
-};
-
-struct sphere {
-    vec3 position;
-    material mat;
-    float radius;
-    float padding[3];
-};
+#include "camera.hpp"
+#include "sphere.hpp"
 
 struct input_data {
     color sky_color;
     color ground_color;
 
-    struct camera {
-        vec3 position;
-        vec3 up;
-        vec3 right;
-        vec3 forward;
-        float viewport_width;
-        float viewport_height;
-        float lens_radius;
-        float focus_distance;
-    } cam;
+    camera cam;
 
     float random_offset[2000];
     float random_disk[2000];
