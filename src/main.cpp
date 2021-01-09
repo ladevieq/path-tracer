@@ -4,11 +4,11 @@
 #include <cstring>
 #include <cstdio>
 #include <cassert>
+#include <unistd.h>
 #include <dlfcn.h>
 
-#include "vk-renderer.hpp"
-
 #include "rt.hpp"
+#include "vk-renderer.hpp"
 #include "thirdparty/renderdoc.h"
 
 color ground_color { 1.0, 1.0, 1.0 };
@@ -79,6 +79,7 @@ int main() {
         assert(ret == 1);
     }
 
+    window wnd {};
     vkrenderer renderer {};
 
     // Image dimensions
@@ -132,28 +133,30 @@ int main() {
 
     std::cerr << "Generating image" << std::endl;
 
+    pause();
+
     // To start a frame capture, call StartFrameCapture.
     // You can specify NULL, NULL for the device to capture on if you have only one device and
     // either no windows at all or only one window, and it will capture from that device.
     // See the documentation below for a longer explanation
-    if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+    // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    renderer.compute(inputs, width, height);
-    auto end = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
+    // renderer.compute(inputs, width, height);
+    // auto end = std::chrono::high_resolution_clock::now();
 
-    std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    // std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
-    // stop the capture
-    if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+    // // stop the capture
+    // if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 
-    //-------------------------
-    // GPU path tracer
-    //-------------------------
-    auto output_image = renderer.output_image();
-    for (size_t index = 0; index < height * width; index++) {
-        write_color(std::cout, output_image[index]);
-    }
+    // //-------------------------
+    // // GPU path tracer
+    // //-------------------------
+    // auto output_image = renderer.output_image();
+    // for (size_t index = 0; index < height * width; index++) {
+    //     write_color(std::cout, output_image[index]);
+    // }
 
     std::cerr << "Done !" << std::endl;
 

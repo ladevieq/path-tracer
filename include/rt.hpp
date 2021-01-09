@@ -8,4 +8,8 @@
 #include "camera.hpp"
 #include "material.hpp"
 
+#ifdef __linux__
+#include "window.hpp"
+#endif
+
 #endif // !__RT_HPP_
