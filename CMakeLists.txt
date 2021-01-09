@@ -7,5 +7,9 @@ project(path-tracer VERSION 1.0 LANGUAGES CXX)
 
 find_package(Vulkan REQUIRED)
 
+if(UNIX)
+    find_package(X11 REQUIRED)
+endif()
+
 add_subdirectory(src)
 add_subdirectory(shaders)
