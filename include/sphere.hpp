@@ -1,19 +1,18 @@
 #ifndef __SPHERE_HPP_
 #define __SPHERE_HPP_
 
-#include "hittable.hpp"
 #include "material.hpp"
 
-class sphere : public hittable {
-    public:
-        sphere(point3 center, double radius, std::shared_ptr<material> material);
+struct sphere{
+    sphere() = default;
+    sphere(point3 center, material material, float radius);
 
-        virtual bool hit(const ray& r, double t_min, double t_max, struct hit_info& info) const;
+    point3 center;
 
-        point3 center;
-        double radius;
+    material mat;
 
-        std::shared_ptr<material> mat_ptr;
+    float radius;
+    float padding[3];
 };
 
 #endif // !__SPHERE_HPP_

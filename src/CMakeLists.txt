@@ -6,13 +6,8 @@ add_executable(
     main.cpp
     vec3.cpp
     color.cpp
-    ray.cpp
     sphere.cpp
-    hittable_list.cpp
     camera.cpp
-    lambertian.cpp
-    metal.cpp
-    dielectric.cpp
     vulkan-loader.cpp
     utils.cpp
     vk-renderer.cpp

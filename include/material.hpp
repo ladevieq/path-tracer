@@ -1,13 +1,20 @@
 #ifndef __MATERIAL_HPP_
 #define __MATERIAL_HPP_
 
-#include "ray.hpp"
+#include "vec3.hpp"
 
-struct hit_info;
+enum MATERIAL_TYPE: uint32_t {
+    LAMBERTIAN  = 0,
+    METAL       = 1,
+    DIELECTRIC  = 2,
+};
 
-class material {
-    public:
-        virtual bool scatter(const ray& r, const struct hit_info& info, color& attenuation, ray& scaterred) const = 0;
+struct material {
+    color albedo;
+    float fuzz;
+    float ior;
+    uint32_t type;
+    uint32_t padding;
 };
 
 #endif // !__MATERIAL_HPP_
