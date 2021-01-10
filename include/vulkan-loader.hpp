@@ -1,11 +1,13 @@
 #ifndef __VULKAN_LOADER_HPP_
 #define __VULKAN_LOADER_HPP_
 
-#if defined(WINDOWS)
+#if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
 #include <windowsx.h>
 
 #define VK_USE_PLATFORM_WIN32_KHR
+#elif defined(__linux__)
+#define VK_USE_PLATFORM_XCB_KHR
 #endif
 
 #define VK_NO_PROTOTYPES
@@ -15,13 +17,32 @@
     X(vkGetInstanceProcAddr)      \
     X(vkGetDeviceProcAddr)
 
+
 #define VULKAN_APPLICATION_FUNCTIONS          \
     X(vkCreateInstance)                       \
     X(vkEnumerateInstanceVersion)             \
     X(vkEnumerateInstanceExtensionProperties) \
     X(vkEnumerateInstanceLayerProperties)
 
+
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateWin32SurfaceKHR)
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+#define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateXcbSurfaceKHR)
+#else
+#define PLATFORM_VULKAN_INSTANCE_FUNCTIONS
+#endif
+
+#define VULKAN_SURFACE_FUNCTIONS                 \
+    PLATFORM_VULKAN_INSTANCE_FUNCTIONS           \
+    X(vkDestroySurfaceKHR)                       \
+    X(vkGetPhysicalDeviceSurfaceSupportKHR)      \
+    X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
+    X(vkGetPhysicalDeviceSurfaceFormatsKHR)      \
+    X(vkGetPhysicalDeviceSurfacePresentModesKHR)
+
 #define VULKAN_INSTANCE_FUNCTIONS                \
+    VULKAN_SURFACE_FUNCTIONS                     \
     X(vkDestroyInstance)                         \
     X(vkEnumeratePhysicalDevices)                \
     X(vkGetPhysicalDeviceProperties)             \
@@ -33,22 +54,16 @@
     X(vkCreateDebugUtilsMessengerEXT)            \
     X(vkDestroyDebugUtilsMessengerEXT)
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-#define VULKAN_SURFACE_FUNCTIONS                 \
-    X(vkDestroySurfaceKHR)                       \
-    X(vkGetPhysicalDeviceSurfaceSupportKHR)      \
-    X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) \
-    X(vkGetPhysicalDeviceSurfaceFormatsKHR)      \
-    X(vkGetPhysicalDeviceSurfacePresentModesKHR)
-#endif
 
-#if defined(WINDOWS)
-#define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateWin32SurfaceKHR)
-#else
-#define PLATFORM_VULKAN_INSTANCE_FUNCTIONS
-#endif
+#define VULKAN_SWAPCHAIN_FUNCTIONS  \
+    X(vkCreateSwapchainKHR)         \
+    X(vkGetSwapchainImagesKHR)      \
+    X(vkAcquireNextImageKHR)        \
+    X(vkDestroySwapchainKHR)        \
+    X(vkQueuePresentKHR)            \
 
 #define VULKAN_DEVICE_FUNCTIONS       \
+    VULKAN_SWAPCHAIN_FUNCTIONS        \
     X(vkGetDeviceQueue)               \
     X(vkDestroyDevice)                \
     X(vkDeviceWaitIdle)               \
@@ -116,18 +131,10 @@
     X(vkDestroyBuffer)                \
     X(vkDestroyRenderPass)
 
-// Depends on the swapchain extension
-//     X(vkCreateSwapchainKHR)           \
-//     X(vkGetSwapchainImagesKHR)        \
-//     X(vkAcquireNextImageKHR)          \
-//     X(vkDestroySwapchainKHR)          \
-//     X(vkQueuePresentKHR)              \
-
 #define X(name) extern PFN_##name name;
     VULKAN_EXPORTED_FUNCTIONS
     VULKAN_APPLICATION_FUNCTIONS
     VULKAN_INSTANCE_FUNCTIONS
-    PLATFORM_VULKAN_INSTANCE_FUNCTIONS
     VULKAN_DEVICE_FUNCTIONS
 #undef X
 
@@ -139,7 +146,6 @@
 
 #define X(name) void Load_##name(VkInstance _instance);
     VULKAN_INSTANCE_FUNCTIONS
-    PLATFORM_VULKAN_INSTANCE_FUNCTIONS
 #undef X
 
 #define X(name) void Load_##name(VkDevice _device);

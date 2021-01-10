@@ -79,13 +79,13 @@ int main() {
         assert(ret == 1);
     }
 
-    window wnd {};
-    vkrenderer renderer {};
-
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
-    const size_t width = 1920;
-    const size_t height = width / aspect_ratio;
+    const uint32_t width = 1920;
+    const uint32_t height = width / aspect_ratio;
+
+    window wnd { width , height };
+    vkrenderer renderer { wnd };
     const uint32_t samples_per_pixel = 20;
     const uint32_t max_depth = 20;
 
@@ -105,8 +105,8 @@ int main() {
 
         .max_bounce = max_depth,
         .samples_per_pixel = samples_per_pixel,
-        .width = (uint32_t)width,
-        .height = (uint32_t)height
+        .width = width,
+        .height = height
     };
 
     // Random numbers pools
