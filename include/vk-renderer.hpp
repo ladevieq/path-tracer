@@ -63,6 +63,8 @@ class vkrenderer {
 
         void create_descriptor_set();
 
+        void create_semaphores();
+
         void select_physical_device();
 
         void select_compute_queue();
@@ -89,10 +91,15 @@ class vkrenderer {
         VkPipelineLayout        compute_pipeline_layout;
         VkPipeline              compute_pipeline;
 
+        VkSemaphore             acquire_semaphore;
+
+        VkSurfaceFormatKHR      surface_format;
         VkSurfaceKHR            platform_surface;
         VkSwapchainKHR          swapchain;
         size_t                  swapchain_images_count = 3;
         std::vector<VkImage>    swapchain_images;
+        std::vector<VkImageView>swapchain_images_views;
+        uint32_t                current_image_index;
 
         struct path_tracer_data* mapped_data;
 };

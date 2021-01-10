@@ -30,9 +30,12 @@ vkrenderer::vkrenderer(window& wnd) {
     create_memory_allocator();
     create_command_buffer();
     create_descriptor_set();
+    create_semaphores();
 }
 
 void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) {
+    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquire_semaphore, VK_NULL_HANDLE, &current_image_index);
+
     fill_descriptor_set(inputs, width, height);
 
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
@@ -42,6 +45,38 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     cmd_buf_begin_info.pInheritanceInfo         = nullptr;
 
     vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
+
+    VkImageSubresourceRange image_subresource_range = {};
+    image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_subresource_range.baseMipLevel            = 0;
+    image_subresource_range.levelCount              = 1;
+    image_subresource_range.baseArrayLayer          = 0;
+    image_subresource_range.layerCount              = 1;
+
+    VkImageMemoryBarrier image_memory_barrier   = {};
+    image_memory_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_memory_barrier.pNext                  = nullptr;
+    // image_memory_barrier.srcAccessMask          = 
+    image_memory_barrier.dstAccessMask          = VK_ACCESS_SHADER_WRITE_BIT;
+    image_memory_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_memory_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
+    image_memory_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    image_memory_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    image_memory_barrier.image                  = swapchain_images[current_image_index];
+    image_memory_barrier.subresourceRange       = image_subresource_range;
+
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_DEPENDENCY_DEVICE_GROUP_BIT,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        1,
+        &image_memory_barrier
+    );
 
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline_layout, 0, 1, &compute_shader_input_set, 0, nullptr);
 
@@ -61,9 +96,21 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffer;
 
-    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE));
+    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE))
 
-    VKRESULT(vkDeviceWaitIdle(device));
+    VKRESULT(vkDeviceWaitIdle(device))
+
+    VkPresentInfoKHR present_info   = {};
+    present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.pNext              = nullptr;
+    present_info.waitSemaphoreCount = 0;
+    present_info.pWaitSemaphores    = 0;
+    present_info.swapchainCount     = 1;
+    present_info.pSwapchains        = &swapchain;
+    present_info.pImageIndices      = &current_image_index;
+    present_info.pResults           = nullptr;
+
+    VKRESULT(vkQueuePresentKHR(compute_queue, &present_info))
 }
 
 const color* const vkrenderer::output_image() {
@@ -188,14 +235,16 @@ void vkrenderer::create_swapchain(window& wnd) {
     std::vector<VkSurfaceFormatKHR> supported_formats { supported_formats_count };
     VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, platform_surface, &supported_formats_count,  supported_formats.data()))
 
+    surface_format = supported_formats[0];
+
     VkSwapchainCreateInfoKHR create_info    = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.pNext                       = nullptr;
     create_info.flags                       = 0;
     create_info.surface                     = platform_surface;
     create_info.minImageCount               = swapchain_images_count;
-    create_info.imageFormat                 = supported_formats[0].format;
-    create_info.imageColorSpace             = supported_formats[0].colorSpace;
+    create_info.imageFormat                 = surface_format.format;
+    create_info.imageColorSpace             = surface_format.colorSpace;
     create_info.imageExtent                 = caps.currentExtent;
     create_info.imageArrayLayers            = 1;
     create_info.imageUsage                  = VK_IMAGE_USAGE_STORAGE_BIT;
@@ -208,7 +257,38 @@ void vkrenderer::create_swapchain(window& wnd) {
 
     VKRESULT(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain))
 
+    swapchain_images_count = 0;
+    VKRESULT(vkGetSwapchainImagesKHR(device, swapchain, (uint32_t*)&swapchain_images_count, VK_NULL_HANDLE))
+
+    swapchain_images = std::vector<VkImage>{ swapchain_images_count };
+    swapchain_images_views = std::vector<VkImageView>{ swapchain_images_count };
     VKRESULT(vkGetSwapchainImagesKHR(device, swapchain, (uint32_t*)&swapchain_images_count, swapchain_images.data()))
+
+    for (size_t index = 0; index < swapchain_images_count; index++) {
+        VkImageSubresourceRange image_subresource_range = {};
+        image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_subresource_range.baseMipLevel            = 0;
+        image_subresource_range.levelCount              = 1;
+        image_subresource_range.baseArrayLayer          = 0;
+        image_subresource_range.layerCount              = 1;
+
+        VkImageViewCreateInfo image_view_create_info    = {};
+        image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_create_info.pNext                    = nullptr;
+        image_view_create_info.flags                    = 0;
+        image_view_create_info.image                    = swapchain_images[index];
+        image_view_create_info.viewType                 = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_create_info.format                   = surface_format.format;
+        image_view_create_info.components               = {
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY
+        };
+        image_view_create_info.subresourceRange        = image_subresource_range;
+
+        VKRESULT(vkCreateImageView(device, &image_view_create_info, nullptr, &swapchain_images_views[index]))
+    }
 }
 
 void vkrenderer::create_pipeline() {
@@ -236,19 +316,31 @@ void vkrenderer::create_pipeline() {
     stage_create_info.pName                         = "main";
     stage_create_info.pSpecializationInfo           = nullptr;
 
-    VkDescriptorSetLayoutBinding binding            = {};
-    binding.binding                                 = 0;
-    binding.descriptorType                          = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    binding.descriptorCount                         = 1;
-    binding.stageFlags                              = VK_SHADER_STAGE_COMPUTE_BIT;
-    binding.pImmutableSamplers                      = 0;
+
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        }
+    };
 
     VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
     descriptor_set_layout_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     descriptor_set_layout_create_info.pNext         = nullptr;
     descriptor_set_layout_create_info.flags         = 0;
-    descriptor_set_layout_create_info.bindingCount  = 1;
-    descriptor_set_layout_create_info.pBindings     = &binding;
+    descriptor_set_layout_create_info.bindingCount  = bindings.size();
+    descriptor_set_layout_create_info.pBindings     = bindings.data();
 
     VKRESULT(vkCreateDescriptorSetLayout(device, &descriptor_set_layout_create_info, nullptr, &compute_shader_input_layout))
 
@@ -311,17 +403,24 @@ void vkrenderer::create_command_buffer() {
     vkAllocateCommandBuffers(device, &cmd_buf_allocate_info, &command_buffer);
 }
 void vkrenderer::create_descriptor_set() {
-    VkDescriptorPoolSize descriptor_pool_size               = {};
-    descriptor_pool_size.type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptor_pool_size.descriptorCount                    = 1;
+    std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
+        {
+            .type                               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount                    = 1,
+        },
+        {
+            .type                               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount                    = 1,
+        }
+    };
 
     VkDescriptorPoolCreateInfo descriptor_pool_create_info  = {};
     descriptor_pool_create_info.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     descriptor_pool_create_info.pNext                       = nullptr;
     descriptor_pool_create_info.flags                       = 0;
     descriptor_pool_create_info.maxSets                     = 1;
-    descriptor_pool_create_info.poolSizeCount               = 1;
-    descriptor_pool_create_info.pPoolSizes                  = &descriptor_pool_size;
+    descriptor_pool_create_info.poolSizeCount               = descriptor_pools_sizes.size();
+    descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes.data();
 
     VKRESULT(vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
 
@@ -333,6 +432,15 @@ void vkrenderer::create_descriptor_set() {
     descriptor_set_allocate_info.pSetLayouts                    = &compute_shader_input_layout;
 
     vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, &compute_shader_input_set);
+}
+
+void vkrenderer::create_semaphores() {
+    VkSemaphoreCreateInfo create_info   = {};
+    create_info.sType                   = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    create_info.pNext                   = nullptr;
+    create_info.flags                   = 0;
+
+    VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &acquire_semaphore))
 }
 
 void vkrenderer::select_physical_device() {
@@ -369,9 +477,10 @@ void vkrenderer::select_compute_queue() {
 }
 
 void vkrenderer::fill_descriptor_set(const input_data& inputs, size_t width, size_t height) {
+    // Update uniform buffer binding
     VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buffer_info.size                = sizeof(struct input_data) + sizeof(color) * width * height;
-    buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    buffer_info.size                = sizeof(struct input_data);
+    buffer_info.usage               = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
@@ -394,10 +503,24 @@ void vkrenderer::fill_descriptor_set(const input_data& inputs, size_t width, siz
     write_descriptor_set.dstBinding                 = 0;
     write_descriptor_set.dstArrayElement            = 0;
     write_descriptor_set.descriptorCount            = 1;
-    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write_descriptor_set.pImageInfo                 = nullptr;
+    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write_descriptor_set.pImageInfo                 = VK_NULL_HANDLE;
     write_descriptor_set.pBufferInfo                = &descriptor_buf_info;
-    write_descriptor_set.pTexelBufferView           = nullptr;
+    write_descriptor_set.pTexelBufferView           = VK_NULL_HANDLE;
+
+    vkUpdateDescriptorSets(device, 1, &write_descriptor_set, 0, nullptr);
+
+
+    // Update storage image binding
+    VkDescriptorImageInfo descriptor_image_info     = {};
+    descriptor_image_info.sampler                   = VK_NULL_HANDLE;
+    descriptor_image_info.imageView                 = swapchain_images_views[current_image_index];
+    descriptor_image_info.imageLayout               = VK_IMAGE_LAYOUT_GENERAL;
+
+    write_descriptor_set.dstBinding                 = 1;
+    write_descriptor_set.descriptorCount            = 1;
+    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write_descriptor_set.pImageInfo                 = &descriptor_image_info;
 
     vkUpdateDescriptorSets(device, 1, &write_descriptor_set, 0, nullptr);
 }
