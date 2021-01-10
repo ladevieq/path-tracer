@@ -86,8 +86,8 @@ int main() {
 
     window wnd { width , height };
     vkrenderer renderer { wnd };
-    const uint32_t samples_per_pixel = 20;
-    const uint32_t max_depth = 20;
+    const uint32_t samples_per_pixel = 1;
+    const uint32_t max_depth = 1;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -133,26 +133,24 @@ int main() {
 
     std::cerr << "Generating image" << std::endl;
 
-    pause();
-
     // To start a frame capture, call StartFrameCapture.
     // You can specify NULL, NULL for the device to capture on if you have only one device and
     // either no windows at all or only one window, and it will capture from that device.
     // See the documentation below for a longer explanation
     // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-    // auto start = std::chrono::high_resolution_clock::now();
-    // renderer.compute(inputs, width, height);
-    // auto end = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
+    renderer.compute(inputs, width, height);
+    auto end = std::chrono::high_resolution_clock::now();
 
-    // std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
-    // // stop the capture
-    // if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+    // stop the capture
+    if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 
-    // //-------------------------
-    // // GPU path tracer
-    // //-------------------------
+    //-------------------------
+    // GPU path tracer
+    //-------------------------
     // auto output_image = renderer.output_image();
     // for (size_t index = 0; index < height * width; index++) {
     //     write_color(std::cout, output_image[index]);
