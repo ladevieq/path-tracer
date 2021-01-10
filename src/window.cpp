@@ -1,6 +1,7 @@
 #include "window.hpp"
 
-window::window() {
+window::window(uint32_t width, uint32_t height)
+    :width(width), height(height) {
     connection = xcb_connect(NULL, NULL);
     win = xcb_generate_id(connection);
 
@@ -14,8 +15,8 @@ window::window() {
         screen_info->root,
         10,
         10,
-        400,
-        400,
+        width,
+        height,
         10,
         XCB_WINDOW_CLASS_INPUT_OUTPUT,
         screen_info->root_visual,

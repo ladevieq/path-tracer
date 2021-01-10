@@ -1,12 +1,15 @@
 #ifndef __VK_RENDERER_HPP_
 #define __VK_RENDERER_HPP_
 
+#include <vector>
+
 #include "vulkan-loader.hpp"
 #include "thirdparty/vk_mem_alloc.h"
 
 #include "vec3.hpp"
 #include "camera.hpp"
 #include "sphere.hpp"
+#include "window.hpp"
 
 struct input_data {
     color sky_color;
@@ -35,7 +38,7 @@ struct path_tracer_data {
 
 class vkrenderer {
     public:
-        vkrenderer();
+        vkrenderer(window& wnd);
 
         void compute(const input_data& inputs, size_t width, size_t height);
 
@@ -46,7 +49,11 @@ class vkrenderer {
 
         void create_debugger();
 
+        void create_surface(window& wnd);
+
         void create_device();
+
+        void create_swapchain(window& wnd);
 
         void create_pipeline();
 
@@ -81,6 +88,11 @@ class vkrenderer {
         VkDescriptorSetLayout   compute_shader_input_layout;
         VkPipelineLayout        compute_pipeline_layout;
         VkPipeline              compute_pipeline;
+
+        VkSurfaceKHR            platform_surface;
+        VkSwapchainKHR          swapchain;
+        size_t                  swapchain_images_count = 3;
+        std::vector<VkImage>    swapchain_images;
 
         struct path_tracer_data* mapped_data;
 };

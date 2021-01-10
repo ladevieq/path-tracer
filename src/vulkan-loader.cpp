@@ -19,7 +19,6 @@ void *vulkanLibrary = dlopen( "libvulkan.so.1", RTLD_NOW );
     VULKAN_EXPORTED_FUNCTIONS
     VULKAN_APPLICATION_FUNCTIONS
     VULKAN_INSTANCE_FUNCTIONS
-    PLATFORM_VULKAN_INSTANCE_FUNCTIONS
     VULKAN_DEVICE_FUNCTIONS
 #undef X
 
@@ -28,7 +27,7 @@ void Load_##name()                                                              
 {                                                                               \
     name = reinterpret_cast<PFN_##name>(LoadProcAddress(vulkanLibrary, #name)); \
     if (!name) {                                                                \
-        std::cout << "Cannot load vulkan function " << #name << std::endl;      \
+        std::cerr << "Cannot load vulkan function " << #name << std::endl;      \
     }                                                                           \
 }
 VULKAN_EXPORTED_FUNCTIONS
@@ -39,7 +38,7 @@ void Load_##name()                                                              
 {                                                                               \
     name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(nullptr, #name)); \
     if (!name) {                                                                \
-        std::cout << "Cannot load vulkan function " << #name << std::endl;      \
+        std::cerr << "Cannot load vulkan function " << #name << std::endl;      \
     }                                                                           \
 }
 VULKAN_APPLICATION_FUNCTIONS
@@ -50,11 +49,10 @@ void Load_##name(VkInstance instance)                                           
 {                                                                                 \
     name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(instance, #name));  \
     if (!name) {                                                                  \
-        std::cout << "Cannot load vulkan function " << #name << std::endl;        \
+        std::cerr << "Cannot load vulkan function " << #name << std::endl;        \
     }                                                                             \
 }
 VULKAN_INSTANCE_FUNCTIONS
-PLATFORM_VULKAN_INSTANCE_FUNCTIONS
 #undef X
 
 #define X(name)                                                               \
@@ -62,7 +60,7 @@ void Load_##name(VkDevice device)                                             \
 {                                                                             \
     name = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(device, #name)); \
     if (!name) {                                                              \
-        std::cout << "Cannot load vulkan function " << #name << std::endl;    \
+        std::cerr << "Cannot load vulkan function " << #name << std::endl;    \
     }                                                                         \
 }
 VULKAN_DEVICE_FUNCTIONS
@@ -79,7 +77,6 @@ void load_vulkan()
 void load_instance_functions(VkInstance instance) {
 #define X(name) Load_##name(instance);
     VULKAN_INSTANCE_FUNCTIONS
-    PLATFORM_VULKAN_INSTANCE_FUNCTIONS
 #undef X
 }
 

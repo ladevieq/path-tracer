@@ -19,12 +19,13 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
     return VK_FALSE;
 }
 
-
-vkrenderer::vkrenderer() {
+vkrenderer::vkrenderer(window& wnd) {
     load_vulkan();
 
     create_instance();
+    create_surface(wnd);
     create_device();
+    create_swapchain(wnd);
     create_pipeline();
     create_memory_allocator();
     create_command_buffer();
@@ -84,7 +85,9 @@ void vkrenderer::create_instance() {
         "VK_LAYER_KHRONOS_validation",
     };
     std::vector<const char*> extensions = {
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        "VK_KHR_surface",
+        "VK_KHR_xcb_surface"
     };
 
     VkInstanceCreateInfo instance_create_info       = {};
@@ -125,6 +128,17 @@ void vkrenderer::create_debugger() {
     ))
 }
 
+void vkrenderer::create_surface(window& wnd) {
+    VkXcbSurfaceCreateInfoKHR create_info   = {};
+    create_info.sType                       = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+    create_info.pNext                       = nullptr;
+    create_info.flags                       = 0;
+    create_info.connection                  = wnd.connection;
+    create_info.window                      = wnd.win;
+
+    VKRESULT(vkCreateXcbSurfaceKHR(instance, &create_info, nullptr, &platform_surface))
+}
+
 void vkrenderer::create_device() {
     select_physical_device();
     select_compute_queue();
@@ -139,12 +153,17 @@ void vkrenderer::create_device() {
 
     VkPhysicalDeviceFeatures device_features    = {};
 
+    std::vector<const char*> device_ext         = {
+        "VK_KHR_swapchain"
+    };
+
     VkDeviceCreateInfo device_create_info       = {};
     device_create_info.sType                    = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     device_create_info.pQueueCreateInfos        = &queue_create_info;
     device_create_info.queueCreateInfoCount     = 1;
     device_create_info.pEnabledFeatures         = &device_features;
-    device_create_info.enabledExtensionCount    = 0; // None yet
+    device_create_info.ppEnabledExtensionNames  = device_ext.data();
+    device_create_info.enabledExtensionCount    = device_ext.size();
     device_create_info.enabledLayerCount        = 0; // Deprecated https://www.khronos.org/registry/vulkan/specs/1.2/html/chap31.html#extendingvulkan-layers-devicelayerdeprecation
 
     VKRESULT(vkCreateDevice(physical_device, &device_create_info, nullptr, &device))
@@ -154,6 +173,42 @@ void vkrenderer::create_device() {
     vkGetDeviceQueue(device, compute_queue_index, 0, &compute_queue);
 
     std::cerr << "Device ready" << std::endl;
+}
+
+void vkrenderer::create_swapchain(window& wnd) {
+    VkBool32 queue_support_presentation = VK_FALSE;
+    VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, compute_queue_index, platform_surface, &queue_support_presentation));
+
+    VkSurfaceCapabilitiesKHR caps;
+    VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, platform_surface, &caps))
+
+    uint32_t supported_formats_count = 0;
+    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, platform_surface, &supported_formats_count,  VK_NULL_HANDLE))
+
+    std::vector<VkSurfaceFormatKHR> supported_formats { supported_formats_count };
+    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, platform_surface, &supported_formats_count,  supported_formats.data()))
+
+    VkSwapchainCreateInfoKHR create_info    = {};
+    create_info.sType                       = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    create_info.pNext                       = nullptr;
+    create_info.flags                       = 0;
+    create_info.surface                     = platform_surface;
+    create_info.minImageCount               = swapchain_images_count;
+    create_info.imageFormat                 = supported_formats[0].format;
+    create_info.imageColorSpace             = supported_formats[0].colorSpace;
+    create_info.imageExtent                 = caps.currentExtent;
+    create_info.imageArrayLayers            = 1;
+    create_info.imageUsage                  = VK_IMAGE_USAGE_STORAGE_BIT;
+    create_info.imageSharingMode            = VK_SHARING_MODE_EXCLUSIVE;
+    create_info.preTransform                = caps.currentTransform;
+    create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
+    create_info.clipped                     = VK_TRUE;
+    create_info.oldSwapchain                = VK_NULL_HANDLE;
+
+    VKRESULT(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain))
+
+    VKRESULT(vkGetSwapchainImagesKHR(device, swapchain, (uint32_t*)&swapchain_images_count, swapchain_images.data()))
 }
 
 void vkrenderer::create_pipeline() {
