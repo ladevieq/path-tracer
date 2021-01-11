@@ -30,9 +30,10 @@ vkrenderer::vkrenderer(window& wnd) {
     create_memory_allocator();
     create_command_buffer();
     create_descriptor_set();
+    create_fence();
     create_semaphores();
 
-    initialization_frame();
+    // initialization_frame();
 }
 
 void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) {
@@ -116,9 +117,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffer;
 
-    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE))
-
-    VKRESULT(vkDeviceWaitIdle(device))
+    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, submission_fence))
 
     VkPresentInfoKHR present_info   = {};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -131,6 +130,8 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     present_info.pResults           = nullptr;
 
     VKRESULT(vkQueuePresentKHR(compute_queue, &present_info))
+
+    VKRESULT(vkWaitForFences(device, 1, &submission_fence, VK_TRUE, UINT64_MAX))
 }
 
 
@@ -450,12 +451,22 @@ void vkrenderer::create_descriptor_set() {
     vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, &compute_shader_set);
 }
 
+void vkrenderer::create_fence() {
+    VkFenceCreateInfo create_info   = {};
+    create_info.sType               = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    create_info.pNext               = nullptr;
+    create_info.flags               = 0;
+
+    VKRESULT(vkCreateFence(device, &create_info, nullptr, &submission_fence))
+}
+
 void vkrenderer::create_semaphores() {
     VkSemaphoreCreateInfo create_info   = {};
     create_info.sType                   = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     create_info.pNext                   = nullptr;
     create_info.flags                   = 0;
 
+    VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &execution_semaphore))
     VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &acquire_semaphore))
 }
 
@@ -514,9 +525,11 @@ void vkrenderer::initialization_frame() {
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffer;
 
-    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE))
+    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, submission_fence))
 
-    VKRESULT(vkDeviceWaitIdle(device))
+    VKRESULT(vkWaitForFences(device, 1, &submission_fence, VK_TRUE, UINT64_MAX))
+
+    vkResetFences(device, 1, &submission_fence);
 }
 
 void vkrenderer::select_physical_device() {

@@ -70,6 +70,7 @@
     X(vkQueueSubmit)                  \
     X(vkCreateSemaphore)              \
     X(vkDestroySemaphore)             \
+    X(vkWaitSemaphores)               \
     X(vkCreateCommandPool)            \
     X(vkAllocateCommandBuffers)       \
     X(vkFreeCommandBuffers)           \
