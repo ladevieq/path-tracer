@@ -31,18 +31,11 @@ struct input_data {
     uint32_t height;
 };
 
-struct path_tracer_data {
-    struct input_data inputs;
-    color first_pixel;
-};
-
 class vkrenderer {
     public:
         vkrenderer(window& wnd);
 
         void compute(const input_data& inputs, size_t width, size_t height);
-
-        const color* const output_image();
 
     private:
         void create_instance();
@@ -65,11 +58,14 @@ class vkrenderer {
 
         void create_semaphores();
 
+    public:
+        void initialization_frame();
+
         void select_physical_device();
 
         void select_compute_queue();
 
-        void fill_descriptor_set(const input_data& data, size_t width, size_t height);
+        void fill_descriptor_set(const input_data& data);
 
         uint32_t            compute_queue_index;
 
@@ -85,9 +81,9 @@ class vkrenderer {
         VkCommandBuffer     command_buffer;
 
         VkDescriptorPool    descriptor_pool;
-        VkDescriptorSet     compute_shader_input_set;
+        VkDescriptorSet     compute_shader_set;
 
-        VkDescriptorSetLayout   compute_shader_input_layout;
+        VkDescriptorSetLayout   compute_shader_layout;
         VkPipelineLayout        compute_pipeline_layout;
         VkPipeline              compute_pipeline;
 
@@ -101,7 +97,7 @@ class vkrenderer {
         std::vector<VkImageView>swapchain_images_views;
         uint32_t                current_image_index;
 
-        struct path_tracer_data* mapped_data;
+        struct input_data*      mapped_data;
 };
 
 #endif // !__VK_RENDERER_HPP_

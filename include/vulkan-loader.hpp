@@ -90,6 +90,7 @@
     X(vkCmdDispatch)                  \
     X(vkCmdEndRenderPass)             \
     X(vkEndCommandBuffer)             \
+    X(vkResetCommandBuffer)           \
     X(vkCreateRenderPass)             \
     X(vkCreateBuffer)                 \
     X(vkCreateImage)                  \

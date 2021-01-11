@@ -86,6 +86,10 @@ int main() {
 
     window wnd { width , height };
     vkrenderer renderer { wnd };
+
+    if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+    renderer.initialization_frame();
+
     const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 1;
 
