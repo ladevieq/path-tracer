@@ -56,6 +56,8 @@ class vkrenderer {
 
         void create_descriptor_set();
 
+        void create_fence();
+
         void create_semaphores();
 
     public:
@@ -87,6 +89,8 @@ class vkrenderer {
         VkPipelineLayout        compute_pipeline_layout;
         VkPipeline              compute_pipeline;
 
+        VkFence                 submission_fence;
+        VkSemaphore             execution_semaphore;
         VkSemaphore             acquire_semaphore;
 
         VkSurfaceFormatKHR      surface_format;
