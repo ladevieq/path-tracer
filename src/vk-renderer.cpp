@@ -479,39 +479,39 @@ void vkrenderer::initialization_frame() {
 
     vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
 
-    for (size_t image_index; image_index < swapchain_images_count; image_index++) {
-        VkImageSubresourceRange image_subresource_range = {};
-        image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_subresource_range.baseMipLevel            = 0;
-        image_subresource_range.levelCount              = 1;
-        image_subresource_range.baseArrayLayer          = 0;
-        image_subresource_range.layerCount              = 1;
+    VkImageSubresourceRange image_subresource_range = {};
+    image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_subresource_range.baseMipLevel            = 0;
+    image_subresource_range.levelCount              = 1;
+    image_subresource_range.baseArrayLayer          = 0;
+    image_subresource_range.layerCount              = 1;
 
-        VkImageMemoryBarrier image_memory_barrier   = {};
-        image_memory_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        image_memory_barrier.pNext                  = nullptr;
-        image_memory_barrier.srcAccessMask          = 0;
-        image_memory_barrier.dstAccessMask          = 0;
-        image_memory_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
-        image_memory_barrier.newLayout              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        image_memory_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.image                  = swapchain_images[image_index];
-        image_memory_barrier.subresourceRange       = image_subresource_range;
-
-        vkCmdPipelineBarrier(
-            command_buffer,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_DEPENDENCY_DEVICE_GROUP_BIT,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            1,
-            &image_memory_barrier
-        );
+    std::vector<VkImageMemoryBarrier> image_barriers { swapchain_images_count };
+    for (size_t image_index = 0; image_index < swapchain_images_count; image_index++) {
+        image_barriers[image_index].sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        image_barriers[image_index].pNext                  = nullptr;
+        image_barriers[image_index].srcAccessMask          = 0;
+        image_barriers[image_index].dstAccessMask          = 0;
+        image_barriers[image_index].oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_barriers[image_index].newLayout              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        image_barriers[image_index].srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+        image_barriers[image_index].dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+        image_barriers[image_index].image                  = swapchain_images[image_index];
+        image_barriers[image_index].subresourceRange       = image_subresource_range;
     }
+
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_DEPENDENCY_DEVICE_GROUP_BIT,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        image_barriers.size(),
+        image_barriers.data()
+    );
 
     vkEndCommandBuffer(command_buffer);
 
