@@ -92,7 +92,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
         command_buffer,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_DEPENDENCY_DEVICE_GROUP_BIT,
+        0,
         0,
         nullptr,
         0,

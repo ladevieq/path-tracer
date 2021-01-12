@@ -46,7 +46,7 @@ struct camera {
     float[3] padding;
 };
 
-layout(set = 0, binding = 0) uniform Inputs {
+layout(set = 0, binding = 0) buffer Inputs {
     vec4 sky_color;
     vec4 ground_color;
     camera cam;
