@@ -80,15 +80,13 @@ int main() {
     }
 
     // Image dimensions
-    const float aspect_ratio = 16.0 / 9.0;
-    const uint32_t width = 1920;
+    // const float aspect_ratio = 16.0 / 9.0;
+    const float aspect_ratio = 1;
+    const uint32_t width = 400;
     const uint32_t height = width / aspect_ratio;
 
     window wnd { width , height };
     vkrenderer renderer { wnd };
-
-    if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
-    renderer.initialization_frame();
 
     const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 1;
@@ -133,15 +131,15 @@ int main() {
     random_scene(inputs.spheres);
 
     // PPM format header
-    std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;
+    // std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;
 
-    std::cerr << "Generating image" << std::endl;
+    // std::cerr << "Generating image" << std::endl;
 
     // To start a frame capture, call StartFrameCapture.
     // You can specify NULL, NULL for the device to capture on if you have only one device and
     // either no windows at all or only one window, and it will capture from that device.
     // See the documentation below for a longer explanation
-    // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+    if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
     auto start = std::chrono::high_resolution_clock::now();
     renderer.compute(inputs, width, height);
@@ -151,6 +149,8 @@ int main() {
 
     // stop the capture
     if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+
+    pause();
 
     //-------------------------
     // GPU path tracer
