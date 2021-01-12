@@ -60,9 +60,6 @@ class vkrenderer {
 
         void create_semaphores();
 
-    public:
-        void initialization_frame();
-
         void select_physical_device();
 
         void select_compute_queue();

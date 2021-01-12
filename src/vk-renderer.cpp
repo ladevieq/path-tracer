@@ -32,12 +32,10 @@ vkrenderer::vkrenderer(window& wnd) {
     create_descriptor_set();
     create_fence();
     create_semaphores();
-
-    // initialization_frame();
 }
 
 void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) {
-    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquire_semaphore, VK_NULL_HANDLE, &current_image_index);
+    VKRESULT(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquire_semaphore, VK_NULL_HANDLE, &current_image_index))
 
     fill_descriptor_set(inputs);
 
@@ -61,7 +59,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     image_memory_barrier.pNext                  = nullptr;
     image_memory_barrier.srcAccessMask          = 0;
     image_memory_barrier.dstAccessMask          = 0;
-    image_memory_barrier.oldLayout              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    image_memory_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
     image_memory_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
     image_memory_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
     image_memory_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
@@ -72,7 +70,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
         command_buffer,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_DEPENDENCY_DEVICE_GROUP_BIT,
+        0,
         0,
         nullptr,
         0,
@@ -102,7 +100,8 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
         1,
         &image_memory_barrier
     );
-    vkEndCommandBuffer(command_buffer);
+
+    VKRESULT(vkEndCommandBuffer(command_buffer))
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
@@ -252,6 +251,12 @@ void vkrenderer::create_swapchain(window& wnd) {
     std::vector<VkSurfaceFormatKHR> supported_formats { supported_formats_count };
     VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, platform_surface, &supported_formats_count,  supported_formats.data()))
 
+    uint32_t supported_present_modes_count = 0;
+    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, platform_surface, &supported_present_modes_count, VK_NULL_HANDLE))
+
+    std::vector<VkPresentModeKHR> supported_present_modes { supported_present_modes_count };
+    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, platform_surface, &supported_present_modes_count, supported_present_modes.data()))
+
     surface_format = supported_formats[0];
 
     VkSwapchainCreateInfoKHR create_info    = {};
@@ -338,7 +343,7 @@ void vkrenderer::create_pipeline() {
     std::vector<VkDescriptorSetLayoutBinding> bindings {
         {
             .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
             .pImmutableSamplers = VK_NULL_HANDLE,
@@ -422,7 +427,7 @@ void vkrenderer::create_command_buffer() {
 void vkrenderer::create_descriptor_set() {
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
         {
-            .type                               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .descriptorCount                    = 1,
         },
         {
@@ -470,68 +475,6 @@ void vkrenderer::create_semaphores() {
     VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &acquire_semaphore))
 }
 
-void vkrenderer::initialization_frame() {
-    VkCommandBufferBeginInfo cmd_buf_begin_info = {};
-    cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmd_buf_begin_info.pNext                    = nullptr;
-    cmd_buf_begin_info.flags                    = 0;
-    cmd_buf_begin_info.pInheritanceInfo         = nullptr;
-
-    vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
-
-    VkImageSubresourceRange image_subresource_range = {};
-    image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
-    image_subresource_range.baseMipLevel            = 0;
-    image_subresource_range.levelCount              = 1;
-    image_subresource_range.baseArrayLayer          = 0;
-    image_subresource_range.layerCount              = 1;
-
-    std::vector<VkImageMemoryBarrier> image_barriers { swapchain_images_count };
-    for (size_t image_index = 0; image_index < swapchain_images_count; image_index++) {
-        image_barriers[image_index].sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        image_barriers[image_index].pNext                  = nullptr;
-        image_barriers[image_index].srcAccessMask          = 0;
-        image_barriers[image_index].dstAccessMask          = 0;
-        image_barriers[image_index].oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
-        image_barriers[image_index].newLayout              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        image_barriers[image_index].srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-        image_barriers[image_index].dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-        image_barriers[image_index].image                  = swapchain_images[image_index];
-        image_barriers[image_index].subresourceRange       = image_subresource_range;
-    }
-
-    vkCmdPipelineBarrier(
-        command_buffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_DEPENDENCY_DEVICE_GROUP_BIT,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        image_barriers.size(),
-        image_barriers.data()
-    );
-
-    vkEndCommandBuffer(command_buffer);
-
-    VkSubmitInfo submit_info            = {};
-    submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.pNext                   = nullptr;
-    submit_info.waitSemaphoreCount      = 0;
-    submit_info.pWaitSemaphores         = nullptr;
-    submit_info.signalSemaphoreCount    = 0;
-    submit_info.pSignalSemaphores       = nullptr;
-    submit_info.commandBufferCount      = 1;
-    submit_info.pCommandBuffers         = &command_buffer;
-
-    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, submission_fence))
-
-    VKRESULT(vkWaitForFences(device, 1, &submission_fence, VK_TRUE, UINT64_MAX))
-
-    vkResetFences(device, 1, &submission_fence);
-}
-
 void vkrenderer::select_physical_device() {
     uint32_t physical_devices_count = 0;
     vkEnumeratePhysicalDevices(instance, &physical_devices_count, nullptr);
@@ -568,11 +511,11 @@ void vkrenderer::select_compute_queue() {
 void vkrenderer::fill_descriptor_set(const input_data& inputs) {
     // Update uniform buffer binding
     VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    buffer_info.size                = sizeof(struct input_data);
-    buffer_info.usage               = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    buffer_info.size                = sizeof(inputs);
+    buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
      
     VmaAllocation allocation;
     vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_buffer, &allocation, nullptr);
@@ -592,7 +535,7 @@ void vkrenderer::fill_descriptor_set(const input_data& inputs) {
     write_descriptor_set.dstBinding                 = 0;
     write_descriptor_set.dstArrayElement            = 0;
     write_descriptor_set.descriptorCount            = 1;
-    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     write_descriptor_set.pImageInfo                 = VK_NULL_HANDLE;
     write_descriptor_set.pBufferInfo                = &descriptor_buf_info;
     write_descriptor_set.pTexelBufferView           = VK_NULL_HANDLE;
