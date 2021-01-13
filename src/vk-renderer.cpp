@@ -515,13 +515,13 @@ void vkrenderer::fill_descriptor_set(const input_data& inputs) {
     buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
     VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+    alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
      
     VmaAllocation allocation;
     vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_buffer, &allocation, nullptr);
 
     vmaMapMemory(allocator, allocation, (void**) &mapped_data);
-    std::memcpy(&mapped_data, &inputs, sizeof(inputs));
+    std::memcpy(mapped_data, &inputs, sizeof(inputs));
 
     // Update uniform buffer descriptor
     VkDescriptorBufferInfo descriptor_buf_info      = {};
