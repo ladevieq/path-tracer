@@ -5,13 +5,14 @@
 
 #include <vector>
 
-#include <cmath>
 #include <cstdlib>
 
 std::vector<uint8_t> get_shader_code(const char* path);
 
+#define PI 3.14159265359
+
 inline float deg_to_rad(float deg) {
-    return deg * M_PI / 180.0;
+    return deg * PI / 180.0;
 }
 
 inline float randd() {

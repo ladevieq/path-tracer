@@ -1,3 +1,5 @@
+add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${Vulkan_INCLUDE_DIRS})
 

@@ -1,5 +1,6 @@
 #include "window.hpp"
 
+#ifdef LINUX
 window::window(uint32_t width, uint32_t height)
     :width(width), height(height) {
     connection = xcb_connect(NULL, NULL);
@@ -27,3 +28,8 @@ window::window(uint32_t width, uint32_t height)
     xcb_map_window(connection, win);
     xcb_flush(connection);
 }
+#elif defined(WINDOWS)
+window::window(uint32_t width, uint32_t height)
+    :width(width), height(height) {
+}
+#endif
