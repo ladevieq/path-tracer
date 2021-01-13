@@ -509,7 +509,7 @@ void vkrenderer::select_compute_queue() {
 }
 
 void vkrenderer::fill_descriptor_set(const input_data& inputs) {
-    // Update uniform buffer binding
+    // Create and fill input data buffer
     VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buffer_info.size                = sizeof(inputs);
     buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -523,36 +523,47 @@ void vkrenderer::fill_descriptor_set(const input_data& inputs) {
     vmaMapMemory(allocator, allocation, (void**) &mapped_data);
     std::memcpy(&mapped_data, &inputs, sizeof(inputs));
 
+    // Update uniform buffer descriptor
     VkDescriptorBufferInfo descriptor_buf_info      = {};
     descriptor_buf_info.buffer                      = compute_shader_buffer;
     descriptor_buf_info.offset                      = 0;
     descriptor_buf_info.range                       = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet write_descriptor_set       = {};
-    write_descriptor_set.sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write_descriptor_set.pNext                      = nullptr;
-    write_descriptor_set.dstSet                     = compute_shader_set;
-    write_descriptor_set.dstBinding                 = 0;
-    write_descriptor_set.dstArrayElement            = 0;
-    write_descriptor_set.descriptorCount            = 1;
-    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write_descriptor_set.pImageInfo                 = VK_NULL_HANDLE;
-    write_descriptor_set.pBufferInfo                = &descriptor_buf_info;
-    write_descriptor_set.pTexelBufferView           = VK_NULL_HANDLE;
-
-    vkUpdateDescriptorSets(device, 1, &write_descriptor_set, 0, nullptr);
+    VkWriteDescriptorSet write_buffer_descriptor    = {};
+    write_buffer_descriptor.sType                   = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_buffer_descriptor.pNext                   = nullptr;
+    write_buffer_descriptor.dstSet                  = compute_shader_set;
+    write_buffer_descriptor.dstBinding              = 0;
+    write_buffer_descriptor.dstArrayElement         = 0;
+    write_buffer_descriptor.descriptorCount         = 1;
+    write_buffer_descriptor.descriptorType          = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write_buffer_descriptor.pImageInfo              = VK_NULL_HANDLE;
+    write_buffer_descriptor.pBufferInfo             = &descriptor_buf_info;
+    write_buffer_descriptor.pTexelBufferView        = VK_NULL_HANDLE;
 
 
-    // Update storage image binding
+    // Update storage image descriptor
     VkDescriptorImageInfo descriptor_image_info     = {};
     descriptor_image_info.sampler                   = VK_NULL_HANDLE;
     descriptor_image_info.imageView                 = swapchain_images_views[current_image_index];
     descriptor_image_info.imageLayout               = VK_IMAGE_LAYOUT_GENERAL;
 
-    write_descriptor_set.dstBinding                 = 1;
-    write_descriptor_set.descriptorType             = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    write_descriptor_set.pImageInfo                 = &descriptor_image_info;
-    write_descriptor_set.pBufferInfo                = VK_NULL_HANDLE;
+    VkWriteDescriptorSet write_image_descriptor     = {};
+    write_image_descriptor.sType                    = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_image_descriptor.pNext                    = nullptr;
+    write_image_descriptor.dstSet                   = compute_shader_set;
+    write_image_descriptor.dstBinding               = 1;
+    write_image_descriptor.dstArrayElement          = 0;
+    write_image_descriptor.descriptorCount          = 1;
+    write_image_descriptor.descriptorType           = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write_image_descriptor.pImageInfo               = &descriptor_image_info;
+    write_image_descriptor.pBufferInfo              = VK_NULL_HANDLE;
+    write_image_descriptor.pTexelBufferView         = VK_NULL_HANDLE;
 
-    vkUpdateDescriptorSets(device, 1, &write_descriptor_set, 0, nullptr);
+    std::vector<VkWriteDescriptorSet> write_descriptors {
+        write_buffer_descriptor,
+        write_image_descriptor,
+    };
+
+    vkUpdateDescriptorSets(device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
 }
