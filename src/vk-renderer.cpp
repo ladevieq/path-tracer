@@ -150,7 +150,9 @@ void vkrenderer::create_instance() {
     std::vector<const char*> extensions = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         "VK_KHR_surface",
+#ifdef LINUX
         "VK_KHR_xcb_surface"
+#endif
     };
 
     VkInstanceCreateInfo instance_create_info       = {};
@@ -192,6 +194,7 @@ void vkrenderer::create_debugger() {
 }
 
 void vkrenderer::create_surface(window& wnd) {
+#ifdef LINUX
     VkXcbSurfaceCreateInfoKHR create_info   = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
     create_info.pNext                       = nullptr;
@@ -200,6 +203,7 @@ void vkrenderer::create_surface(window& wnd) {
     create_info.window                      = wnd.win;
 
     VKRESULT(vkCreateXcbSurfaceKHR(instance, &create_info, nullptr, &platform_surface))
+#endif
 }
 
 void vkrenderer::create_device() {

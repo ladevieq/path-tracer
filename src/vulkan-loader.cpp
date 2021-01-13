@@ -1,13 +1,14 @@
 #include "vulkan-loader.hpp"
 
 #include <iostream>
+#include "rt.hpp"
 
 #if defined(WINDOWS)
 HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 
 #define LoadProcAddress GetProcAddress
 
-#elif defined(__linux__)
+#elif defined(LINUX)
 #include <dlfcn.h>
 
 void *vulkanLibrary = dlopen( "libvulkan.so.1", RTLD_NOW );

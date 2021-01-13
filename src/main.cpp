@@ -4,8 +4,6 @@
 #include <cstring>
 #include <cstdio>
 #include <cassert>
-#include <unistd.h>
-#include <dlfcn.h>
 
 #include "rt.hpp"
 #include "vk-renderer.hpp"
@@ -70,6 +68,16 @@ void random_scene(sphere *world) {
 int main() {
     RENDERDOC_API_1_1_2 *rdoc_api = NULL;
 
+#ifdef WINDOWS
+    // At init, on windows
+    if(HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+    {
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+            (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
+        assert(ret == 1);
+    }
+#elif LINUX
     // At init, on linux/android.
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
     if(void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
@@ -78,6 +86,7 @@ int main() {
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
         assert(ret == 1);
     }
+#endif
 
     // Image dimensions
     // const float aspect_ratio = 16.0 / 9.0;
@@ -149,8 +158,6 @@ int main() {
 
     // stop the capture
     if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
-
-    pause();
 
     //-------------------------
     // GPU path tracer

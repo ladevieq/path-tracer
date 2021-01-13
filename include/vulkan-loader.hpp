@@ -1,12 +1,12 @@
 #ifndef __VULKAN_LOADER_HPP_
 #define __VULKAN_LOADER_HPP_
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(WINDOWS)
 #include <Windows.h>
 #include <windowsx.h>
 
 #define VK_USE_PLATFORM_WIN32_KHR
-#elif defined(__linux__)
+#elif defined(LINUX)
 #define VK_USE_PLATFORM_XCB_KHR
 #endif
 
