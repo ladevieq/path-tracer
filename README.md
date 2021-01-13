@@ -1,21 +1,16 @@
 # path-tracer
-Initially a CPU path tracer based on ray tracing in one weekend book
+Initially a CPU path tracer based on [_Ray Tracing in One Weekend_](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
 
-The new implementation is using Vulkan compute shaders to generate an image of a path traced scene
-
-
-## Features
-* PPM image format
-* Three types of material (lambertian, metalic, dielectric)
-* Customisable camera (focus plan, aperture)
-* Compute everything on GPU
+Rewritten using Vulkan API compute shaders to make it lighting fast.
 
 ## Result
 ![](https://github.com/ladevieq/path-tracer/blob/master/result.jpg?raw=true)
 
 ## TODO
-* [ ] More material types
+* [x] Vulkan compute shader implementation
+* [x] Viewer window
+* [ ] Realtime progressive rendering
+* [ ] Camera controller
+* [ ] Add material types
 * [ ] Support GLTF format
-* [ ] Triangulated meshes rendering
-* [x] GPU implementation
-* [ ] Realtime
+* [ ] Triangulated meshes rendering (Vulkan raytracing pipeline)
