@@ -8,7 +8,8 @@ Rewritten using Vulkan API compute shaders to make it lighting fast.
 
 ## TODO
 * [x] Vulkan compute shader implementation
-* [x] Viewer window
+* [x] Viewer window (linux only)
+* [ ] Support Windows
 * [ ] Realtime progressive rendering
 * [ ] Camera controller
 * [ ] Add material types
