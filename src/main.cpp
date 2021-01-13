@@ -88,8 +88,8 @@ int main() {
     window wnd { width , height };
     vkrenderer renderer { wnd };
 
-    const uint32_t samples_per_pixel = 1;
-    const uint32_t max_depth = 1;
+    const uint32_t samples_per_pixel = 25;
+    const uint32_t max_depth = 25;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };

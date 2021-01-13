@@ -223,6 +223,5 @@ void main() {
     }
 
     float spp_scale = (1.0 / samples_per_pixel);
-    out_color = sqrt(out_color * spp_scale);
-    imageStore(output_image, ivec2(x, y), out_color);
+    imageStore(output_image, ivec2(x, y), sqrt(out_color * spp_scale));
 }
