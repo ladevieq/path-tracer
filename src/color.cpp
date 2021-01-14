@@ -1,5 +1,5 @@
 #include "color.hpp"
-#include "rt.hpp"
+#include "utils.hpp"
 
 void write_color(std::ostream& out, const color& pixel_color) {
     auto r = pixel_color.x;

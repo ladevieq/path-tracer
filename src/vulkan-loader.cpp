@@ -1,9 +1,12 @@
-#include "vulkan-loader.hpp"
-
 #include <iostream>
-#include "rt.hpp"
+
+#include "vulkan-loader.hpp"
+#include "defines.hpp"
 
 #if defined(WINDOWS)
+#include <Windows.h>
+#include <windowsx.h>
+
 HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 
 #define LoadProcAddress GetProcAddress
@@ -15,6 +18,7 @@ void *vulkanLibrary = dlopen( "libvulkan.so.1", RTLD_NOW );
 
 #define LoadProcAddress dlsym
 #endif
+
 
 #define X(name) PFN_##name name;
     VULKAN_EXPORTED_FUNCTIONS

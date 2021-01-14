@@ -2,7 +2,6 @@
 #define __VEC3_HPP_
 
 #include <iostream>
-#include <cmath>
 
 class vec3 {
     public:

@@ -1,10 +1,9 @@
 #ifndef __VULKAN_LOADER_HPP_
 #define __VULKAN_LOADER_HPP_
 
-#if defined(WINDOWS)
-#include <Windows.h>
-#include <windowsx.h>
+#include "defines.hpp"
 
+#if defined(WINDOWS)
 #define VK_USE_PLATFORM_WIN32_KHR
 #elif defined(LINUX)
 #define VK_USE_PLATFORM_XCB_KHR

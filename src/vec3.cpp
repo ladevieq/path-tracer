@@ -1,5 +1,7 @@
+#include <cmath>
+
 #include "vec3.hpp"
-#include "rt.hpp"
+#include "utils.hpp"
 
 vec3::vec3(): x(0.0), y(0.0), z(0.0) {}
 
