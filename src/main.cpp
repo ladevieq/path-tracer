@@ -4,14 +4,6 @@
 #include <cstdio>
 #include <cassert>
 
-
-#if defined(LINUX)
-#include <unistd.h>
-#include <dlfcn.h>
-#elif defined(WINDOWS)
-#include <Windows.h>
-#endif
-
 #include "vk-renderer.hpp"
 #include "thirdparty/renderdoc.h"
 
@@ -20,6 +12,15 @@
 #include "sphere.hpp"
 #include "camera.hpp"
 #include "utils.hpp"
+#include "defines.hpp"
+
+#if defined(LINUX)
+#include <unistd.h>
+#include <dlfcn.h>
+#elif defined(WINDOWS)
+#include <Windows.h>
+#endif
+
 
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
@@ -151,11 +152,6 @@ int main() {
     // World hittable objects
     random_scene(inputs.spheres);
 
-    // PPM format header
-    // std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;
-
-    // std::cerr << "Generating image" << std::endl;
-
     // To start a frame capture, call StartFrameCapture.
     // You can specify NULL, NULL for the device to capture on if you have only one device and
     // either no windows at all or only one window, and it will capture from that device.
@@ -175,8 +171,10 @@ int main() {
     }
 
     //-------------------------
-    // GPU path tracer
+    // Image exporter
     //-------------------------
+    // PPM format header
+    // std::cout << "P3\n" << width << '\n' << height << "\n255" << std::endl;
     // auto output_image = renderer.output_image();
     // for (size_t index = 0; index < height * width; index++) {
     //     write_color(std::cout, output_image[index]);
