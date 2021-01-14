@@ -171,6 +171,9 @@ int main() {
     // stop the capture
     if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 
+    while(wnd.isOpen) {
+    }
+
     //-------------------------
     // GPU path tracer
     //-------------------------
