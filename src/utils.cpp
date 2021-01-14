@@ -5,7 +5,7 @@
 #include <iostream>
 
 std::vector<uint8_t> get_shader_code(const char* path) {
-    FILE* f = fopen(path, "r");
+    FILE* f = fopen(path, "rb");
 
     if (f == nullptr) {
         std::cerr << "Cannot open compute shader file !" << std::endl;
