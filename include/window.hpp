@@ -1,16 +1,7 @@
 #ifndef __WINDOW_HPP_
 #define __WINDOW_HPP_
 
-#include <cstdint>
-
-#if defined(__linux__)
-#define LINUX
-#include <unistd.h>
-#include <dlfcn.h>
-#elif defined(_WIN32) || defined(_WIN64)
-#define WINDOWS
-#include <Windows.h>
-#endif
+#include "defines.hpp"
 
 #if defined(LINUX)
 #include <xcb/xcb.h>
