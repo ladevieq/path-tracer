@@ -6,7 +6,9 @@
 #include "vulkan-loader.hpp"
 #include "thirdparty/vk_mem_alloc.h"
 
-#include "rt.hpp"
+#include "window.hpp"
+#include "camera.hpp"
+#include "sphere.hpp"
 
 struct input_data {
     color sky_color;

@@ -1,12 +1,12 @@
-#include "vk-renderer.hpp"
-#include "utils.hpp"
+#include <iostream>
+#include <cstring>
 
+#include "vk-renderer.hpp"
 #define VMA_IMPLEMENTATION
 #include "thirdparty/vk_mem_alloc.h"
 
-#include <iostream>
-#include <vector>
-#include <cstring>
+#include "defines.hpp"
+#include "utils.hpp"
 
 #define VKRESULT(result) assert(result == VK_SUCCESS);
 

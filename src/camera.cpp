@@ -1,6 +1,7 @@
-#include "camera.hpp"
+#include <cmath>
 
-#include "rt.hpp"
+#include "camera.hpp"
+#include "utils.hpp"
 
 camera::camera(
         point3 position,

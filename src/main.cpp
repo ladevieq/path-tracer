@@ -1,13 +1,25 @@
 #include <iostream>
-#include <vector>
 #include <chrono>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
 
-#include "rt.hpp"
+
+#if defined(LINUX)
+#include <unistd.h>
+#include <dlfcn.h>
+#elif defined(WINDOWS)
+#include <Windows.h>
+#endif
+
 #include "vk-renderer.hpp"
 #include "thirdparty/renderdoc.h"
+
+#include "vec3.hpp"
+#include "material.hpp"
+#include "sphere.hpp"
+#include "camera.hpp"
+#include "utils.hpp"
 
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
@@ -77,7 +89,7 @@ int main() {
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
         assert(ret == 1);
     }
-#elif LINUX
+#elif defined(LINUX)
     // At init, on linux/android.
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
     if(void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
