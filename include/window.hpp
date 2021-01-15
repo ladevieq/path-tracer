@@ -2,6 +2,7 @@
 #define __WINDOW_HPP_
 
 #include "defines.hpp"
+#include <cstdint>
 
 #if defined(LINUX)
 #include <xcb/xcb.h>
