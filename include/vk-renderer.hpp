@@ -32,9 +32,9 @@ struct input_data {
 
 class vkrenderer {
     public:
-        vkrenderer(window& wnd);
+        vkrenderer(window& wnd, const input_data& inputs);
 
-        void compute(const input_data& inputs, size_t width, size_t height);
+        void compute(size_t width, size_t height);
 
     private:
         void create_instance();
@@ -51,11 +51,11 @@ class vkrenderer {
 
         void create_memory_allocator();
 
-        void create_command_buffer();
+        void create_command_buffers();
 
         void create_descriptor_set();
 
-        void create_fence();
+        void create_fences();
 
         void create_semaphores();
 
@@ -63,39 +63,40 @@ class vkrenderer {
 
         void select_compute_queue();
 
-        void fill_descriptor_set(const input_data& data);
+        void update_sets(const input_data& data);
 
-        uint32_t            compute_queue_index;
+        uint32_t                        compute_queue_index;
+        uint64_t                        frame_index = 0;
 
-        VkInstance          instance;
-        VkPhysicalDevice    physical_device;
-        VkDevice            device;
-        VkQueue             compute_queue;
+        VkInstance                      instance;
+        VkPhysicalDevice                physical_device;
+        VkDevice                        device;
+        VkQueue                         compute_queue;
 
-        VmaAllocator        allocator;
-        VkBuffer            compute_shader_buffer;
+        VmaAllocator                    allocator;
+        VkBuffer                        compute_shader_buffer;
 
-        VkCommandPool       command_pool;
-        VkCommandBuffer     command_buffer;
+        VkCommandPool                   command_pool;
+        std::vector<VkCommandBuffer>    command_buffers;
 
-        VkDescriptorPool    descriptor_pool;
-        VkDescriptorSet     compute_shader_set;
+        VkDescriptorPool                descriptor_pool;
+        std::vector<VkDescriptorSet>    compute_shader_sets;
 
-        VkDescriptorSetLayout   compute_shader_layout;
-        VkPipelineLayout        compute_pipeline_layout;
-        VkPipeline              compute_pipeline;
+        VkDescriptorSetLayout           compute_shader_layout;
+        VkPipelineLayout                compute_pipeline_layout;
+        VkPipeline                      compute_pipeline;
 
-        VkFence                 submission_fence;
-        VkSemaphore             execution_semaphore;
-        VkSemaphore             acquire_semaphore;
+        std::vector<VkFence>            submission_fences;
+        std::vector<VkSemaphore>        execution_semaphores;
+        std::vector<VkSemaphore>        acquire_semaphores;
 
-        VkSurfaceFormatKHR      surface_format;
-        VkSurfaceKHR            platform_surface;
-        VkSwapchainKHR          swapchain;
-        size_t                  swapchain_images_count = 3;
-        std::vector<VkImage>    swapchain_images;
-        std::vector<VkImageView>swapchain_images_views;
-        uint32_t                current_image_index;
+        VkSurfaceFormatKHR              surface_format;
+        VkSurfaceKHR                    platform_surface;
+        VkSwapchainKHR                  swapchain;
+        size_t                          swapchain_images_count = 3;
+        std::vector<VkImage>            swapchain_images;
+        std::vector<VkImageView>        swapchain_images_views;
+        uint32_t                        current_image_index;
 
         struct input_data*      mapped_data;
 };
