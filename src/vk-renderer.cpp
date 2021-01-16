@@ -61,7 +61,7 @@ void vkrenderer::compute(size_t width, size_t height) {
     undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     undefined_to_general_barrier.pNext                  = nullptr;
     undefined_to_general_barrier.srcAccessMask          = 0;
-    undefined_to_general_barrier.dstAccessMask          = 0;
+    undefined_to_general_barrier.dstAccessMask          = VK_ACCESS_SHADER_WRITE_BIT;
     undefined_to_general_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
     undefined_to_general_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
     undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
@@ -72,7 +72,7 @@ void vkrenderer::compute(size_t width, size_t height) {
     vkCmdPipelineBarrier(
         command_buffers[frame_index],
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0,
         0,
         nullptr,
@@ -91,21 +91,19 @@ void vkrenderer::compute(size_t width, size_t height) {
     VkImageMemoryBarrier general_to_present_barrier   = {};
     general_to_present_barrier.sType                    = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     general_to_present_barrier.pNext                    = nullptr;
-    general_to_present_barrier.srcAccessMask            = 0;
-    general_to_present_barrier.dstAccessMask            = 0;
+    general_to_present_barrier.srcAccessMask            = VK_ACCESS_SHADER_WRITE_BIT;
+    general_to_present_barrier.dstAccessMask            = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
     general_to_present_barrier.oldLayout                = VK_IMAGE_LAYOUT_GENERAL;
     general_to_present_barrier.newLayout                = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     general_to_present_barrier.srcQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
     general_to_present_barrier.dstQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
     general_to_present_barrier.image                    = swapchain_images[current_image_index];
     general_to_present_barrier.subresourceRange         = image_subresource_range;
-    // image_memory_barrier.srcAccessMask          = VK_ACCESS_SHADER_WRITE_BIT;
-    // image_memory_barrier.dstAccessMask          = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
     vkCmdPipelineBarrier(
         command_buffers[frame_index],
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         0,
         0,
         nullptr,
