@@ -11,6 +11,8 @@ class window {
     public:
         window(uint32_t width, uint32_t height);
 
+        void poll_events();
+
         xcb_connection_t*   connection;
         xcb_window_t        win;
 
@@ -25,6 +27,10 @@ class window {
 class window {
     public:
         window(uint32_t width, uint32_t height);
+
+        void poll_events();
+
+        LRESULT message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
         static LRESULT CALLBACK window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
