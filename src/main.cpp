@@ -107,11 +107,8 @@ int main() {
     const uint32_t width = 400;
     const uint32_t height = width / aspect_ratio;
 
-    window wnd { width , height };
-    vkrenderer renderer { wnd };
-
-    const uint32_t samples_per_pixel = 25;
-    const uint32_t max_depth = 25;
+    const uint32_t samples_per_pixel = 1;
+    const uint32_t max_depth = 50;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };
@@ -152,22 +149,24 @@ int main() {
     // World hittable objects
     random_scene(inputs.spheres);
 
-    // To start a frame capture, call StartFrameCapture.
-    // You can specify NULL, NULL for the device to capture on if you have only one device and
-    // either no windows at all or only one window, and it will capture from that device.
-    // See the documentation below for a longer explanation
-    if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
-
-    auto start = std::chrono::high_resolution_clock::now();
-    renderer.compute(inputs, width, height);
-    auto end = std::chrono::high_resolution_clock::now();
-
-    std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
-
-    // stop the capture
-    if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+    window wnd { width , height };
+    vkrenderer renderer { wnd, inputs };
 
     while(wnd.isOpen) {
+        // To start a frame capture, call StartFrameCapture.
+        // You can specify NULL, NULL for the device to capture on if you have only one device and
+        // either no windows at all or only one window, and it will capture from that device.
+        // See the documentation below for a longer explanation
+        if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+
+        auto start = std::chrono::high_resolution_clock::now();
+        renderer.compute(width, height);
+        auto end = std::chrono::high_resolution_clock::now();
+
+        std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+
+        // stop the capture
+        if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
     }
 
     //-------------------------

@@ -19,7 +19,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
     return VK_FALSE;
 }
 
-vkrenderer::vkrenderer(window& wnd) {
+vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     load_vulkan();
 
     create_instance();
@@ -28,16 +28,19 @@ vkrenderer::vkrenderer(window& wnd) {
     create_swapchain(wnd);
     create_pipeline();
     create_memory_allocator();
-    create_command_buffer();
+    create_command_buffers();
     create_descriptor_set();
-    create_fence();
+    create_fences();
     create_semaphores();
+
+    update_sets(inputs);
 }
 
-void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) {
-    VKRESULT(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquire_semaphore, VK_NULL_HANDLE, &current_image_index))
+void vkrenderer::compute(size_t width, size_t height) {
+    VKRESULT(vkWaitForFences(device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(device, 1, &submission_fences[frame_index]))
 
-    fill_descriptor_set(inputs);
+    VKRESULT(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index))
 
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
     cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -45,7 +48,7 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     cmd_buf_begin_info.flags                    = 0;
     cmd_buf_begin_info.pInheritanceInfo         = nullptr;
 
-    vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
+    vkBeginCommandBuffer(command_buffers[frame_index], &cmd_buf_begin_info);
 
     VkImageSubresourceRange image_subresource_range = {};
     image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -54,20 +57,20 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     image_subresource_range.baseArrayLayer          = 0;
     image_subresource_range.layerCount              = 1;
 
-    VkImageMemoryBarrier image_memory_barrier   = {};
-    image_memory_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    image_memory_barrier.pNext                  = nullptr;
-    image_memory_barrier.srcAccessMask          = 0;
-    image_memory_barrier.dstAccessMask          = 0;
-    image_memory_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
-    image_memory_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
-    image_memory_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    image_memory_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    image_memory_barrier.image                  = swapchain_images[current_image_index];
-    image_memory_barrier.subresourceRange       = image_subresource_range;
+    VkImageMemoryBarrier undefined_to_general_barrier   = {};
+    undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    undefined_to_general_barrier.pNext                  = nullptr;
+    undefined_to_general_barrier.srcAccessMask          = 0;
+    undefined_to_general_barrier.dstAccessMask          = 0;
+    undefined_to_general_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
+    undefined_to_general_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
+    undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    undefined_to_general_barrier.image                  = swapchain_images[current_image_index];
+    undefined_to_general_barrier.subresourceRange       = image_subresource_range;
 
     vkCmdPipelineBarrier(
-        command_buffer,
+        command_buffers[frame_index],
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         0,
@@ -76,20 +79,31 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
         0,
         nullptr,
         1,
-        &image_memory_barrier
+        &undefined_to_general_barrier
     );
 
-    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline_layout, 0, 1, &compute_shader_set, 0, nullptr);
+    vkCmdBindDescriptorSets(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline_layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
 
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
+    vkCmdBindPipeline(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
 
-    vkCmdDispatch(command_buffer, width / 8, height / 8, 1);
+    vkCmdDispatch(command_buffers[frame_index], width / 8, height / 8, 1);
 
-    image_memory_barrier.oldLayout              = VK_IMAGE_LAYOUT_GENERAL;
-    image_memory_barrier.newLayout              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkImageMemoryBarrier general_to_present_barrier   = {};
+    general_to_present_barrier.sType                    = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    general_to_present_barrier.pNext                    = nullptr;
+    general_to_present_barrier.srcAccessMask            = 0;
+    general_to_present_barrier.dstAccessMask            = 0;
+    general_to_present_barrier.oldLayout                = VK_IMAGE_LAYOUT_GENERAL;
+    general_to_present_barrier.newLayout                = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    general_to_present_barrier.srcQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
+    general_to_present_barrier.dstQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
+    general_to_present_barrier.image                    = swapchain_images[current_image_index];
+    general_to_present_barrier.subresourceRange         = image_subresource_range;
+    // image_memory_barrier.srcAccessMask          = VK_ACCESS_SHADER_WRITE_BIT;
+    // image_memory_barrier.dstAccessMask          = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
     vkCmdPipelineBarrier(
-        command_buffer,
+        command_buffers[frame_index],
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         0,
@@ -98,10 +112,10 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
         0,
         nullptr,
         1,
-        &image_memory_barrier
+        &general_to_present_barrier
     );
 
-    VKRESULT(vkEndCommandBuffer(command_buffer))
+    VKRESULT(vkEndCommandBuffer(command_buffers[frame_index]))
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
@@ -109,20 +123,20 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
     submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.pNext                   = nullptr;
     submit_info.waitSemaphoreCount      = 1;
-    submit_info.pWaitSemaphores         = &acquire_semaphore;
+    submit_info.pWaitSemaphores         = &acquire_semaphores[frame_index];
     submit_info.pWaitDstStageMask       = &wait_stage;
-    submit_info.signalSemaphoreCount    = 0;
-    submit_info.pSignalSemaphores       = nullptr;
+    submit_info.signalSemaphoreCount    = 1;
+    submit_info.pSignalSemaphores       = &execution_semaphores[frame_index];
     submit_info.commandBufferCount      = 1;
-    submit_info.pCommandBuffers         = &command_buffer;
+    submit_info.pCommandBuffers         = &command_buffers[frame_index];
 
-    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, submission_fence))
+    VKRESULT(vkQueueSubmit(compute_queue, 1, &submit_info, submission_fences[frame_index]))
 
     VkPresentInfoKHR present_info   = {};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.pNext              = nullptr;
-    present_info.waitSemaphoreCount = 0;
-    present_info.pWaitSemaphores    = 0;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores    = &execution_semaphores[frame_index];
     present_info.swapchainCount     = 1;
     present_info.pSwapchains        = &swapchain;
     present_info.pImageIndices      = &current_image_index;
@@ -130,7 +144,9 @@ void vkrenderer::compute(const input_data& inputs, size_t width, size_t height) 
 
     VKRESULT(vkQueuePresentKHR(compute_queue, &present_info))
 
-    VKRESULT(vkWaitForFences(device, 1, &submission_fence, VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+
+    frame_index = ++frame_index % swapchain_images_count;
 }
 
 
@@ -421,7 +437,7 @@ void vkrenderer::create_memory_allocator() {
     vmaCreateAllocator(&allocator_info, &allocator);
 }
 
-void vkrenderer::create_command_buffer() {
+void vkrenderer::create_command_buffers() {
     VkCommandPoolCreateInfo cmd_pool_create_info    = {};
     cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_create_info.pNext                      = nullptr;
@@ -435,19 +451,20 @@ void vkrenderer::create_command_buffer() {
     cmd_buf_allocate_info.pNext                         = nullptr;
     cmd_buf_allocate_info.commandPool                   = command_pool;
     cmd_buf_allocate_info.level                         = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_buf_allocate_info.commandBufferCount            = 1;
+    cmd_buf_allocate_info.commandBufferCount            = swapchain_images_count;
 
-    vkAllocateCommandBuffers(device, &cmd_buf_allocate_info, &command_buffer);
+    command_buffers = std::vector<VkCommandBuffer> { swapchain_images_count };
+    vkAllocateCommandBuffers(device, &cmd_buf_allocate_info, command_buffers.data());
 }
 void vkrenderer::create_descriptor_set() {
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount                    = 1,
+            .descriptorCount                    = (uint32_t)swapchain_images_count,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount                    = 1,
+            .descriptorCount                    = (uint32_t)swapchain_images_count,
         }
     };
 
@@ -455,39 +472,54 @@ void vkrenderer::create_descriptor_set() {
     descriptor_pool_create_info.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     descriptor_pool_create_info.pNext                       = nullptr;
     descriptor_pool_create_info.flags                       = 0;
-    descriptor_pool_create_info.maxSets                     = 1;
+    descriptor_pool_create_info.maxSets                     = swapchain_images_count;
     descriptor_pool_create_info.poolSizeCount               = descriptor_pools_sizes.size();
     descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes.data();
 
     VKRESULT(vkCreateDescriptorPool(device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
 
+    std::vector<VkDescriptorSetLayout> sets_layouts = { swapchain_images_count, compute_shader_layout };
+
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info    = {};
     descriptor_set_allocate_info.sType                          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     descriptor_set_allocate_info.pNext                          = nullptr;
     descriptor_set_allocate_info.descriptorPool                 = descriptor_pool;
-    descriptor_set_allocate_info.descriptorSetCount             = 1;
-    descriptor_set_allocate_info.pSetLayouts                    = &compute_shader_layout;
+    descriptor_set_allocate_info.descriptorSetCount             = sets_layouts.size();
+    descriptor_set_allocate_info.pSetLayouts                    = sets_layouts.data();
 
-    vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, &compute_shader_set);
+    compute_shader_sets = std::vector<VkDescriptorSet> { swapchain_images_count };
+    vkAllocateDescriptorSets(device, &descriptor_set_allocate_info, compute_shader_sets.data());
 }
 
-void vkrenderer::create_fence() {
-    VkFenceCreateInfo create_info   = {};
-    create_info.sType               = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    create_info.pNext               = nullptr;
-    create_info.flags               = 0;
+void vkrenderer::create_fences() {
+    for (size_t fence_index = 0; fence_index < swapchain_images_count; fence_index++) {
+        VkFence submission_fence;
+        VkFenceCreateInfo create_info   = {};
+        create_info.sType               = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        create_info.pNext               = nullptr;
+        create_info.flags               = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VKRESULT(vkCreateFence(device, &create_info, nullptr, &submission_fence))
+        VKRESULT(vkCreateFence(device, &create_info, nullptr, &submission_fence))
+        
+        submission_fences.push_back(submission_fence);
+    }
 }
 
 void vkrenderer::create_semaphores() {
-    VkSemaphoreCreateInfo create_info   = {};
-    create_info.sType                   = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    create_info.pNext                   = nullptr;
-    create_info.flags                   = 0;
+    for (size_t semaphore_index = 0; semaphore_index < swapchain_images_count; semaphore_index++) {
+        VkSemaphore execution_semaphore;
+        VkSemaphore acquire_semaphore;
+        VkSemaphoreCreateInfo create_info   = {};
+        create_info.sType                   = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        create_info.pNext                   = nullptr;
+        create_info.flags                   = 0;
 
-    VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &execution_semaphore))
-    VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &acquire_semaphore))
+        VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &execution_semaphore))
+        VKRESULT(vkCreateSemaphore(device, &create_info, nullptr, &acquire_semaphore))
+
+        execution_semaphores.push_back(execution_semaphore);
+        acquire_semaphores.push_back(acquire_semaphore);
+    }
 }
 
 void vkrenderer::select_physical_device() {
@@ -523,9 +555,10 @@ void vkrenderer::select_compute_queue() {
     exit(1);
 }
 
-void vkrenderer::fill_descriptor_set(const input_data& inputs) {
+void vkrenderer::update_sets(const input_data& inputs) {
     // Create and fill input data buffer
-    VkBufferCreateInfo buffer_info  = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    VkBufferCreateInfo buffer_info  = {  };
+    buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size                = sizeof(inputs);
     buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
      
@@ -538,47 +571,44 @@ void vkrenderer::fill_descriptor_set(const input_data& inputs) {
     vmaMapMemory(allocator, allocation, (void**) &mapped_data);
     std::memcpy(mapped_data, &inputs, sizeof(inputs));
 
-    // Update uniform buffer descriptor
-    VkDescriptorBufferInfo descriptor_buf_info      = {};
-    descriptor_buf_info.buffer                      = compute_shader_buffer;
-    descriptor_buf_info.offset                      = 0;
-    descriptor_buf_info.range                       = VK_WHOLE_SIZE;
+    std::vector<VkDescriptorBufferInfo> descriptors_buf_info    { swapchain_images_count };
+    std::vector<VkDescriptorImageInfo> descriptors_image_info   { swapchain_images_count };
+    std::vector<VkWriteDescriptorSet> write_descriptors         { swapchain_images_count * 2 };
 
-    VkWriteDescriptorSet write_buffer_descriptor    = {};
-    write_buffer_descriptor.sType                   = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write_buffer_descriptor.pNext                   = nullptr;
-    write_buffer_descriptor.dstSet                  = compute_shader_set;
-    write_buffer_descriptor.dstBinding              = 0;
-    write_buffer_descriptor.dstArrayElement         = 0;
-    write_buffer_descriptor.descriptorCount         = 1;
-    write_buffer_descriptor.descriptorType          = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write_buffer_descriptor.pImageInfo              = VK_NULL_HANDLE;
-    write_buffer_descriptor.pBufferInfo             = &descriptor_buf_info;
-    write_buffer_descriptor.pTexelBufferView        = VK_NULL_HANDLE;
+    for (size_t set_index = 0; set_index < swapchain_images_count; set_index++) {
+        // Update uniform buffer descriptor
+        descriptors_buf_info[set_index].buffer                  = compute_shader_buffer;
+        descriptors_buf_info[set_index].offset                  = 0;
+        descriptors_buf_info[set_index].range                   = VK_WHOLE_SIZE;
+
+        write_descriptors[set_index * 2].sType                  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_descriptors[set_index * 2].pNext                  = nullptr;
+        write_descriptors[set_index * 2].dstSet                 = compute_shader_sets[set_index];
+        write_descriptors[set_index * 2].dstBinding             = 0;
+        write_descriptors[set_index * 2].dstArrayElement        = 0;
+        write_descriptors[set_index * 2].descriptorCount        = 1;
+        write_descriptors[set_index * 2].descriptorType         = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write_descriptors[set_index * 2].pImageInfo             = VK_NULL_HANDLE;
+        write_descriptors[set_index * 2].pBufferInfo            = &descriptors_buf_info[set_index];
+        write_descriptors[set_index * 2].pTexelBufferView       = VK_NULL_HANDLE;
 
 
-    // Update storage image descriptor
-    VkDescriptorImageInfo descriptor_image_info     = {};
-    descriptor_image_info.sampler                   = VK_NULL_HANDLE;
-    descriptor_image_info.imageView                 = swapchain_images_views[current_image_index];
-    descriptor_image_info.imageLayout               = VK_IMAGE_LAYOUT_GENERAL;
+        // Update storage image descriptor
+        descriptors_image_info[set_index].sampler               = VK_NULL_HANDLE;
+        descriptors_image_info[set_index].imageView             = swapchain_images_views[set_index];
+        descriptors_image_info[set_index].imageLayout           = VK_IMAGE_LAYOUT_GENERAL;
 
-    VkWriteDescriptorSet write_image_descriptor     = {};
-    write_image_descriptor.sType                    = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write_image_descriptor.pNext                    = nullptr;
-    write_image_descriptor.dstSet                   = compute_shader_set;
-    write_image_descriptor.dstBinding               = 1;
-    write_image_descriptor.dstArrayElement          = 0;
-    write_image_descriptor.descriptorCount          = 1;
-    write_image_descriptor.descriptorType           = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    write_image_descriptor.pImageInfo               = &descriptor_image_info;
-    write_image_descriptor.pBufferInfo              = VK_NULL_HANDLE;
-    write_image_descriptor.pTexelBufferView         = VK_NULL_HANDLE;
-
-    std::vector<VkWriteDescriptorSet> write_descriptors {
-        write_buffer_descriptor,
-        write_image_descriptor,
-    };
+        write_descriptors[set_index * 2 + 1].sType              = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_descriptors[set_index * 2 + 1].pNext              = nullptr;
+        write_descriptors[set_index * 2 + 1].dstSet             = compute_shader_sets[set_index];
+        write_descriptors[set_index * 2 + 1].dstBinding         = 1;
+        write_descriptors[set_index * 2 + 1].dstArrayElement    = 0;
+        write_descriptors[set_index * 2 + 1].descriptorCount    = 1;
+        write_descriptors[set_index * 2 + 1].descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write_descriptors[set_index * 2 + 1].pImageInfo         = &descriptors_image_info[set_index];
+        write_descriptors[set_index * 2 + 1].pBufferInfo        = VK_NULL_HANDLE;
+        write_descriptors[set_index * 2 + 1].pTexelBufferView   = VK_NULL_HANDLE;
+    }
 
     vkUpdateDescriptorSets(device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
 }
