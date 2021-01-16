@@ -153,6 +153,8 @@ int main() {
     vkrenderer renderer { wnd, inputs };
 
     while(wnd.isOpen) {
+        wnd.poll_events();
+
         // To start a frame capture, call StartFrameCapture.
         // You can specify NULL, NULL for the device to capture on if you have only one device and
         // either no windows at all or only one window, and it will capture from that device.

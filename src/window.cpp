@@ -41,6 +41,7 @@ LRESULT CALLBACK window::window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, L
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)win);
     } else {
         win = (window*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+        return win->message_handler(hwnd, umsg, wparam, lparam);
     }
 
     return DefWindowProc(hwnd, umsg, wparam, lparam);
@@ -81,5 +82,23 @@ window::window(uint32_t width, uint32_t height)
         ShowWindow(win_handle, SW_SHOW);
 
         isOpen = true;
+}
+
+void window::poll_events() {
+    MSG msg = {};
+
+    while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
+    switch(umsg) {
+        default:
+            return DefWindowProc(hwnd, umsg, wparam, lparam);
+    }
+
+    return 0;
 }
 #endif
