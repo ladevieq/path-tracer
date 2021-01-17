@@ -2,12 +2,36 @@
 #define __UTILS_HPP_
 
 #include <cstdint>
-
+#include <cstdlib>
 #include <vector>
 
-#include <cstdlib>
+#include "vec3.hpp"
+#include "sphere.hpp"
+#include "camera.hpp"
+
+struct input_data {
+    color sky_color;
+    color ground_color;
+
+    camera cam;
+
+    float random_offset[2000];
+    float random_disk[2000];
+    vec3 random_in_sphere[1000];
+
+    sphere spheres[512];
+
+    uint32_t max_bounce;
+    uint32_t samples_per_pixel;
+
+    // Output image resolution
+    uint32_t width;
+    uint32_t height;
+};
 
 std::vector<uint8_t> get_shader_code(const char* path);
+
+struct input_data create_inputs(uint32_t width, uint32_t height);
 
 #define PI 3.14159265359
 

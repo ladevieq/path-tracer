@@ -1,4 +1,6 @@
 #include "window.hpp"
+#include "vk-renderer.hpp"
+#include "utils.hpp"
 
 #ifdef LINUX
 window::window(uint32_t width, uint32_t height)
@@ -87,7 +89,7 @@ window::window(uint32_t width, uint32_t height)
 void window::poll_events() {
     MSG msg = {};
 
-    while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+    while (PeekMessage(&msg, win_handle, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
@@ -95,6 +97,23 @@ void window::poll_events() {
 
 LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     switch(umsg) {
+        case WM_QUIT: {
+            isOpen = false;
+            break;
+        }
+        case WM_SIZE: {
+            RECT rect;
+            if(GetWindowRect(hwnd, &rect))
+            {
+              width = rect.right - rect.left;
+              height = rect.bottom - rect.top;
+            }
+
+            if (renderer != nullptr) {
+                renderer->recreate_swapchain();
+                break;
+            }
+        }
         default:
             return DefWindowProc(hwnd, umsg, wparam, lparam);
     }
