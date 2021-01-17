@@ -1,8 +1,11 @@
 #ifndef __WINDOW_HPP_
 #define __WINDOW_HPP_
 
-#include "defines.hpp"
 #include <cstdint>
+
+#include "defines.hpp"
+
+class vkrenderer;
 
 #if defined(LINUX)
 #include <xcb/xcb.h>
@@ -35,6 +38,7 @@ class window {
         static LRESULT CALLBACK window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
         HWND                win_handle;
+        vkrenderer*         renderer = nullptr;
 
         uint32_t            width;
         uint32_t            height;
