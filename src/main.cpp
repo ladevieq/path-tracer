@@ -55,17 +55,31 @@ int main() {
     while(wnd.isOpen) {
         wnd.poll_events();
 
+        for (auto event: wnd.events) {
+            switch(event.type) {
+                case EVENT_TYPES::RESIZE: {
+                    renderer.recreate_swapchain();
+                    renderer.mapped_data->width = event.width;
+                    renderer.mapped_data->height = event.height;
+                    break;
+                }
+                case EVENT_TYPES::QUIT: {
+                    exit(1);
+                }
+                default: {
+                }
+            }
+        }
+
+        wnd.events.clear();
+
         // To start a frame capture, call StartFrameCapture.
         // You can specify NULL, NULL for the device to capture on if you have only one device and
         // either no windows at all or only one window, and it will capture from that device.
         // See the documentation below for a longer explanation
         if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-        auto start = std::chrono::high_resolution_clock::now();
         renderer.compute();
-        auto end = std::chrono::high_resolution_clock::now();
-
-        std::cerr << "Image generation took " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
         // stop the capture
         if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);

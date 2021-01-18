@@ -18,6 +18,8 @@ class vkrenderer {
 
         void recreate_swapchain();
 
+        struct input_data*              mapped_data;
+
     private:
         void create_instance();
 
@@ -43,7 +45,7 @@ class vkrenderer {
 
         void create_input_buffer(const input_data& inputs);
 
-        void destroy_swapchain();
+        void destroy_swapchain_images();
 
         void select_physical_device();
 
@@ -87,8 +89,6 @@ class vkrenderer {
         std::vector<VkImage>            swapchain_images;
         std::vector<VkImageView>        swapchain_images_views;
         uint32_t                        current_image_index;
-
-        struct input_data*              mapped_data;
 
         window&                         wnd;
 };
