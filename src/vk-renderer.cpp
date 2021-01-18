@@ -155,9 +155,7 @@ void vkrenderer::compute() {
 void vkrenderer::recreate_swapchain() {
     VKRESULT(vkWaitForFences(device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
-    destroy_swapchain();
-
-    create_surface();
+    destroy_swapchain_images();
 
     create_swapchain();
 
@@ -309,6 +307,8 @@ void vkrenderer::create_swapchain() {
 
     surface_format = supported_formats[0];
 
+    VkSwapchainKHR old_swapchain            = swapchain;
+
     VkSwapchainCreateInfoKHR create_info    = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.pNext                       = nullptr;
@@ -325,10 +325,13 @@ void vkrenderer::create_swapchain() {
     create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
     create_info.clipped                     = VK_TRUE;
-    create_info.oldSwapchain                = swapchain;
+    create_info.oldSwapchain                = old_swapchain;
 
     VKRESULT(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain))
 
+    if (old_swapchain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(device, old_swapchain, nullptr);
+    }
 
     swapchain_images_count = 0;
     VKRESULT(vkGetSwapchainImagesKHR(device, swapchain, (uint32_t*)&swapchain_images_count, VK_NULL_HANDLE))
@@ -560,7 +563,7 @@ void vkrenderer::create_input_buffer(const input_data& inputs) {
 }
 
 
-void vkrenderer::destroy_swapchain() {
+void vkrenderer::destroy_swapchain_images() {
     if (swapchain != VK_NULL_HANDLE) {
         for (auto view: swapchain_images_views) {
             vkDestroyImageView(device, view, nullptr);
@@ -568,8 +571,6 @@ void vkrenderer::destroy_swapchain() {
 
         swapchain_images_views.clear();
         swapchain_images.clear();
-
-        vkDestroySwapchainKHR(device, swapchain, nullptr);
     }
 }
 

@@ -11,6 +11,9 @@ window::window(uint32_t width, uint32_t height)
     auto setup = xcb_get_setup (connection);
     auto screen_info = xcb_setup_roots_iterator(setup).data;
 
+    xcb_event_mask_t events[] = {
+        XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+    };
     xcb_create_window(
         connection,
         XCB_COPY_FROM_PARENT,
@@ -23,8 +26,29 @@ window::window(uint32_t width, uint32_t height)
         10,
         XCB_WINDOW_CLASS_INPUT_OUTPUT,
         screen_info->root_visual,
-        0,
-        nullptr
+        XCB_CW_EVENT_MASK,
+        events
+    );
+
+    // Ask for WM_PROTOCOLS atom
+    auto protocols_id   = xcb_intern_atom(connection, true, 12, "WM_PROTOCOLS");
+    auto protocols_atom = xcb_intern_atom_reply(connection, protocols_id, NULL)->atom;
+
+    // Ask for WM_DELETE_WINDOW atom
+    auto win_delete_id  = xcb_intern_atom(connection, false, 16, "WM_DELETE_WINDOW");
+    win_delete_atom     = xcb_intern_atom_reply(connection, win_delete_id, NULL)->atom;
+
+    // Allow the window to receive win close events
+    // https://lists.freedesktop.org/archives/xcb/2010-December/006713.html
+    xcb_change_property(
+        connection,
+        XCB_PROP_MODE_REPLACE,
+        win,
+        protocols_atom,
+        4,              // Predefined value for atom type
+        32,
+        1,
+        &win_delete_atom
     );
 
     xcb_map_window(connection, win);
@@ -32,6 +56,41 @@ window::window(uint32_t width, uint32_t height)
 
     isOpen = true;
 }
+
+void window::poll_events() {
+    xcb_generic_event_t *event;
+    while((event = xcb_poll_for_event (connection))) {
+        switch(event->response_type & ~0x80) {
+            case XCB_CONFIGURE_NOTIFY: {
+                auto notify_event = (xcb_configure_notify_event_t*)event;
+
+                if (width != notify_event->width || height != notify_event->height) {
+                    events.push_back({ 
+                        .width  = notify_event->width,
+                        .height = notify_event->height,
+                        .type   = EVENT_TYPES::RESIZE
+                    });
+
+                    width = notify_event->width;
+                    height = notify_event->height;
+                }
+
+                break;
+            }
+            case XCB_CLIENT_MESSAGE: {
+                auto client_message_event = (xcb_client_message_event_t*)event;
+                if (client_message_event->data.data32[0] == win_delete_atom)  {
+                    events.push_back({ .type = EVENT_TYPES::QUIT });
+                }
+            }
+            default: {
+            }
+        }
+
+        free(event);
+    }
+}
+
 #elif defined(WINDOWS)
 LRESULT CALLBACK window::window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     window* win = nullptr;
@@ -102,17 +161,7 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
             break;
         }
         case WM_SIZE: {
-            RECT rect;
-            if(GetWindowRect(hwnd, &rect))
-            {
-              width = rect.right - rect.left;
-              height = rect.bottom - rect.top;
-            }
-
-            if (renderer != nullptr) {
-                renderer->recreate_swapchain();
-                break;
-            }
+            event.push_back({ EVENT_TYPES::RESIZE });
         }
         default:
             return DefWindowProc(hwnd, umsg, wparam, lparam);
