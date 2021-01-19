@@ -156,17 +156,24 @@ void window::poll_events() {
 
 LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     switch(umsg) {
+        case WM_CLOSE:
+        case WM_DESTROY:
         case WM_QUIT: {
             isOpen = false;
-            break;
+            return 0;
         }
         case WM_SIZE: {
-            event.push_back({ EVENT_TYPES::RESIZE });
-        }
-        default:
-            return DefWindowProc(hwnd, umsg, wparam, lparam);
-    }
+            width = LOWORD(lparam);
+            height = HIWORD(lparam);
 
-    return 0;
+            events.push_back({
+                .width = width,
+                .height = height,
+                .type = EVENT_TYPES::RESIZE
+            });
+            return 0;
+        }
+    }
+    return DefWindowProc(hwnd, umsg, wparam, lparam);
 }
 #endif
