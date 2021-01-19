@@ -293,6 +293,18 @@ void vkrenderer::create_swapchain() {
     VkSurfaceCapabilitiesKHR caps;
     VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, platform_surface, &caps))
 
+    VkExtent2D wantedExtent = caps.currentExtent;
+
+    if (wantedExtent.width < caps.minImageExtent.width) {
+        wantedExtent.width = caps.minImageExtent.width;
+    } else if (wantedExtent.height < caps.minImageExtent.height) {
+        wantedExtent.height = caps.minImageExtent.height;
+    } else if (wantedExtent.width > caps.maxImageExtent.width) {
+        wantedExtent.width = caps.maxImageExtent.width;
+    } else if (wantedExtent.height > caps.maxImageExtent.height) {
+        wantedExtent.height = caps.maxImageExtent.height;
+    }
+
     uint32_t supported_formats_count = 0;
     VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, platform_surface, &supported_formats_count,  VK_NULL_HANDLE))
 
@@ -317,7 +329,7 @@ void vkrenderer::create_swapchain() {
     create_info.minImageCount               = swapchain_images_count;
     create_info.imageFormat                 = surface_format.format;
     create_info.imageColorSpace             = surface_format.colorSpace;
-    create_info.imageExtent                 = caps.currentExtent;
+    create_info.imageExtent                 = wantedExtent;
     create_info.imageArrayLayers            = 1;
     create_info.imageUsage                  = VK_IMAGE_USAGE_STORAGE_BIT;
     create_info.imageSharingMode            = VK_SHARING_MODE_EXCLUSIVE;

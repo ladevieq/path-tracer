@@ -42,14 +42,15 @@ int main() {
 #endif
 
     // Image dimensions
-    // const float aspect_ratio = 16.0 / 9.0;
-    const float aspect_ratio = 1;
-    const uint32_t width = 400;
+    const float aspect_ratio = 16.0 / 9.0;
+    // const float aspect_ratio = 1;
+    const uint32_t width = 1920;
     const uint32_t height = width / aspect_ratio;
 
     window wnd { width , height };
 
     auto inputs = create_inputs(width, height);
+    auto canRender = true;
     vkrenderer renderer { wnd, inputs };
 
     while(wnd.isOpen) {
@@ -58,9 +59,15 @@ int main() {
         for (auto event: wnd.events) {
             switch(event.type) {
                 case EVENT_TYPES::RESIZE: {
-                    renderer.recreate_swapchain();
                     renderer.mapped_data->width = event.width;
                     renderer.mapped_data->height = event.height;
+
+                    if (event.width == 0 && event.height == 0) {
+                        canRender = false;
+                    } else {
+                        canRender = true;
+                        renderer.recreate_swapchain();
+                    }
                     break;
                 }
                 case EVENT_TYPES::QUIT: {
@@ -79,7 +86,9 @@ int main() {
         // See the documentation below for a longer explanation
         if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-        renderer.compute();
+        if (canRender) {
+            renderer.compute();
+        }
 
         // stop the capture
         if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
