@@ -30,13 +30,30 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs)
     create_swapchain();
     create_memory_allocator();
     create_command_buffers();
-    create_descriptor_set();
+    create_descriptor_sets();
     create_fences();
     create_semaphores();
     create_input_buffer(inputs);
 
     update_descriptors_buffer();
     update_descriptors_image();
+}
+
+vkrenderer::~vkrenderer() {
+    VKRESULT(vkWaitForFences(device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+
+    destroy_input_buffer();
+    destroy_fences();
+    destroy_semaphores();
+    destroy_descriptor_sets();
+    destroy_command_buffers();
+    destroy_allocator();
+    destroy_pipeline();
+    destroy_swapchain();
+    destroy_device();
+    destroy_surface();
+    destroy_debugger();
+    destroy_instance();
 }
 
 void vkrenderer::compute() {
@@ -204,7 +221,6 @@ void vkrenderer::create_instance() {
 }
 
 void vkrenderer::create_debugger() {
-    VkDebugUtilsMessengerEXT debugMessenger;
     VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengeCreateInfo {
         VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
         nullptr,
@@ -225,10 +241,6 @@ void vkrenderer::create_debugger() {
 }
 
 void vkrenderer::create_surface() {
-    if (platform_surface != VK_NULL_HANDLE) {
-        vkDestroySurfaceKHR(instance, platform_surface, nullptr);
-    }
-
 #if defined(LINUX)
     VkXcbSurfaceCreateInfoKHR create_info   = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
@@ -385,7 +397,6 @@ void vkrenderer::create_pipeline() {
         exit(1);
     }
 
-    VkShaderModule compute_shader_module;
     VkShaderModuleCreateInfo shader_create_info     = {};
     shader_create_info.sType                        = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shader_create_info.pNext                        = nullptr;
@@ -491,7 +502,7 @@ void vkrenderer::create_command_buffers() {
     command_buffers = std::vector<VkCommandBuffer> { swapchain_images_count };
     vkAllocateCommandBuffers(device, &cmd_buf_allocate_info, command_buffers.data());
 }
-void vkrenderer::create_descriptor_set() {
+void vkrenderer::create_descriptor_sets() {
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -567,23 +578,91 @@ void vkrenderer::create_input_buffer(const input_data& inputs) {
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
      
-    VmaAllocation allocation;
     vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &compute_shader_buffer, &allocation, nullptr);
 
     vmaMapMemory(allocator, allocation, (void**) &mapped_data);
     std::memcpy(mapped_data, &inputs, sizeof(inputs));
 }
 
+void vkrenderer::destroy_instance() {
+    vkDestroyInstance(instance, nullptr);
+}
+
+void vkrenderer::destroy_debugger() {
+    vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+}
+
+void vkrenderer::destroy_surface() {
+    vkDestroySurfaceKHR(instance, platform_surface, nullptr);
+}
+
+void vkrenderer::destroy_device() {
+    vkDestroyDevice(device, nullptr);
+}
+
+void vkrenderer::destroy_swapchain() {
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+
+    destroy_swapchain_images();
+}
 
 void vkrenderer::destroy_swapchain_images() {
-    if (swapchain != VK_NULL_HANDLE) {
-        for (auto view: swapchain_images_views) {
-            vkDestroyImageView(device, view, nullptr);
-        }
-
-        swapchain_images_views.clear();
-        swapchain_images.clear();
+    for (auto view: swapchain_images_views) {
+        vkDestroyImageView(device, view, nullptr);
     }
+
+    swapchain_images_views.clear();
+    swapchain_images.clear();
+}
+
+void vkrenderer::destroy_pipeline() {
+    vkDestroyShaderModule(device, compute_shader_module, nullptr);
+    vkDestroyDescriptorSetLayout(device, compute_shader_layout, nullptr);
+    vkDestroyPipelineLayout(device, compute_pipeline_layout, nullptr);
+    vkDestroyPipeline(device, compute_pipeline, nullptr);
+}
+
+void vkrenderer::destroy_command_buffers() {
+    vkFreeCommandBuffers(device, command_pool, swapchain_images_count, command_buffers.data());
+
+    vkDestroyCommandPool(device, command_pool, nullptr);
+}
+
+void vkrenderer::destroy_allocator() {
+    vmaDestroyAllocator(allocator);
+}
+
+void vkrenderer::destroy_descriptor_sets() {
+    // vkFreeDescriptorSets(device, descriptor_pool, swapchain_images_count, compute_shader_sets.data());
+
+    vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+}
+
+void vkrenderer::destroy_fences() {
+    for (auto fence: submission_fences) {
+        vkDestroyFence(device, fence, nullptr);
+    }
+
+    submission_fences.clear();
+}
+
+void vkrenderer::destroy_semaphores() {
+    for (auto semaphore: acquire_semaphores) {
+        vkDestroySemaphore(device, semaphore, nullptr);
+    }
+
+    acquire_semaphores.clear();
+
+    for (auto semaphore: execution_semaphores) {
+        vkDestroySemaphore(device, semaphore, nullptr);
+    }
+
+    execution_semaphores.clear();
+}
+
+void vkrenderer::destroy_input_buffer() {
+    vmaUnmapMemory(allocator, allocation);
+    vmaDestroyBuffer(allocator, compute_shader_buffer, allocation);
 }
 
 void vkrenderer::select_physical_device() {
@@ -673,6 +752,8 @@ void vkrenderer::handle_swapchain_result(VkResult function_result) {
     switch(function_result) {
         case VK_ERROR_OUT_OF_DATE_KHR:
             return recreate_swapchain();
+        case VK_ERROR_SURFACE_LOST_KHR:
+            std::cerr << "surface lost" << std::endl;
         default:
             return;
     }

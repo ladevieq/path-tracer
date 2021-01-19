@@ -70,9 +70,6 @@ int main() {
                     }
                     break;
                 }
-                case EVENT_TYPES::QUIT: {
-                    exit(1);
-                }
                 default: {
                 }
             }

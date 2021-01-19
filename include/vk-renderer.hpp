@@ -14,6 +14,8 @@ class vkrenderer {
     public:
         vkrenderer(window& wnd, const input_data& inputs);
 
+        ~vkrenderer();
+
         void compute();
 
         void recreate_swapchain();
@@ -37,7 +39,7 @@ class vkrenderer {
 
         void create_command_buffers();
 
-        void create_descriptor_set();
+        void create_descriptor_sets();
 
         void create_fences();
 
@@ -45,7 +47,31 @@ class vkrenderer {
 
         void create_input_buffer(const input_data& inputs);
 
+        void destroy_instance();
+
+        void destroy_debugger();
+
+        void destroy_surface();
+
+        void destroy_device();
+
+        void destroy_swapchain();
+
         void destroy_swapchain_images();
+
+        void destroy_pipeline();
+
+        void destroy_command_buffers();
+
+        void destroy_allocator();
+
+        void destroy_descriptor_sets();
+
+        void destroy_fences();
+
+        void destroy_semaphores();
+
+        void destroy_input_buffer();
 
         void select_physical_device();
 
@@ -61,11 +87,15 @@ class vkrenderer {
         uint64_t                        frame_index = 0;
 
         VkInstance                      instance;
+
+        VkDebugUtilsMessengerEXT        debugMessenger;
+
         VkPhysicalDevice                physical_device;
         VkDevice                        device;
         VkQueue                         compute_queue;
 
         VmaAllocator                    allocator;
+        VmaAllocation                   allocation;
         VkBuffer                        compute_shader_buffer;
 
         VkCommandPool                   command_pool;
@@ -74,6 +104,7 @@ class vkrenderer {
         VkDescriptorPool                descriptor_pool;
         std::vector<VkDescriptorSet>    compute_shader_sets;
 
+        VkShaderModule                  compute_shader_module;
         VkDescriptorSetLayout           compute_shader_layout;
         VkPipelineLayout                compute_pipeline_layout;
         VkPipeline                      compute_pipeline;
