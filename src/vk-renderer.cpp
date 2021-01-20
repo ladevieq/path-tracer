@@ -309,10 +309,12 @@ void vkrenderer::create_swapchain() {
 
     if (wantedExtent.width < caps.minImageExtent.width) {
         wantedExtent.width = caps.minImageExtent.width;
-    } else if (wantedExtent.height < caps.minImageExtent.height) {
-        wantedExtent.height = caps.minImageExtent.height;
     } else if (wantedExtent.width > caps.maxImageExtent.width) {
         wantedExtent.width = caps.maxImageExtent.width;
+    }
+
+    if (wantedExtent.height < caps.minImageExtent.height) {
+        wantedExtent.height = caps.minImageExtent.height;
     } else if (wantedExtent.height > caps.maxImageExtent.height) {
         wantedExtent.height = caps.maxImageExtent.height;
     }
