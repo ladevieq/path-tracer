@@ -35,6 +35,7 @@ struct sphere {
 struct camera {
     vec4 position;
 
+    vec4 forward;
     vec4 up;
     vec4 right;
 
@@ -218,8 +219,9 @@ void main() {
         vec2 lens_disk = random_disk[sample_index] * cam.lens_radius;
         vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
         vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
+        ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
 
-        out_color += ray_color(ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset), sample_index);
+        out_color += ray_color(r, sample_index);
     }
 
     float spp_scale = (1.0 / samples_per_pixel);

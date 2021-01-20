@@ -14,8 +14,11 @@ class camera {
             float focus_dist
         );
 
+        void set_aspect_ratio(float aspect_ratio);
+
         point3 position;
 
+        vec3 forward;
         vec3 right;
         vec3 up;
 
@@ -25,7 +28,9 @@ class camera {
         vec3 first_pixel;
 
         float lens_radius;
-        float padding[3];
+        float fov;
+        float focus_distance;
+        float padding;
 };
 
 #endif // !__CAMERA_HPP_

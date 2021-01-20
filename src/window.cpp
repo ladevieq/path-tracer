@@ -81,6 +81,7 @@ void window::poll_events() {
                 auto client_message_event = (xcb_client_message_event_t*)event;
                 if (client_message_event->data.data32[0] == win_delete_atom)  {
                     events.push_back({ .type = EVENT_TYPES::QUIT });
+                    isOpen = false;
                 }
             }
             default: {
@@ -159,6 +160,7 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
         case WM_CLOSE:
         case WM_DESTROY:
         case WM_QUIT: {
+            events.push_back({ .type = EVENT_TYPES::QUIT });
             isOpen = false;
             return 0;
         }

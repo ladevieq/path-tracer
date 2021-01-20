@@ -67,6 +67,7 @@ int main() {
                     } else {
                         canRender = true;
                         renderer.recreate_swapchain();
+                        renderer.mapped_data->cam.set_aspect_ratio((float)event.width / (float)event.height);
                     }
                     break;
                 }
