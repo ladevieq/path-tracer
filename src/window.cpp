@@ -3,16 +3,20 @@
 #include "utils.hpp"
 
 #ifdef LINUX
+#include <xkbcommon/xkbcommon-x11.h>
+
 window::window(uint32_t width, uint32_t height)
     :width(width), height(height) {
+
     connection = xcb_connect(NULL, NULL);
     win = xcb_generate_id(connection);
 
     auto setup = xcb_get_setup (connection);
     auto screen_info = xcb_setup_roots_iterator(setup).data;
 
-    xcb_event_mask_t events[] = {
-        XCB_EVENT_MASK_STRUCTURE_NOTIFY,
+    uint32_t events[] = {
+        XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_PRESS |
+        XCB_EVENT_MASK_KEY_RELEASE,
     };
     xcb_create_window(
         connection,
@@ -54,7 +58,31 @@ window::window(uint32_t width, uint32_t height)
     xcb_map_window(connection, win);
     xcb_flush(connection);
 
+    xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
+    if (!xkb_ctx) {
+        std::cerr << "Cannot create xkb context" << std::endl;
+    }
+
+    keyboard_device_id = xkb_x11_get_core_keyboard_device_id(connection);
+
+    if (keyboard_device_id == -1) {
+        std::cerr << "Cannot access keyboard device !" << std::endl;
+        exit(1);
+    }
+
+    keyboard_keymap = xkb_x11_keymap_new_from_device(xkb_ctx, connection, keyboard_device_id, XKB_KEYMAP_COMPILE_NO_FLAGS);
+
+    keyboard_state = xkb_x11_state_new_from_device(keyboard_keymap, connection, keyboard_device_id);
+
     isOpen = true;
+}
+
+window::~window() {
+    xkb_state_unref(keyboard_state);
+    xkb_keymap_unref(keyboard_keymap);
+    xkb_context_unref(xkb_ctx);
+    xcb_disconnect(connection);
 }
 
 void window::poll_events() {
@@ -75,6 +103,26 @@ void window::poll_events() {
                     height = notify_event->height;
                 }
 
+                break;
+            }
+            case XCB_KEY_PRESS: {
+                auto key_press_event    = (xcb_key_press_event_t*)event;
+                auto keysym             = xkb_state_key_get_one_sym(keyboard_state, key_press_event->detail);
+                struct event new_event = {
+                    .type   = EVENT_TYPES::KEY_PRESS
+                };
+
+                new_event.keycode = keysym;
+
+                events.push_back(new_event);
+                break;
+            }
+            case XCB_KEY_RELEASE: {
+                auto key_press_event = (xcb_key_release_event_t*)event;
+                events.push_back({ 
+                    .keycode = key_press_event->detail,
+                    .type   = EVENT_TYPES::KEY_RELEASE
+                });
                 break;
             }
             case XCB_CLIENT_MESSAGE: {
