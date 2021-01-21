@@ -44,7 +44,7 @@ int main() {
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
     // const float aspect_ratio = 1;
-    const uint32_t width = 1920;
+    const uint32_t width = 400;
     const uint32_t height = width / aspect_ratio;
 
     window wnd { width , height };
@@ -72,7 +72,18 @@ int main() {
                     break;
                 }
                 case EVENT_TYPES::KEY_PRESS: {
-                    std::cerr << (uint8_t)event.keycode << std::endl;
+                    switch((uint8_t)event.keycode) {
+                        case('w'): {
+                            renderer.mapped_data->cam.move(renderer.mapped_data->cam.forward * 0.1);
+                            break;
+                        }
+                        case('s'): {
+                            renderer.mapped_data->cam.move(-renderer.mapped_data->cam.forward * 0.1);
+                            break;
+                        }
+                        default:
+                            std::cerr << (uint8_t)event.keycode << std::endl;
+                    }
                 }
                 default: {
                 }

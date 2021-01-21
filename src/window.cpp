@@ -58,6 +58,16 @@ window::window(uint32_t width, uint32_t height)
     xcb_map_window(connection, win);
     xcb_flush(connection);
 
+    uint8_t first_xkb_event;
+    auto ret = xkb_x11_setup_xkb_extension(connection,
+                                      XKB_X11_MIN_MAJOR_XKB_VERSION,
+                                      XKB_X11_MIN_MINOR_XKB_VERSION,
+                                      XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
+                                      NULL, NULL, NULL, NULL);
+    if (!ret) {
+        std::cerr << "Couldn't setup XKB extension" << std::endl;
+    }
+
     xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
     if (!xkb_ctx) {
@@ -105,6 +115,7 @@ void window::poll_events() {
 
                 break;
             }
+            case XCB_KEY_RELEASE:
             case XCB_KEY_PRESS: {
                 auto key_press_event    = (xcb_key_press_event_t*)event;
                 auto keysym             = xkb_state_key_get_one_sym(keyboard_state, key_press_event->detail);
@@ -115,14 +126,6 @@ void window::poll_events() {
                 new_event.keycode = keysym;
 
                 events.push_back(new_event);
-                break;
-            }
-            case XCB_KEY_RELEASE: {
-                auto key_press_event = (xcb_key_release_event_t*)event;
-                events.push_back({ 
-                    .keycode = key_press_event->detail,
-                    .type   = EVENT_TYPES::KEY_RELEASE
-                });
                 break;
             }
             case XCB_CLIENT_MESSAGE: {

@@ -36,3 +36,8 @@ void camera::set_aspect_ratio(float aspect_ratio) {
 
     first_pixel = position - horizontal / 2.0 - vertical / 2.0 + focus_distance * forward;
 }
+
+void camera::move(vec3 v) {
+    position += v;
+    first_pixel = position - horizontal / 2.0 - vertical / 2.0 + focus_distance * forward;
+}
