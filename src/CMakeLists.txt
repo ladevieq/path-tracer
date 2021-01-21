@@ -22,4 +22,7 @@ add_executable(
 
 if(UNIX)
     target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xcb_LIB})
+    target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xkbcommon_LIB})
+    target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xkbcommon_X11_LIB})
+
 endif()

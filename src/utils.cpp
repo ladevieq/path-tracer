@@ -42,8 +42,9 @@ void random_scene(sphere *world) {
 
     uint32_t world_sphere_index = 1;
 
-    for (int a = -11; a < 11; a++) {
-        for (int b = -11; b < 11; b++) {
+    int32_t spheres_count = 11;
+    for (int a = -spheres_count; a < spheres_count; a++) {
+        for (int b = -spheres_count; b < spheres_count; b++) {
             auto choose_mat = randd();
             point3 center(a + 0.9 * randd(), 0.2, b + 0.9 * randd());
 

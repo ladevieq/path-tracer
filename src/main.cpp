@@ -71,6 +71,9 @@ int main() {
                     }
                     break;
                 }
+                case EVENT_TYPES::KEY_PRESS: {
+                    std::cerr << (uint8_t)event.keycode << std::endl;
+                }
                 default: {
                 }
             }
