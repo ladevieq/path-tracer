@@ -16,6 +16,9 @@ class camera {
 
         void set_aspect_ratio(float aspect_ratio);
 
+        void move(vec3 v);
+
+
         point3 position;
 
         vec3 forward;
