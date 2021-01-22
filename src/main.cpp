@@ -72,18 +72,32 @@ int main() {
                     break;
                 }
                 case EVENT_TYPES::KEY_PRESS: {
+                    auto move_speed = 0.1;
+                    if (event.modifiers & MODIFIERS::SHIFT) {
+                        move_speed *= 10;
+                    }
+
                     switch((uint8_t)event.keycode) {
                         case('w'): {
-                            renderer.mapped_data->cam.move(renderer.mapped_data->cam.forward * 0.1);
+                            renderer.mapped_data->cam.move(renderer.mapped_data->cam.forward * move_speed);
                             break;
                         }
                         case('s'): {
-                            renderer.mapped_data->cam.move(-renderer.mapped_data->cam.forward * 0.1);
+                            renderer.mapped_data->cam.move(-renderer.mapped_data->cam.forward * move_speed);
                             break;
                         }
-                        default:
-                            std::cerr << (uint8_t)event.keycode << std::endl;
+                        case('d'): {
+                            renderer.mapped_data->cam.move(renderer.mapped_data->cam.right * move_speed);
+                            break;
+                        }
+                        case('a'): {
+                            renderer.mapped_data->cam.move(-renderer.mapped_data->cam.right * move_speed);
+                            break;
+                        }
                     }
+                }
+                case EVENT_TYPES::MOVE: {
+                    std::cerr << "X : " << event.x << " Y : " << event.y << std::endl;
                 }
                 default: {
                 }

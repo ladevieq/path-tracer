@@ -15,8 +15,10 @@ window::window(uint32_t width, uint32_t height)
     auto screen_info = xcb_setup_roots_iterator(setup).data;
 
     uint32_t events[] = {
-        XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_PRESS |
-        XCB_EVENT_MASK_KEY_RELEASE,
+        XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+        XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE |
+        XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
+        XCB_EVENT_MASK_POINTER_MOTION,
     };
     xcb_create_window(
         connection,
@@ -120,12 +122,32 @@ void window::poll_events() {
                 auto key_press_event    = (xcb_key_press_event_t*)event;
                 auto keysym             = xkb_state_key_get_one_sym(keyboard_state, key_press_event->detail);
                 struct event new_event = {
-                    .type   = EVENT_TYPES::KEY_PRESS
+                    .type   = event->response_type == XCB_KEY_PRESS ? EVENT_TYPES::KEY_PRESS :EVENT_TYPES::KEY_RELEASE
                 };
 
+                new_event.modifiers = key_press_event->state;
                 new_event.keycode = keysym;
 
                 events.push_back(new_event);
+                break;
+            }
+            case XCB_BUTTON_RELEASE:
+            case XCB_BUTTON_PRESS: {
+                auto key_press_event    = (xcb_key_press_event_t*)event;
+                struct event new_event = {
+                    .type   = event->response_type == XCB_BUTTON_PRESS ? EVENT_TYPES::BUTTON_PRESS :EVENT_TYPES::BUTTON_RELEASE
+                };
+
+                events.push_back(new_event);
+                break;
+            }
+            case XCB_MOTION_NOTIFY: {
+                auto motion_event = (xcb_motion_notify_event_t*)event;
+                events.push_back({
+                    .x      = motion_event->event_x,
+                    .y      = motion_event->event_y,
+                    .type   = EVENT_TYPES::MOVE,
+                });
                 break;
             }
             case XCB_CLIENT_MESSAGE: {
