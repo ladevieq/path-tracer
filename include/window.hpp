@@ -16,6 +16,22 @@ class vkrenderer;
 #include <Windows.h>
 #endif
 
+enum MODIFIERS {
+    SHIFT       = 1,
+    LOCK        = 2,
+    CTRL        = 4,
+    ALT         = 8,
+    MOD2        = 16,
+    MOD3        = 32,
+    MOD4        = 64,
+    MOD5        = 128,
+    BUTTON1     = 256,
+    BUTTON2     = 512,
+    BUTTON3     = 1024,
+    BUTTON4     = 2048,
+    BUTTON5     = 4096,
+};
+
 enum KEYS {
     SPACE,
     Z,
@@ -29,13 +45,19 @@ enum EVENT_TYPES: int32_t {
     RESIZE,
     KEY_PRESS,
     KEY_RELEASE,
+    BUTTON_PRESS,
+    BUTTON_RELEASE,
+    MOVE
 };
 
 struct event {
     uint32_t    width;
     uint32_t    height;
     // KEYS        key;
+    uint32_t    modifiers;
     uint32_t    keycode;
+    int32_t     x;
+    int32_t     y;
     EVENT_TYPES type;
 };
 
