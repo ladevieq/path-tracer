@@ -72,32 +72,34 @@ int main() {
                     break;
                 }
                 case EVENT_TYPES::KEY_PRESS: {
-                    auto move_speed = 0.1;
-                    if (event.modifiers & MODIFIERS::SHIFT) {
-                        move_speed *= 10;
+                    auto move_speed = 0.1f;
+                    if (wnd.keyboard[KEYS::SHIFT]) {
+                        move_speed *= 10.f;
                     }
 
-                    switch((uint8_t)event.keycode) {
-                        case('w'): {
-                            renderer.mapped_data->cam.move(renderer.mapped_data->cam.forward * move_speed);
-                            break;
-                        }
-                        case('s'): {
-                            renderer.mapped_data->cam.move(-renderer.mapped_data->cam.forward * move_speed);
-                            break;
-                        }
-                        case('d'): {
-                            renderer.mapped_data->cam.move(renderer.mapped_data->cam.right * move_speed);
-                            break;
-                        }
-                        case('a'): {
-                            renderer.mapped_data->cam.move(-renderer.mapped_data->cam.right * move_speed);
-                            break;
-                        }
+                    vec3 move_vec {};
+                    if (wnd.keyboard[KEYS::W]) {
+                        move_vec += renderer.mapped_data->cam.forward;
                     }
+                    if (wnd.keyboard[KEYS::S]) {
+                        move_vec += -renderer.mapped_data->cam.forward;
+                    }
+                    if (wnd.keyboard[KEYS::D]) {
+                        move_vec += renderer.mapped_data->cam.right;
+                    }
+                    if (wnd.keyboard[KEYS::A]) {
+                        move_vec += -renderer.mapped_data->cam.right;
+                    }
+
+                    move_vec = move_vec.unit() * move_speed;
+
+                    renderer.mapped_data->cam.move(move_vec);
+
+                    break;
                 }
                 case EVENT_TYPES::MOVE: {
                     std::cerr << "X : " << event.x << " Y : " << event.y << std::endl;
+                    break;
                 }
                 default: {
                 }
