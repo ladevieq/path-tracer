@@ -123,10 +123,9 @@ void window::poll_events() {
                 auto keysym             = xkb_state_key_get_one_sym(keyboard_state, key_press_event->detail);
                 struct event new_event = {
                     .type   = event->response_type == XCB_KEY_PRESS ? EVENT_TYPES::KEY_PRESS :EVENT_TYPES::KEY_RELEASE
+                    .modifiers = key_press_event->state;
+                    .keycode = keysym;
                 };
-
-                new_event.modifiers = key_press_event->state;
-                new_event.keycode = keysym;
 
                 events.push_back(new_event);
                 break;
@@ -166,6 +165,10 @@ void window::poll_events() {
 }
 
 #elif defined(WINDOWS)
+
+#include <windowsx.h>
+#include <cctype>
+
 LRESULT CALLBACK window::window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     window* win = nullptr;
 
@@ -219,6 +222,8 @@ window::window(uint32_t width, uint32_t height)
         isOpen = true;
 }
 
+window::~window() {}
+
 void window::poll_events() {
     MSG msg = {};
 
@@ -235,7 +240,7 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
         case WM_QUIT: {
             events.push_back({ .type = EVENT_TYPES::QUIT });
             isOpen = false;
-            return 0;
+            break;
         }
         case WM_SIZE: {
             width = LOWORD(lparam);
@@ -246,9 +251,87 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
                 .height = height,
                 .type = EVENT_TYPES::RESIZE
             });
-            return 0;
+            break;
+        }
+
+        case WM_KEYDOWN: {
+            auto key_press_event = event { 
+                .key = (KEYS)wparam,
+                .type = EVENT_TYPES::KEY_PRESS,
+            };
+
+            keyboard[wparam] = true;
+
+            events.push_back(key_press_event);
+            break;
+        }
+
+        case WM_KEYUP: {
+            auto key_press_event = event { 
+                .key = (KEYS)wparam,
+                .type = EVENT_TYPES::KEY_RELEASE,
+            };
+
+            keyboard[wparam] = false;
+
+            events.push_back(key_press_event);
+            break;
+        }
+
+        case WM_LBUTTONDOWN: {
+            events.push_back({ 
+                .button = BUTTONS::LEFT,
+                .type = EVENT_TYPES::BUTTON_PRESS,
+            });
+            break;
+        }
+        case WM_LBUTTONUP: {
+            events.push_back({ 
+                .button = BUTTONS::LEFT,
+                .type = EVENT_TYPES::BUTTON_RELEASE,
+            });
+            break;
+        }
+        case WM_RBUTTONDOWN: {
+            events.push_back({ 
+                .button = BUTTONS::RIGHT,
+                .type = EVENT_TYPES::BUTTON_PRESS,
+            });
+            break;
+        }
+        case WM_RBUTTONUP: {
+            events.push_back({ 
+                .button = BUTTONS::RIGHT,
+                .type = EVENT_TYPES::BUTTON_RELEASE,
+            });
+            break;
+        }
+        case WM_MBUTTONDOWN: {
+            events.push_back({ 
+                .button = BUTTONS::MIDDLE,
+                .type = EVENT_TYPES::BUTTON_PRESS,
+            });
+            break;
+        }
+        case WM_MBUTTONUP: {
+            events.push_back({ 
+                .button = BUTTONS::MIDDLE,
+                .type = EVENT_TYPES::BUTTON_RELEASE,
+            });
+            break;
+        }
+        case WM_MOUSEMOVE: {
+            events.push_back({ 
+                .x = GET_X_LPARAM(lparam),
+                .y = GET_Y_LPARAM(lparam),
+                .type = EVENT_TYPES::MOVE,
+            });
+            break;
+        }
+        default: {
+            return DefWindowProc(hwnd, umsg, wparam, lparam);
         }
     }
-    return DefWindowProc(hwnd, umsg, wparam, lparam);
+    return 0;
 }
 #endif
