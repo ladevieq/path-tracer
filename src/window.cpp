@@ -227,6 +227,17 @@ window::~window() {}
 void window::poll_events() {
     MSG msg = {};
 
+    // Generate keydown events pressed keys
+    for (size_t virtual_key = KEYS::SHIFT; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
+        if (keyboard[virtual_key]) {
+            events.push_back({ 
+                .key = (KEYS)virtual_key,
+                .type = EVENT_TYPES::KEY_PRESS,
+            });
+        }
+    }
+
+
     while (PeekMessage(&msg, win_handle, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
@@ -255,26 +266,22 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
         }
 
         case WM_KEYDOWN: {
-            auto key_press_event = event { 
-                .key = (KEYS)wparam,
-                .type = EVENT_TYPES::KEY_PRESS,
-            };
-
             keyboard[wparam] = true;
 
-            events.push_back(key_press_event);
+            events.push_back({ 
+                .key = (KEYS)wparam,
+                .type = EVENT_TYPES::KEY_PRESS,
+            });
             break;
         }
 
         case WM_KEYUP: {
-            auto key_press_event = event { 
-                .key = (KEYS)wparam,
-                .type = EVENT_TYPES::KEY_RELEASE,
-            };
-
             keyboard[wparam] = false;
 
-            events.push_back(key_press_event);
+            events.push_back({ 
+                .key = (KEYS)wparam,
+                .type = EVENT_TYPES::KEY_RELEASE,
+            });
             break;
         }
 
