@@ -43,17 +43,25 @@ int main() {
 
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
-    // const float aspect_ratio = 1;
     const uint32_t width = 400;
     const uint32_t height = width / aspect_ratio;
 
     window wnd { width , height };
 
+    float delta_time = 0.f;
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
     auto inputs = create_inputs(width, height);
     auto canRender = true;
     vkrenderer renderer { wnd, inputs };
 
     while(wnd.isOpen) {
+        end = std::chrono::high_resolution_clock::now();
+
+        delta_time = std::chrono::duration<float, std::milli>(end - start).count();
+
+        start = std::chrono::high_resolution_clock::now();
+
         wnd.poll_events();
 
         for (auto event: wnd.events) {
@@ -72,9 +80,9 @@ int main() {
                     break;
                 }
                 case EVENT_TYPES::KEY_PRESS: {
-                    auto move_speed = 0.1f;
+                    auto move_speed = 0.01f * delta_time;
                     if (wnd.keyboard[KEYS::SHIFT]) {
-                        move_speed *= 10.f;
+                        move_speed *= 2.f;
                     }
 
                     vec3 move_vec {};
