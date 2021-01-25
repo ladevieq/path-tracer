@@ -78,31 +78,34 @@ int main() {
                     }
 
                     vec3 move_vec {};
-                    if (wnd.keyboard[KEYS::W]) {
-                        move_vec += renderer.mapped_data->cam.forward;
-                    }
-                    if (wnd.keyboard[KEYS::S]) {
-                        move_vec += -renderer.mapped_data->cam.forward;
-                    }
-                    if (wnd.keyboard[KEYS::D]) {
-                        move_vec += renderer.mapped_data->cam.right;
-                    }
-                    if (wnd.keyboard[KEYS::A]) {
-                        move_vec += -renderer.mapped_data->cam.right;
-                    }
 
-                    move_vec = move_vec.unit() * move_speed;
+                    switch (event.key) {
+                        case KEYS::W: {
+                            move_vec = renderer.mapped_data->cam.forward.unit() * move_speed;
+                            break;
+                        }
+                        case KEYS::S: {
+                            move_vec = -renderer.mapped_data->cam.forward.unit() * move_speed;
+                            break;
+                        }
+                        case KEYS::D: {
+                            move_vec = renderer.mapped_data->cam.right.unit() * move_speed;
+                            break;
+                        }
+                        case KEYS::A: {
+                            move_vec = -renderer.mapped_data->cam.right.unit() * move_speed;
+                            break;
+                        }
+                        default:
+                            break;
+                    }
 
                     renderer.mapped_data->cam.move(move_vec);
 
                     break;
                 }
-                case EVENT_TYPES::MOVE: {
-                    std::cerr << "X : " << event.x << " Y : " << event.y << std::endl;
+                default:
                     break;
-                }
-                default: {
-                }
             }
         }
 
