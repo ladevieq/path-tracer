@@ -7,6 +7,7 @@
 #include "thirdparty/renderdoc.h"
 
 #include "vk-renderer.hpp"
+#include "window.hpp"
 #include "utils.hpp"
 #include "defines.hpp"
 
@@ -126,7 +127,7 @@ int main() {
         if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
         if (canRender) {
-            renderer.compute();
+            renderer.compute(width, height);
         }
 
         // stop the capture

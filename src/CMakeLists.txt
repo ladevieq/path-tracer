@@ -17,6 +17,7 @@ add_executable(
     vulkan-loader.cpp
     utils.cpp
     vk-renderer.cpp
+    vk-context.cpp
     window.cpp
 )
 

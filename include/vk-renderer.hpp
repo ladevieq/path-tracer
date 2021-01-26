@@ -3,12 +3,11 @@
 
 #include <vector>
 
+#include "vk-context.hpp"
 #include "vulkan-loader.hpp"
-#include "thirdparty/vk_mem_alloc.h"
-
-#include "window.hpp"
 
 class input_data;
+class window;
 
 class vkrenderer {
     public:
@@ -16,26 +15,18 @@ class vkrenderer {
 
         ~vkrenderer();
 
-        void compute();
+        void compute(uint32_t width, uint32_t height);
 
         void recreate_swapchain();
 
         struct input_data*              mapped_data;
 
     private:
-        void create_instance();
-
-        void create_debugger();
-
-        void create_surface();
-
-        void create_device();
+        void create_surface(window& wnd);
 
         void create_swapchain();
 
         void create_pipeline();
-
-        void create_memory_allocator();
 
         void create_command_buffers();
 
@@ -47,13 +38,7 @@ class vkrenderer {
 
         void create_input_buffer(const input_data& inputs);
 
-        void destroy_instance();
-
-        void destroy_debugger();
-
         void destroy_surface();
-
-        void destroy_device();
 
         void destroy_swapchain();
 
@@ -63,8 +48,6 @@ class vkrenderer {
 
         void destroy_command_buffers();
 
-        void destroy_allocator();
-
         void destroy_descriptor_sets();
 
         void destroy_fences();
@@ -73,28 +56,16 @@ class vkrenderer {
 
         void destroy_input_buffer();
 
-        void select_physical_device();
-
-        void select_compute_queue();
-
         void update_descriptors_buffer();
 
         void update_descriptors_image();
 
         void handle_swapchain_result(VkResult function_result);
 
-        uint32_t                        compute_queue_index;
+        vkcontext                       context;
+
         uint64_t                        frame_index = 0;
 
-        VkInstance                      instance;
-
-        VkDebugUtilsMessengerEXT        debugMessenger;
-
-        VkPhysicalDevice                physical_device;
-        VkDevice                        device;
-        VkQueue                         compute_queue;
-
-        VmaAllocator                    allocator;
         VmaAllocation                   allocation;
         VkBuffer                        compute_shader_buffer;
 
@@ -120,8 +91,6 @@ class vkrenderer {
         std::vector<VkImage>            swapchain_images;
         std::vector<VkImageView>        swapchain_images_views;
         uint32_t                        current_image_index;
-
-        window&                         wnd;
 };
 
 #endif // !__VK_RENDERER_HPP_
