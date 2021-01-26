@@ -119,12 +119,16 @@ void window::poll_events() {
             }
             case XCB_KEY_RELEASE:
             case XCB_KEY_PRESS: {
-                auto key_press_event    = (xcb_key_press_event_t*)event;
-                auto keysym             = xkb_state_key_get_one_sym(keyboard_state, key_press_event->detail);
+                auto key_press_event = (xcb_key_press_event_t*)event;
+                auto keysym = xkb_state_key_get_one_sym(keyboard_state, key_press_event->detail);
+                auto isKeyPress = event->response_type == XCB_KEY_PRESS;
+                auto key = (KEYS)keysym;
+
+                keyboard[key] = isKeyPress;
+
                 struct event new_event = {
-                    .type   = event->response_type == XCB_KEY_PRESS ? EVENT_TYPES::KEY_PRESS :EVENT_TYPES::KEY_RELEASE
-                    .modifiers = key_press_event->state;
-                    .keycode = keysym;
+                    .key = key,
+                    .type = isKeyPress ? EVENT_TYPES::KEY_PRESS :EVENT_TYPES::KEY_RELEASE
                 };
 
                 events.push_back(new_event);

@@ -32,6 +32,7 @@ class vkrenderer;
 //     BUTTON5     = 4096,
 // };
 
+// TODO improve this
 #if defined(WINDOWS)
 enum KEYS: uint32_t {
     SHIFT = 0x10,
@@ -65,6 +66,43 @@ enum KEYS: uint32_t {
     Z,
     MAX_KEYS = 255
 };
+#else
+enum KEYS: uint32_t {
+    A = 0x61,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    LSHIFT = 65505,
+    RSHIFT,
+    LCTRL,
+    RCTRL,
+    LALT = 65513,
+    RALT,
+    MAX_KEYS = 0xffff
+};
+#endif
 
 enum BUTTONS: uint32_t {
     LEFT,
@@ -72,7 +110,6 @@ enum BUTTONS: uint32_t {
     MIDDLE,
     MAX_BUTTONS = 255
 };
-#endif
 
 enum EVENT_TYPES: int32_t {
     QUIT,
@@ -89,8 +126,6 @@ struct event {
     uint32_t    height;
     KEYS        key;
     BUTTONS     button;
-    // uint32_t    modifiers;
-    // uint32_t    keycode;
     int32_t     x;
     int32_t     y;
     EVENT_TYPES type;

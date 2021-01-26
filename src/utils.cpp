@@ -91,8 +91,7 @@ void random_scene(sphere *world) {
 
 struct input_data create_inputs(uint32_t width, uint32_t height) {
     // Image dimensions
-    // const float aspect_ratio = 16.0 / 9.0;
-    const float aspect_ratio = 1;
+    const float aspect_ratio = (float)width / (float) height;
 
     const uint32_t samples_per_pixel = 1;
     const uint32_t max_depth = 2;
