@@ -18,6 +18,7 @@ add_executable(
     utils.cpp
     vk-renderer.cpp
     vk-context.cpp
+    vk-api.cpp
     window.cpp
 )
 
