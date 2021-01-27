@@ -20,16 +20,18 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     create_descriptor_sets();
     create_fences();
     create_semaphores();
-    create_input_buffer(inputs);
+
+    compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
 
     update_descriptors_buffer();
     update_descriptors_image();
 }
 
 vkrenderer::~vkrenderer() {
-    VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
-    destroy_input_buffer();
+    api.destroy_buffer(compute_shader_buffer);
     destroy_fences();
     destroy_semaphores();
     destroy_descriptor_sets();
@@ -40,10 +42,10 @@ vkrenderer::~vkrenderer() {
 }
 
 void vkrenderer::compute(uint32_t width, uint32_t height) {
-    VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
-    VKRESULT(vkResetFences(context.device, 1, &submission_fences[frame_index]))
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
-    auto acquire_result = vkAcquireNextImageKHR(context.device, swapchain, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
+    auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
     handle_swapchain_result(acquire_result);
 
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
@@ -132,7 +134,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffers[frame_index];
 
-    VKRESULT(vkQueueSubmit(context.queue, 1, &submit_info, submission_fences[frame_index]))
+    VKRESULT(vkQueueSubmit(api.context.queue, 1, &submit_info, submission_fences[frame_index]))
 
     VkPresentInfoKHR present_info   = {};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -144,16 +146,16 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     present_info.pImageIndices      = &current_image_index;
     present_info.pResults           = nullptr;
 
-    auto present_result = vkQueuePresentKHR(context.queue, &present_info);
+    auto present_result = vkQueuePresentKHR(api.context.queue, &present_info);
     handle_swapchain_result(present_result);
 
-    VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
     frame_index = ++frame_index % swapchain_images_count;
 }
 
 void vkrenderer::recreate_swapchain() {
-    VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
     destroy_swapchain_images();
 
@@ -172,7 +174,7 @@ void vkrenderer::create_surface(window& wnd) {
     create_info.connection                  = wnd.connection;
     create_info.window                      = wnd.win;
 
-    VKRESULT(vkCreateXcbSurfaceKHR(context.instance, &create_info, nullptr, &platform_surface))
+    VKRESULT(vkCreateXcbSurfaceKHR(api.context.instance, &create_info, nullptr, &platform_surface))
 #elif defined(WINDOWS)
     VkWin32SurfaceCreateInfoKHR create_info   = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -187,10 +189,10 @@ void vkrenderer::create_surface(window& wnd) {
 
 void vkrenderer::create_swapchain() {
     VkBool32 queue_support_presentation = VK_FALSE;
-    VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.queue_index, platform_surface, &queue_support_presentation))
+    VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(api.context.physical_device, api.context.queue_index, platform_surface, &queue_support_presentation))
 
     VkSurfaceCapabilitiesKHR caps;
-    VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, platform_surface, &caps))
+    VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(api.context.physical_device, platform_surface, &caps))
 
     VkExtent2D wantedExtent = caps.currentExtent;
 
@@ -207,16 +209,16 @@ void vkrenderer::create_swapchain() {
     }
 
     uint32_t supported_formats_count = 0;
-    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device, platform_surface, &supported_formats_count,  VK_NULL_HANDLE))
+    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(api.context.physical_device, platform_surface, &supported_formats_count,  VK_NULL_HANDLE))
 
     std::vector<VkSurfaceFormatKHR> supported_formats { supported_formats_count };
-    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device, platform_surface, &supported_formats_count,  supported_formats.data()))
+    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(api.context.physical_device, platform_surface, &supported_formats_count,  supported_formats.data()))
 
     uint32_t supported_present_modes_count = 0;
-    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, platform_surface, &supported_present_modes_count, VK_NULL_HANDLE))
+    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(api.context.physical_device, platform_surface, &supported_present_modes_count, VK_NULL_HANDLE))
 
     std::vector<VkPresentModeKHR> supported_present_modes { supported_present_modes_count };
-    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, platform_surface, &supported_present_modes_count, supported_present_modes.data()))
+    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(api.context.physical_device, platform_surface, &supported_present_modes_count, supported_present_modes.data()))
 
     surface_format = supported_formats[0];
 
@@ -240,18 +242,18 @@ void vkrenderer::create_swapchain() {
     create_info.clipped                     = VK_TRUE;
     create_info.oldSwapchain                = old_swapchain;
 
-    VKRESULT(vkCreateSwapchainKHR(context.device, &create_info, nullptr, &swapchain))
+    VKRESULT(vkCreateSwapchainKHR(api.context.device, &create_info, nullptr, &swapchain))
 
     if (old_swapchain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(context.device, old_swapchain, nullptr);
+        vkDestroySwapchainKHR(api.context.device, old_swapchain, nullptr);
     }
 
     swapchain_images_count = 0;
-    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain, (uint32_t*)&swapchain_images_count, VK_NULL_HANDLE))
+    VKRESULT(vkGetSwapchainImagesKHR(api.context.device, swapchain, (uint32_t*)&swapchain_images_count, VK_NULL_HANDLE))
 
     swapchain_images = std::vector<VkImage>{ swapchain_images_count };
     swapchain_images_views = std::vector<VkImageView>{ swapchain_images_count };
-    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain, (uint32_t*)&swapchain_images_count, swapchain_images.data()))
+    VKRESULT(vkGetSwapchainImagesKHR(api.context.device, swapchain, (uint32_t*)&swapchain_images_count, swapchain_images.data()))
 
     for (size_t index = 0; index < swapchain_images_count; index++) {
         VkImageSubresourceRange image_subresource_range = {};
@@ -276,7 +278,7 @@ void vkrenderer::create_swapchain() {
         };
         image_view_create_info.subresourceRange        = image_subresource_range;
 
-        VKRESULT(vkCreateImageView(context.device, &image_view_create_info, nullptr, &swapchain_images_views[index]))
+        VKRESULT(vkCreateImageView(api.context.device, &image_view_create_info, nullptr, &swapchain_images_views[index]))
     }
 }
 
@@ -293,7 +295,7 @@ void vkrenderer::create_pipeline() {
     shader_create_info.codeSize                     = shader_code.size();
     shader_create_info.pCode                        = (uint32_t*)shader_code.data();
 
-    VKRESULT(vkCreateShaderModule(context.device, &shader_create_info, nullptr, &compute_shader_module))
+    VKRESULT(vkCreateShaderModule(api.context.device, &shader_create_info, nullptr, &compute_shader_module))
 
     VkPipelineShaderStageCreateInfo stage_create_info = {};
     stage_create_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -330,7 +332,7 @@ void vkrenderer::create_pipeline() {
     descriptor_set_layout_create_info.bindingCount  = bindings.size();
     descriptor_set_layout_create_info.pBindings     = bindings.data();
 
-    VKRESULT(vkCreateDescriptorSetLayout(context.device, &descriptor_set_layout_create_info, nullptr, &compute_shader_layout))
+    VKRESULT(vkCreateDescriptorSetLayout(api.context.device, &descriptor_set_layout_create_info, nullptr, &compute_shader_layout))
 
     VkPipelineLayoutCreateInfo layout_create_info   = {};
     layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -341,7 +343,7 @@ void vkrenderer::create_pipeline() {
     layout_create_info.pushConstantRangeCount       = 0;
     layout_create_info.pPushConstantRanges          = nullptr;
 
-    VKRESULT(vkCreatePipelineLayout(context.device, &layout_create_info, nullptr, &compute_pipeline_layout))
+    VKRESULT(vkCreatePipelineLayout(api.context.device, &layout_create_info, nullptr, &compute_pipeline_layout))
 
     VkComputePipelineCreateInfo create_info         = {};
     create_info.sType                               = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -351,7 +353,7 @@ void vkrenderer::create_pipeline() {
     create_info.layout                              = compute_pipeline_layout;
 
     VKRESULT(vkCreateComputePipelines(
-        context.device,
+        api.context.device,
         VK_NULL_HANDLE,
         1,
         &create_info,
@@ -367,9 +369,9 @@ void vkrenderer::create_command_buffers() {
     cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_create_info.pNext                      = nullptr;
     cmd_pool_create_info.flags                      = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmd_pool_create_info.queueFamilyIndex           = context.queue_index;
+    cmd_pool_create_info.queueFamilyIndex           = api.context.queue_index;
 
-    VKRESULT(vkCreateCommandPool(context.device, &cmd_pool_create_info, nullptr, &command_pool))
+    VKRESULT(vkCreateCommandPool(api.context.device, &cmd_pool_create_info, nullptr, &command_pool))
 
     VkCommandBufferAllocateInfo cmd_buf_allocate_info   = {};
     cmd_buf_allocate_info.sType                         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -379,7 +381,7 @@ void vkrenderer::create_command_buffers() {
     cmd_buf_allocate_info.commandBufferCount            = swapchain_images_count;
 
     command_buffers = std::vector<VkCommandBuffer> { swapchain_images_count };
-    vkAllocateCommandBuffers(context.device, &cmd_buf_allocate_info, command_buffers.data());
+    vkAllocateCommandBuffers(api.context.device, &cmd_buf_allocate_info, command_buffers.data());
 }
 void vkrenderer::create_descriptor_sets() {
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
@@ -401,7 +403,7 @@ void vkrenderer::create_descriptor_sets() {
     descriptor_pool_create_info.poolSizeCount               = descriptor_pools_sizes.size();
     descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes.data();
 
-    VKRESULT(vkCreateDescriptorPool(context.device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
+    VKRESULT(vkCreateDescriptorPool(api.context.device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
 
     std::vector<VkDescriptorSetLayout> sets_layouts = { swapchain_images_count, compute_shader_layout };
 
@@ -413,7 +415,7 @@ void vkrenderer::create_descriptor_sets() {
     descriptor_set_allocate_info.pSetLayouts                    = sets_layouts.data();
 
     compute_shader_sets = std::vector<VkDescriptorSet> { swapchain_images_count };
-    vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, compute_shader_sets.data());
+    vkAllocateDescriptorSets(api.context.device, &descriptor_set_allocate_info, compute_shader_sets.data());
 }
 
 void vkrenderer::create_fences() {
@@ -424,7 +426,7 @@ void vkrenderer::create_fences() {
         create_info.pNext               = nullptr;
         create_info.flags               = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        VKRESULT(vkCreateFence(context.device, &create_info, nullptr, &submission_fence))
+        VKRESULT(vkCreateFence(api.context.device, &create_info, nullptr, &submission_fence))
         
         submission_fences.push_back(submission_fence);
     }
@@ -439,43 +441,27 @@ void vkrenderer::create_semaphores() {
         create_info.pNext                   = nullptr;
         create_info.flags                   = 0;
 
-        VKRESULT(vkCreateSemaphore(context.device, &create_info, nullptr, &execution_semaphore))
-        VKRESULT(vkCreateSemaphore(context.device, &create_info, nullptr, &acquire_semaphore))
+        VKRESULT(vkCreateSemaphore(api.context.device, &create_info, nullptr, &execution_semaphore))
+        VKRESULT(vkCreateSemaphore(api.context.device, &create_info, nullptr, &acquire_semaphore))
 
         execution_semaphores.push_back(execution_semaphore);
         acquire_semaphores.push_back(acquire_semaphore);
     }
 }
 
-void vkrenderer::create_input_buffer(const input_data& inputs) {
-    // Create and fill input data buffer
-    VkBufferCreateInfo buffer_info  = {  };
-    buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size                = sizeof(inputs);
-    buffer_info.usage               = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-     
-    VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-     
-    vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &compute_shader_buffer, &allocation, nullptr);
-
-    vmaMapMemory(context.allocator, allocation, (void**) &mapped_data);
-    std::memcpy(mapped_data, &inputs, sizeof(inputs));
-}
-
 void vkrenderer::destroy_surface() {
-    vkDestroySurfaceKHR(context.instance, platform_surface, nullptr);
+    vkDestroySurfaceKHR(api.context.instance, platform_surface, nullptr);
 }
 
 void vkrenderer::destroy_swapchain() {
-    vkDestroySwapchainKHR(context.device, swapchain, nullptr);
+    vkDestroySwapchainKHR(api.context.device, swapchain, nullptr);
 
     destroy_swapchain_images();
 }
 
 void vkrenderer::destroy_swapchain_images() {
     for (auto view: swapchain_images_views) {
-        vkDestroyImageView(context.device, view, nullptr);
+        vkDestroyImageView(api.context.device, view, nullptr);
     }
 
     swapchain_images_views.clear();
@@ -483,27 +469,27 @@ void vkrenderer::destroy_swapchain_images() {
 }
 
 void vkrenderer::destroy_pipeline() {
-    vkDestroyShaderModule(context.device, compute_shader_module, nullptr);
-    vkDestroyDescriptorSetLayout(context.device, compute_shader_layout, nullptr);
-    vkDestroyPipelineLayout(context.device, compute_pipeline_layout, nullptr);
-    vkDestroyPipeline(context.device, compute_pipeline, nullptr);
+    vkDestroyShaderModule(api.context.device, compute_shader_module, nullptr);
+    vkDestroyDescriptorSetLayout(api.context.device, compute_shader_layout, nullptr);
+    vkDestroyPipelineLayout(api.context.device, compute_pipeline_layout, nullptr);
+    vkDestroyPipeline(api.context.device, compute_pipeline, nullptr);
 }
 
 void vkrenderer::destroy_command_buffers() {
-    vkFreeCommandBuffers(context.device, command_pool, swapchain_images_count, command_buffers.data());
+    vkFreeCommandBuffers(api.context.device, command_pool, swapchain_images_count, command_buffers.data());
 
-    vkDestroyCommandPool(context.device, command_pool, nullptr);
+    vkDestroyCommandPool(api.context.device, command_pool, nullptr);
 }
 
 void vkrenderer::destroy_descriptor_sets() {
     // vkFreeDescriptorSets(device, descriptor_pool, swapchain_images_count, compute_shader_sets.data());
 
-    vkDestroyDescriptorPool(context.device, descriptor_pool, nullptr);
+    vkDestroyDescriptorPool(api.context.device, descriptor_pool, nullptr);
 }
 
 void vkrenderer::destroy_fences() {
     for (auto fence: submission_fences) {
-        vkDestroyFence(context.device, fence, nullptr);
+        vkDestroyFence(api.context.device, fence, nullptr);
     }
 
     submission_fences.clear();
@@ -511,21 +497,16 @@ void vkrenderer::destroy_fences() {
 
 void vkrenderer::destroy_semaphores() {
     for (auto semaphore: acquire_semaphores) {
-        vkDestroySemaphore(context.device, semaphore, nullptr);
+        vkDestroySemaphore(api.context.device, semaphore, nullptr);
     }
 
     acquire_semaphores.clear();
 
     for (auto semaphore: execution_semaphores) {
-        vkDestroySemaphore(context.device, semaphore, nullptr);
+        vkDestroySemaphore(api.context.device, semaphore, nullptr);
     }
 
     execution_semaphores.clear();
-}
-
-void vkrenderer::destroy_input_buffer() {
-    vmaUnmapMemory(context.allocator, allocation);
-    vmaDestroyBuffer(context.allocator, compute_shader_buffer, allocation);
 }
 
 void vkrenderer::update_descriptors_buffer() {
@@ -534,7 +515,7 @@ void vkrenderer::update_descriptors_buffer() {
 
     for (size_t set_index = 0; set_index < swapchain_images_count; set_index++) {
         // Update uniform buffer descriptor
-        descriptors_buf_info[set_index].buffer                  = compute_shader_buffer;
+        descriptors_buf_info[set_index].buffer                  = compute_shader_buffer.vkbuffer;
         descriptors_buf_info[set_index].offset                  = 0;
         descriptors_buf_info[set_index].range                   = VK_WHOLE_SIZE;
 
@@ -550,7 +531,7 @@ void vkrenderer::update_descriptors_buffer() {
         write_descriptors[set_index].pTexelBufferView       = VK_NULL_HANDLE;
     }
 
-    vkUpdateDescriptorSets(context.device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
+    vkUpdateDescriptorSets(api.context.device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
 }
 
 void vkrenderer::update_descriptors_image() {
@@ -575,7 +556,7 @@ void vkrenderer::update_descriptors_image() {
         write_descriptors[set_index].pTexelBufferView   = VK_NULL_HANDLE;
     }
 
-    vkUpdateDescriptorSets(context.device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
+    vkUpdateDescriptorSets(api.context.device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
 }
 
 void vkrenderer::handle_swapchain_result(VkResult function_result) {

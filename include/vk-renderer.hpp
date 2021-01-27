@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "vk-context.hpp"
+#include "vk-api.hpp"
 #include "vulkan-loader.hpp"
 
 class input_data;
@@ -36,8 +36,6 @@ class vkrenderer {
 
         void create_semaphores();
 
-        void create_input_buffer(const input_data& inputs);
-
         void destroy_surface();
 
         void destroy_swapchain();
@@ -62,12 +60,11 @@ class vkrenderer {
 
         void handle_swapchain_result(VkResult function_result);
 
-        vkcontext                       context;
+        vkapi                           api;
 
         uint64_t                        frame_index = 0;
 
-        VmaAllocation                   allocation;
-        VkBuffer                        compute_shader_buffer;
+        Buffer                          compute_shader_buffer;
 
         VkCommandPool                   command_pool;
         std::vector<VkCommandBuffer>    command_buffers;
