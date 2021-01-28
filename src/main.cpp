@@ -68,15 +68,15 @@ int main() {
         for (auto event: wnd.events) {
             switch(event.type) {
                 case EVENT_TYPES::RESIZE: {
-                    renderer.mapped_data->width = event.width;
-                    renderer.mapped_data->height = event.height;
+                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->width = event.width;
+                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->height = event.height;
 
                     if (event.width == 0 && event.height == 0) {
                         canRender = false;
                     } else {
                         canRender = true;
                         renderer.recreate_swapchain();
-                        renderer.mapped_data->cam.set_aspect_ratio((float)event.width / (float)event.height);
+                        ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.set_aspect_ratio((float)event.width / (float)event.height);
                     }
                     break;
                 }
@@ -90,26 +90,26 @@ int main() {
 
                     switch (event.key) {
                         case KEYS::W: {
-                            move_vec = renderer.mapped_data->cam.forward.unit() * move_speed;
+                            move_vec = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::S: {
-                            move_vec = -renderer.mapped_data->cam.forward.unit() * move_speed;
+                            move_vec = -((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::D: {
-                            move_vec = renderer.mapped_data->cam.right.unit() * move_speed;
+                            move_vec = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.right.unit() * move_speed;
                             break;
                         }
                         case KEYS::A: {
-                            move_vec = -renderer.mapped_data->cam.right.unit() * move_speed;
+                            move_vec = -((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.right.unit() * move_speed;
                             break;
                         }
                         default:
                             break;
                     }
 
-                    renderer.mapped_data->cam.move(move_vec);
+                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.move(move_vec);
 
                     break;
                 }
