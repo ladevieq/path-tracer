@@ -19,22 +19,12 @@ class vkrenderer {
 
         void recreate_swapchain();
 
-        struct input_data*              mapped_data;
+        Buffer                      compute_shader_buffer;
 
     private:
         void create_surface(window& wnd);
 
         void create_swapchain();
-
-        void create_pipeline();
-
-        void create_command_buffers();
-
-        void create_descriptor_sets();
-
-        void create_fences();
-
-        void create_semaphores();
 
         void destroy_surface();
 
@@ -42,17 +32,7 @@ class vkrenderer {
 
         void destroy_swapchain_images();
 
-        void destroy_pipeline();
-
-        void destroy_command_buffers();
-
         void destroy_descriptor_sets();
-
-        void destroy_fences();
-
-        void destroy_semaphores();
-
-        void destroy_input_buffer();
 
         void update_descriptors_buffer();
 
@@ -64,18 +44,12 @@ class vkrenderer {
 
         uint64_t                        frame_index = 0;
 
-        Buffer                          compute_shader_buffer;
-
-        VkCommandPool                   command_pool;
         std::vector<VkCommandBuffer>    command_buffers;
 
         VkDescriptorPool                descriptor_pool;
         std::vector<VkDescriptorSet>    compute_shader_sets;
 
-        VkShaderModule                  compute_shader_module;
-        VkDescriptorSetLayout           compute_shader_layout;
-        VkPipelineLayout                compute_pipeline_layout;
-        VkPipeline                      compute_pipeline;
+        ComputePipeline                 compute_pipeline;
 
         std::vector<VkFence>            submission_fences;
         std::vector<VkSemaphore>        execution_semaphores;

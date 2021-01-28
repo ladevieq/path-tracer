@@ -14,12 +14,35 @@
 vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 
     create_surface(wnd);
-    create_pipeline();
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        }
+    };
+
+    compute_pipeline = api.create_compute_pipeline("./shaders/compute.comp.spv", bindings);
+
     create_swapchain();
-    create_command_buffers();
-    create_descriptor_sets();
-    create_fences();
-    create_semaphores();
+
+    command_buffers = api.create_command_buffers(swapchain_images_count);
+
+    compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain_images_count);
+
+    submission_fences = api.create_fences(swapchain_images_count);
+    execution_semaphores = api.create_semaphores(swapchain_images_count);
+    acquire_semaphores = api.create_semaphores(swapchain_images_count);
 
     compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
@@ -32,11 +55,14 @@ vkrenderer::~vkrenderer() {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
     api.destroy_buffer(compute_shader_buffer);
-    destroy_fences();
-    destroy_semaphores();
+    api.destroy_fences(submission_fences);
+    api.destroy_semaphores(execution_semaphores);
+    api.destroy_semaphores(acquire_semaphores);
+
     destroy_descriptor_sets();
-    destroy_command_buffers();
-    destroy_pipeline();
+
+    api.destroy_command_buffers(command_buffers);
+
     destroy_swapchain();
     destroy_surface();
 }
@@ -88,9 +114,9 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
         &undefined_to_general_barrier
     );
 
-    vkCmdBindDescriptorSets(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline_layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
+    vkCmdBindDescriptorSets(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
 
-    vkCmdBindPipeline(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
+    vkCmdBindPipeline(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.vkpipeline);
 
     vkCmdDispatch(command_buffers[frame_index], width / 8, height / 8, 1);
 
@@ -282,173 +308,6 @@ void vkrenderer::create_swapchain() {
     }
 }
 
-void vkrenderer::create_pipeline() {
-    std::vector<uint8_t> shader_code = get_shader_code("./shaders/compute.comp.spv");
-    if (shader_code.size() == 0) {
-        exit(1);
-    }
-
-    VkShaderModuleCreateInfo shader_create_info     = {};
-    shader_create_info.sType                        = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    shader_create_info.pNext                        = nullptr;
-    shader_create_info.flags                        = 0;
-    shader_create_info.codeSize                     = shader_code.size();
-    shader_create_info.pCode                        = (uint32_t*)shader_code.data();
-
-    VKRESULT(vkCreateShaderModule(api.context.device, &shader_create_info, nullptr, &compute_shader_module))
-
-    VkPipelineShaderStageCreateInfo stage_create_info = {};
-    stage_create_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stage_create_info.pNext                         = nullptr;
-    stage_create_info.flags                         = 0;
-    stage_create_info.stage                         = VK_SHADER_STAGE_COMPUTE_BIT;
-    stage_create_info.module                        = compute_shader_module;
-    stage_create_info.pName                         = "main";
-    stage_create_info.pSpecializationInfo           = nullptr;
-
-
-
-    std::vector<VkDescriptorSetLayoutBinding> bindings {
-        {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-        {
-            .binding = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        }
-    };
-
-    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
-    descriptor_set_layout_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptor_set_layout_create_info.pNext         = nullptr;
-    descriptor_set_layout_create_info.flags         = 0;
-    descriptor_set_layout_create_info.bindingCount  = bindings.size();
-    descriptor_set_layout_create_info.pBindings     = bindings.data();
-
-    VKRESULT(vkCreateDescriptorSetLayout(api.context.device, &descriptor_set_layout_create_info, nullptr, &compute_shader_layout))
-
-    VkPipelineLayoutCreateInfo layout_create_info   = {};
-    layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_create_info.pNext                        = nullptr;
-    layout_create_info.flags                        = 0;
-    layout_create_info.setLayoutCount               = 1;
-    layout_create_info.pSetLayouts                  = &compute_shader_layout;
-    layout_create_info.pushConstantRangeCount       = 0;
-    layout_create_info.pPushConstantRanges          = nullptr;
-
-    VKRESULT(vkCreatePipelineLayout(api.context.device, &layout_create_info, nullptr, &compute_pipeline_layout))
-
-    VkComputePipelineCreateInfo create_info         = {};
-    create_info.sType                               = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    create_info.pNext                               = nullptr;
-    create_info.flags                               = 0;
-    create_info.stage                               = stage_create_info;
-    create_info.layout                              = compute_pipeline_layout;
-
-    VKRESULT(vkCreateComputePipelines(
-        api.context.device,
-        VK_NULL_HANDLE,
-        1,
-        &create_info,
-        nullptr,
-        &compute_pipeline
-    ))
-
-    std::cerr << "Compute pipeline ready" << std::endl;
-}
-
-void vkrenderer::create_command_buffers() {
-    VkCommandPoolCreateInfo cmd_pool_create_info    = {};
-    cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmd_pool_create_info.pNext                      = nullptr;
-    cmd_pool_create_info.flags                      = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmd_pool_create_info.queueFamilyIndex           = api.context.queue_index;
-
-    VKRESULT(vkCreateCommandPool(api.context.device, &cmd_pool_create_info, nullptr, &command_pool))
-
-    VkCommandBufferAllocateInfo cmd_buf_allocate_info   = {};
-    cmd_buf_allocate_info.sType                         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_buf_allocate_info.pNext                         = nullptr;
-    cmd_buf_allocate_info.commandPool                   = command_pool;
-    cmd_buf_allocate_info.level                         = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_buf_allocate_info.commandBufferCount            = swapchain_images_count;
-
-    command_buffers = std::vector<VkCommandBuffer> { swapchain_images_count };
-    vkAllocateCommandBuffers(api.context.device, &cmd_buf_allocate_info, command_buffers.data());
-}
-void vkrenderer::create_descriptor_sets() {
-    std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
-        {
-            .type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount                    = (uint32_t)swapchain_images_count,
-        },
-        {
-            .type                               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount                    = (uint32_t)swapchain_images_count,
-        }
-    };
-
-    VkDescriptorPoolCreateInfo descriptor_pool_create_info  = {};
-    descriptor_pool_create_info.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descriptor_pool_create_info.pNext                       = nullptr;
-    descriptor_pool_create_info.flags                       = 0;
-    descriptor_pool_create_info.maxSets                     = swapchain_images_count;
-    descriptor_pool_create_info.poolSizeCount               = descriptor_pools_sizes.size();
-    descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes.data();
-
-    VKRESULT(vkCreateDescriptorPool(api.context.device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
-
-    std::vector<VkDescriptorSetLayout> sets_layouts = { swapchain_images_count, compute_shader_layout };
-
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info    = {};
-    descriptor_set_allocate_info.sType                          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptor_set_allocate_info.pNext                          = nullptr;
-    descriptor_set_allocate_info.descriptorPool                 = descriptor_pool;
-    descriptor_set_allocate_info.descriptorSetCount             = sets_layouts.size();
-    descriptor_set_allocate_info.pSetLayouts                    = sets_layouts.data();
-
-    compute_shader_sets = std::vector<VkDescriptorSet> { swapchain_images_count };
-    vkAllocateDescriptorSets(api.context.device, &descriptor_set_allocate_info, compute_shader_sets.data());
-}
-
-void vkrenderer::create_fences() {
-    for (size_t fence_index = 0; fence_index < swapchain_images_count; fence_index++) {
-        VkFence submission_fence;
-        VkFenceCreateInfo create_info   = {};
-        create_info.sType               = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        create_info.pNext               = nullptr;
-        create_info.flags               = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        VKRESULT(vkCreateFence(api.context.device, &create_info, nullptr, &submission_fence))
-        
-        submission_fences.push_back(submission_fence);
-    }
-}
-
-void vkrenderer::create_semaphores() {
-    for (size_t semaphore_index = 0; semaphore_index < swapchain_images_count; semaphore_index++) {
-        VkSemaphore execution_semaphore;
-        VkSemaphore acquire_semaphore;
-        VkSemaphoreCreateInfo create_info   = {};
-        create_info.sType                   = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        create_info.pNext                   = nullptr;
-        create_info.flags                   = 0;
-
-        VKRESULT(vkCreateSemaphore(api.context.device, &create_info, nullptr, &execution_semaphore))
-        VKRESULT(vkCreateSemaphore(api.context.device, &create_info, nullptr, &acquire_semaphore))
-
-        execution_semaphores.push_back(execution_semaphore);
-        acquire_semaphores.push_back(acquire_semaphore);
-    }
-}
-
 void vkrenderer::destroy_surface() {
     vkDestroySurfaceKHR(api.context.instance, platform_surface, nullptr);
 }
@@ -468,45 +327,10 @@ void vkrenderer::destroy_swapchain_images() {
     swapchain_images.clear();
 }
 
-void vkrenderer::destroy_pipeline() {
-    vkDestroyShaderModule(api.context.device, compute_shader_module, nullptr);
-    vkDestroyDescriptorSetLayout(api.context.device, compute_shader_layout, nullptr);
-    vkDestroyPipelineLayout(api.context.device, compute_pipeline_layout, nullptr);
-    vkDestroyPipeline(api.context.device, compute_pipeline, nullptr);
-}
-
-void vkrenderer::destroy_command_buffers() {
-    vkFreeCommandBuffers(api.context.device, command_pool, swapchain_images_count, command_buffers.data());
-
-    vkDestroyCommandPool(api.context.device, command_pool, nullptr);
-}
-
 void vkrenderer::destroy_descriptor_sets() {
     // vkFreeDescriptorSets(device, descriptor_pool, swapchain_images_count, compute_shader_sets.data());
 
     vkDestroyDescriptorPool(api.context.device, descriptor_pool, nullptr);
-}
-
-void vkrenderer::destroy_fences() {
-    for (auto fence: submission_fences) {
-        vkDestroyFence(api.context.device, fence, nullptr);
-    }
-
-    submission_fences.clear();
-}
-
-void vkrenderer::destroy_semaphores() {
-    for (auto semaphore: acquire_semaphores) {
-        vkDestroySemaphore(api.context.device, semaphore, nullptr);
-    }
-
-    acquire_semaphores.clear();
-
-    for (auto semaphore: execution_semaphores) {
-        vkDestroySemaphore(api.context.device, semaphore, nullptr);
-    }
-
-    execution_semaphores.clear();
 }
 
 void vkrenderer::update_descriptors_buffer() {
