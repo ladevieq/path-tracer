@@ -12,8 +12,13 @@
 #define VKRESULT(result) assert(result == VK_SUCCESS);
 
 vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
-
-    create_surface(wnd);
+    platform_surface = api.create_surface(wnd);
+    swapchain = api.create_swapchain(
+        platform_surface,
+        min_swapchain_image_count,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        std::nullopt
+    );
 
     std::vector<VkDescriptorSetLayoutBinding> bindings {
         {
@@ -34,21 +39,22 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 
     compute_pipeline = api.create_compute_pipeline("./shaders/compute.comp.spv", bindings);
 
-    create_swapchain();
+    command_buffers = api.create_command_buffers(swapchain.image_count);
 
-    command_buffers = api.create_command_buffers(swapchain_images_count);
+    compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain.image_count);
 
-    compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain_images_count);
-
-    submission_fences = api.create_fences(swapchain_images_count);
-    execution_semaphores = api.create_semaphores(swapchain_images_count);
-    acquire_semaphores = api.create_semaphores(swapchain_images_count);
+    submission_fences = api.create_fences(swapchain.image_count);
+    execution_semaphores = api.create_semaphores(swapchain.image_count);
+    acquire_semaphores = api.create_semaphores(swapchain.image_count);
 
     compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
 
-    update_descriptors_buffer();
-    update_descriptors_image();
+    size_t image_index = 0;
+    for (auto& set: compute_shader_sets) {
+        api.update_descriptor_set_buffer(set, bindings[0], compute_shader_buffer);
+        api.update_descriptor_set_image(set, bindings[1], swapchain.images[image_index].view);
+    }
 }
 
 vkrenderer::~vkrenderer() {
@@ -59,19 +65,20 @@ vkrenderer::~vkrenderer() {
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);
 
-    destroy_descriptor_sets();
+    api.destroy_descriptor_sets(compute_shader_sets);
 
     api.destroy_command_buffers(command_buffers);
+    api.destroy_compute_pipeline(compute_pipeline);
 
-    destroy_swapchain();
-    destroy_surface();
+    api.destroy_swapchain(swapchain);
+    api.destroy_surface(platform_surface);
 }
 
 void vkrenderer::compute(uint32_t width, uint32_t height) {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
-    auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
+    auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
     handle_swapchain_result(acquire_result);
 
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
@@ -98,7 +105,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     undefined_to_general_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
     undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
     undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    undefined_to_general_barrier.image                  = swapchain_images[current_image_index];
+    undefined_to_general_barrier.image                  = swapchain.images[current_image_index].handle;
     undefined_to_general_barrier.subresourceRange       = image_subresource_range;
 
     vkCmdPipelineBarrier(
@@ -116,7 +123,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
 
     vkCmdBindDescriptorSets(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
 
-    vkCmdBindPipeline(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.vkpipeline);
+    vkCmdBindPipeline(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.handle);
 
     vkCmdDispatch(command_buffers[frame_index], width / 8, height / 8, 1);
 
@@ -129,7 +136,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     general_to_present_barrier.newLayout                = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     general_to_present_barrier.srcQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
     general_to_present_barrier.dstQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
-    general_to_present_barrier.image                    = swapchain_images[current_image_index];
+    general_to_present_barrier.image                    = swapchain.images[current_image_index].handle;
     general_to_present_barrier.subresourceRange         = image_subresource_range;
 
     vkCmdPipelineBarrier(
@@ -168,7 +175,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     present_info.waitSemaphoreCount = 1;
     present_info.pWaitSemaphores    = &execution_semaphores[frame_index];
     present_info.swapchainCount     = 1;
-    present_info.pSwapchains        = &swapchain;
+    present_info.pSwapchains        = &swapchain.handle;
     present_info.pImageIndices      = &current_image_index;
     present_info.pResults           = nullptr;
 
@@ -177,210 +184,25 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
 
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
-    frame_index = ++frame_index % swapchain_images_count;
+    frame_index = ++frame_index % swapchain.image_count;
 }
 
 void vkrenderer::recreate_swapchain() {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
-    destroy_swapchain_images();
+    swapchain = api.create_swapchain(platform_surface, 3, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, std::optional<Swapchain> { swapchain });
 
-    create_swapchain();
-
-    update_descriptors_image();
-}
-
-
-void vkrenderer::create_surface(window& wnd) {
-#if defined(LINUX)
-    VkXcbSurfaceCreateInfoKHR create_info   = {};
-    create_info.sType                       = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-    create_info.pNext                       = nullptr;
-    create_info.flags                       = 0;
-    create_info.connection                  = wnd.connection;
-    create_info.window                      = wnd.win;
-
-    VKRESULT(vkCreateXcbSurfaceKHR(api.context.instance, &create_info, nullptr, &platform_surface))
-#elif defined(WINDOWS)
-    VkWin32SurfaceCreateInfoKHR create_info   = {};
-    create_info.sType                       = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    create_info.pNext                       = nullptr;
-    create_info.flags                       = 0;
-    create_info.hinstance                   = GetModuleHandle(NULL);
-    create_info.hwnd                        = wnd.win_handle;
-
-    VKRESULT(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &platform_surface))
-#endif
-}
-
-void vkrenderer::create_swapchain() {
-    VkBool32 queue_support_presentation = VK_FALSE;
-    VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(api.context.physical_device, api.context.queue_index, platform_surface, &queue_support_presentation))
-
-    VkSurfaceCapabilitiesKHR caps;
-    VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(api.context.physical_device, platform_surface, &caps))
-
-    VkExtent2D wantedExtent = caps.currentExtent;
-
-    if (wantedExtent.width < caps.minImageExtent.width) {
-        wantedExtent.width = caps.minImageExtent.width;
-    } else if (wantedExtent.width > caps.maxImageExtent.width) {
-        wantedExtent.width = caps.maxImageExtent.width;
+    VkDescriptorSetLayoutBinding binding {
+        .binding = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .pImmutableSamplers = VK_NULL_HANDLE,
+    };
+    size_t image_index = 0;
+    for (auto& set: compute_shader_sets) {
+        api.update_descriptor_set_image(set, binding, swapchain.images[image_index].view);
     }
-
-    if (wantedExtent.height < caps.minImageExtent.height) {
-        wantedExtent.height = caps.minImageExtent.height;
-    } else if (wantedExtent.height > caps.maxImageExtent.height) {
-        wantedExtent.height = caps.maxImageExtent.height;
-    }
-
-    uint32_t supported_formats_count = 0;
-    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(api.context.physical_device, platform_surface, &supported_formats_count,  VK_NULL_HANDLE))
-
-    std::vector<VkSurfaceFormatKHR> supported_formats { supported_formats_count };
-    VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(api.context.physical_device, platform_surface, &supported_formats_count,  supported_formats.data()))
-
-    uint32_t supported_present_modes_count = 0;
-    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(api.context.physical_device, platform_surface, &supported_present_modes_count, VK_NULL_HANDLE))
-
-    std::vector<VkPresentModeKHR> supported_present_modes { supported_present_modes_count };
-    VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(api.context.physical_device, platform_surface, &supported_present_modes_count, supported_present_modes.data()))
-
-    surface_format = supported_formats[0];
-
-    VkSwapchainKHR old_swapchain            = swapchain;
-
-    VkSwapchainCreateInfoKHR create_info    = {};
-    create_info.sType                       = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.pNext                       = nullptr;
-    create_info.flags                       = 0;
-    create_info.surface                     = platform_surface;
-    create_info.minImageCount               = swapchain_images_count;
-    create_info.imageFormat                 = surface_format.format;
-    create_info.imageColorSpace             = surface_format.colorSpace;
-    create_info.imageExtent                 = wantedExtent;
-    create_info.imageArrayLayers            = 1;
-    create_info.imageUsage                  = VK_IMAGE_USAGE_STORAGE_BIT;
-    create_info.imageSharingMode            = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.preTransform                = caps.currentTransform;
-    create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
-    create_info.clipped                     = VK_TRUE;
-    create_info.oldSwapchain                = old_swapchain;
-
-    VKRESULT(vkCreateSwapchainKHR(api.context.device, &create_info, nullptr, &swapchain))
-
-    if (old_swapchain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(api.context.device, old_swapchain, nullptr);
-    }
-
-    swapchain_images_count = 0;
-    VKRESULT(vkGetSwapchainImagesKHR(api.context.device, swapchain, (uint32_t*)&swapchain_images_count, VK_NULL_HANDLE))
-
-    swapchain_images = std::vector<VkImage>{ swapchain_images_count };
-    swapchain_images_views = std::vector<VkImageView>{ swapchain_images_count };
-    VKRESULT(vkGetSwapchainImagesKHR(api.context.device, swapchain, (uint32_t*)&swapchain_images_count, swapchain_images.data()))
-
-    for (size_t index = 0; index < swapchain_images_count; index++) {
-        VkImageSubresourceRange image_subresource_range = {};
-        image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_subresource_range.baseMipLevel            = 0;
-        image_subresource_range.levelCount              = 1;
-        image_subresource_range.baseArrayLayer          = 0;
-        image_subresource_range.layerCount              = 1;
-
-        VkImageViewCreateInfo image_view_create_info    = {};
-        image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        image_view_create_info.pNext                    = nullptr;
-        image_view_create_info.flags                    = 0;
-        image_view_create_info.image                    = swapchain_images[index];
-        image_view_create_info.viewType                 = VK_IMAGE_VIEW_TYPE_2D;
-        image_view_create_info.format                   = surface_format.format;
-        image_view_create_info.components               = {
-            VK_COMPONENT_SWIZZLE_IDENTITY,
-            VK_COMPONENT_SWIZZLE_IDENTITY,
-            VK_COMPONENT_SWIZZLE_IDENTITY,
-            VK_COMPONENT_SWIZZLE_IDENTITY
-        };
-        image_view_create_info.subresourceRange        = image_subresource_range;
-
-        VKRESULT(vkCreateImageView(api.context.device, &image_view_create_info, nullptr, &swapchain_images_views[index]))
-    }
-}
-
-void vkrenderer::destroy_surface() {
-    vkDestroySurfaceKHR(api.context.instance, platform_surface, nullptr);
-}
-
-void vkrenderer::destroy_swapchain() {
-    vkDestroySwapchainKHR(api.context.device, swapchain, nullptr);
-
-    destroy_swapchain_images();
-}
-
-void vkrenderer::destroy_swapchain_images() {
-    for (auto view: swapchain_images_views) {
-        vkDestroyImageView(api.context.device, view, nullptr);
-    }
-
-    swapchain_images_views.clear();
-    swapchain_images.clear();
-}
-
-void vkrenderer::destroy_descriptor_sets() {
-    // vkFreeDescriptorSets(device, descriptor_pool, swapchain_images_count, compute_shader_sets.data());
-
-    vkDestroyDescriptorPool(api.context.device, descriptor_pool, nullptr);
-}
-
-void vkrenderer::update_descriptors_buffer() {
-    std::vector<VkDescriptorBufferInfo> descriptors_buf_info    { swapchain_images_count };
-    std::vector<VkWriteDescriptorSet> write_descriptors         { swapchain_images_count };
-
-    for (size_t set_index = 0; set_index < swapchain_images_count; set_index++) {
-        // Update uniform buffer descriptor
-        descriptors_buf_info[set_index].buffer                  = compute_shader_buffer.vkbuffer;
-        descriptors_buf_info[set_index].offset                  = 0;
-        descriptors_buf_info[set_index].range                   = VK_WHOLE_SIZE;
-
-        write_descriptors[set_index].sType                  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write_descriptors[set_index].pNext                  = nullptr;
-        write_descriptors[set_index].dstSet                 = compute_shader_sets[set_index];
-        write_descriptors[set_index].dstBinding             = 0;
-        write_descriptors[set_index].dstArrayElement        = 0;
-        write_descriptors[set_index].descriptorCount        = 1;
-        write_descriptors[set_index].descriptorType         = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        write_descriptors[set_index].pImageInfo             = VK_NULL_HANDLE;
-        write_descriptors[set_index].pBufferInfo            = &descriptors_buf_info[set_index];
-        write_descriptors[set_index].pTexelBufferView       = VK_NULL_HANDLE;
-    }
-
-    vkUpdateDescriptorSets(api.context.device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
-}
-
-void vkrenderer::update_descriptors_image() {
-    std::vector<VkDescriptorImageInfo> descriptors_image_info   { swapchain_images_count };
-    std::vector<VkWriteDescriptorSet> write_descriptors         { swapchain_images_count };
-
-    for (size_t set_index = 0; set_index < swapchain_images_count; set_index++) {
-        // Update storage image descriptor
-        descriptors_image_info[set_index].sampler       = VK_NULL_HANDLE;
-        descriptors_image_info[set_index].imageView     = swapchain_images_views[set_index];
-        descriptors_image_info[set_index].imageLayout   = VK_IMAGE_LAYOUT_GENERAL;
-
-        write_descriptors[set_index].sType              = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write_descriptors[set_index].pNext              = nullptr;
-        write_descriptors[set_index].dstSet             = compute_shader_sets[set_index];
-        write_descriptors[set_index].dstBinding         = 1;
-        write_descriptors[set_index].dstArrayElement    = 0;
-        write_descriptors[set_index].descriptorCount    = 1;
-        write_descriptors[set_index].descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        write_descriptors[set_index].pImageInfo         = &descriptors_image_info[set_index];
-        write_descriptors[set_index].pBufferInfo        = VK_NULL_HANDLE;
-        write_descriptors[set_index].pTexelBufferView   = VK_NULL_HANDLE;
-    }
-
-    vkUpdateDescriptorSets(api.context.device, write_descriptors.size(), write_descriptors.data(), 0, nullptr);
 }
 
 void vkrenderer::handle_swapchain_result(VkResult function_result) {

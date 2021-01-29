@@ -22,21 +22,6 @@ class vkrenderer {
         Buffer                      compute_shader_buffer;
 
     private:
-        void create_surface(window& wnd);
-
-        void create_swapchain();
-
-        void destroy_surface();
-
-        void destroy_swapchain();
-
-        void destroy_swapchain_images();
-
-        void destroy_descriptor_sets();
-
-        void update_descriptors_buffer();
-
-        void update_descriptors_image();
 
         void handle_swapchain_result(VkResult function_result);
 
@@ -57,10 +42,10 @@ class vkrenderer {
 
         VkSurfaceFormatKHR              surface_format;
         VkSurfaceKHR                    platform_surface = VK_NULL_HANDLE;
-        VkSwapchainKHR                  swapchain = VK_NULL_HANDLE;
-        size_t                          swapchain_images_count = 3;
-        std::vector<VkImage>            swapchain_images;
-        std::vector<VkImageView>        swapchain_images_views;
+
+        Swapchain                       swapchain;
+
+        const uint32_t                  min_swapchain_image_count = 3;
         uint32_t                        current_image_index;
 };
 
