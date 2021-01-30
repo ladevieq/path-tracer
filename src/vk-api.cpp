@@ -339,7 +339,7 @@ VkSurfaceKHR vkapi::create_surface(window& wnd) {
     create_info.hinstance                   = GetModuleHandle(NULL);
     create_info.hwnd                        = wnd.win_handle;
 
-    VKRESULT(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &platform_surface))
+    VKRESULT(vkCreateWin32SurfaceKHR(context.instance, &create_info, nullptr, &surface))
 #endif
 
     return surface;
