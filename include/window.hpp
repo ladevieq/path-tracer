@@ -64,6 +64,8 @@ enum KEYS: uint32_t {
     X,
     Y,
     Z,
+    LSHIFT = 0xA0,
+    RSHIFT,
     MAX_KEYS = 255
 };
 #else
