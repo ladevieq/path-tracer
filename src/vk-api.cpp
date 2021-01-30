@@ -405,7 +405,7 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
     create_info.clipped                     = VK_TRUE;
-    create_info.oldSwapchain                = old_swapchain_handle;
+    create_info.oldSwapchain                = VK_NULL_HANDLE;
 
     VKRESULT(vkCreateSwapchainKHR(context.device, &create_info, nullptr, &swapchain.handle))
 
@@ -413,8 +413,10 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
         destroy_swapchain(old_swapchain.value());
     }
 
-    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, (uint32_t*)&swapchain.image_count, VK_NULL_HANDLE))
+    uint32_t image_count = 0;
+    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, &image_count, VK_NULL_HANDLE))
 
+    swapchain.image_count = image_count;
     swapchain.images = std::vector<Image>{ swapchain.image_count };
     auto images = std::vector<VkImage>{ swapchain.image_count };
     auto views = std::vector<VkImageView>{ swapchain.image_count };
