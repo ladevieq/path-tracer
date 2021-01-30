@@ -82,6 +82,13 @@ class vkapi {
 
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer);
         void update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view);
+
+
+        void start_record(VkCommandBuffer command_buffer);
+
+        void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, Image image);
+
+        void end_record(VkCommandBuffer command_buffer);
     // private:
 
         vkcontext           context;

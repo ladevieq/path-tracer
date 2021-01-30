@@ -504,3 +504,46 @@ void vkapi::update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayo
 
     vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
 }
+
+
+void vkapi::start_record(VkCommandBuffer command_buffer) {
+    VkCommandBufferBeginInfo cmd_buf_begin_info = {};
+    cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmd_buf_begin_info.pNext                    = nullptr;
+    cmd_buf_begin_info.flags                    = 0;
+    cmd_buf_begin_info.pInheritanceInfo         = nullptr;
+
+    vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
+}
+
+void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, Image image) {
+    VkImageMemoryBarrier undefined_to_general_barrier   = {};
+    undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    undefined_to_general_barrier.pNext                  = nullptr;
+    undefined_to_general_barrier.srcAccessMask          = src_access;
+    undefined_to_general_barrier.dstAccessMask          = dst_access;
+    undefined_to_general_barrier.oldLayout              = src_layout;
+    undefined_to_general_barrier.newLayout              = dst_layout;
+    undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    undefined_to_general_barrier.image                  = image.handle;
+    undefined_to_general_barrier.subresourceRange       = image.subresource_range;
+
+    // api.image_barrier(cmd_buffer, src_stage, dst_stage, image);
+    vkCmdPipelineBarrier(
+        command_buffer,
+        src_stage,
+        dst_stage,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        1,
+        &undefined_to_general_barrier
+    );
+}
+
+void vkapi::end_record(VkCommandBuffer command_buffer) {
+    VKRESULT(vkEndCommandBuffer(command_buffer))
+}
