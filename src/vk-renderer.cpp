@@ -80,7 +80,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
     handle_swapchain_result(acquire_result);
 
-    // API
+    // API frame skeleton
     // api.start_record(cmd_buffer);
     // api.command_barrier();
     // bind pipeline
@@ -91,77 +91,20 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     // api.execute(cmd_buffer, wait_semaphore, signal_semaphore);
     // api.present(swapchain, img_index, wait_semaphore);
 
-    VkCommandBufferBeginInfo cmd_buf_begin_info = {};
-    cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmd_buf_begin_info.pNext                    = nullptr;
-    cmd_buf_begin_info.flags                    = 0;
-    cmd_buf_begin_info.pInheritanceInfo         = nullptr;
+    auto cmd_buf = command_buffers[frame_index];
+    api.start_record(cmd_buf);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, swapchain.images[current_image_index]);
 
-    vkBeginCommandBuffer(command_buffers[frame_index], &cmd_buf_begin_info);
-    VkImageSubresourceRange image_subresource_range = {};
-    image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
-    image_subresource_range.baseMipLevel            = 0;
-    image_subresource_range.levelCount              = 1;
-    image_subresource_range.baseArrayLayer          = 0;
-    image_subresource_range.layerCount              = 1;
 
-    VkImageMemoryBarrier undefined_to_general_barrier   = {};
-    undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    undefined_to_general_barrier.pNext                  = nullptr;
-    undefined_to_general_barrier.srcAccessMask          = 0;
-    undefined_to_general_barrier.dstAccessMask          = VK_ACCESS_SHADER_WRITE_BIT;
-    undefined_to_general_barrier.oldLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
-    undefined_to_general_barrier.newLayout              = VK_IMAGE_LAYOUT_GENERAL;
-    undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    undefined_to_general_barrier.image                  = swapchain.images[current_image_index].handle;
-    undefined_to_general_barrier.subresourceRange       = image_subresource_range;
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
 
-    vkCmdPipelineBarrier(
-        command_buffers[frame_index],
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        0,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &undefined_to_general_barrier
-    );
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.handle);
 
-    vkCmdBindDescriptorSets(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
+    vkCmdDispatch(cmd_buf, width / 8, height / 8, 1);
 
-    vkCmdBindPipeline(command_buffers[frame_index], VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.handle);
 
-    vkCmdDispatch(command_buffers[frame_index], width / 8, height / 8, 1);
-
-    VkImageMemoryBarrier general_to_present_barrier   = {};
-    general_to_present_barrier.sType                    = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    general_to_present_barrier.pNext                    = nullptr;
-    general_to_present_barrier.srcAccessMask            = VK_ACCESS_SHADER_WRITE_BIT;
-    general_to_present_barrier.dstAccessMask            = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    general_to_present_barrier.oldLayout                = VK_IMAGE_LAYOUT_GENERAL;
-    general_to_present_barrier.newLayout                = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    general_to_present_barrier.srcQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
-    general_to_present_barrier.dstQueueFamilyIndex      = VK_QUEUE_FAMILY_IGNORED;
-    general_to_present_barrier.image                    = swapchain.images[current_image_index].handle;
-    general_to_present_barrier.subresourceRange         = image_subresource_range;
-
-    vkCmdPipelineBarrier(
-        command_buffers[frame_index],
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        0,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &general_to_present_barrier
-    );
-
-    VKRESULT(vkEndCommandBuffer(command_buffers[frame_index]))
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, swapchain.images[current_image_index]);
+    api.end_record(cmd_buf);
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
