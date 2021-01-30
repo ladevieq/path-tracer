@@ -50,15 +50,14 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
 
-    size_t image_index = 0;
-    for (auto& set: compute_shader_sets) {
-        api.update_descriptor_set_buffer(set, bindings[0], compute_shader_buffer);
-        api.update_descriptor_set_image(set, bindings[1], swapchain.images[image_index].view);
+    for (size_t index = 0; index < swapchain.image_count; index++) {
+        api.update_descriptor_set_buffer(compute_shader_sets[index], bindings[0], compute_shader_buffer);
+        api.update_descriptor_set_image(compute_shader_sets[index], bindings[1], swapchain.images[index].view);
     }
 }
 
 vkrenderer::~vkrenderer() {
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
     api.destroy_buffer(compute_shader_buffer);
     api.destroy_fences(submission_fences);
@@ -81,6 +80,17 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
     handle_swapchain_result(acquire_result);
 
+    // API
+    // api.start_record(cmd_buffer);
+    // api.command_barrier();
+    // bind pipeline
+    // bind descriptor set
+    // dispatch
+    // api.command_barrier();
+    // api.stop_record();
+    // api.execute(cmd_buffer, wait_semaphore, signal_semaphore);
+    // api.present(swapchain, img_index, wait_semaphore);
+
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};
     cmd_buf_begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_buf_begin_info.pNext                    = nullptr;
@@ -88,7 +98,6 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     cmd_buf_begin_info.pInheritanceInfo         = nullptr;
 
     vkBeginCommandBuffer(command_buffers[frame_index], &cmd_buf_begin_info);
-
     VkImageSubresourceRange image_subresource_range = {};
     image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
     image_subresource_range.baseMipLevel            = 0;
@@ -182,15 +191,18 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto present_result = vkQueuePresentKHR(api.context.queue, &present_info);
     handle_swapchain_result(present_result);
 
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
-
     frame_index = ++frame_index % swapchain.image_count;
 }
 
 void vkrenderer::recreate_swapchain() {
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
-    swapchain = api.create_swapchain(platform_surface, 3, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, std::optional<Swapchain> { swapchain });
+    swapchain = api.create_swapchain(
+        platform_surface,
+        min_swapchain_image_count,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        std::optional<Swapchain> { swapchain }
+    );
 
     VkDescriptorSetLayoutBinding binding {
         .binding = 1,
@@ -199,9 +211,9 @@ void vkrenderer::recreate_swapchain() {
         .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
         .pImmutableSamplers = VK_NULL_HANDLE,
     };
-    size_t image_index = 0;
-    for (auto& set: compute_shader_sets) {
-        api.update_descriptor_set_image(set, binding, swapchain.images[image_index].view);
+
+    for (size_t index = 0; index < swapchain.image_count; index++) {
+        api.update_descriptor_set_image(compute_shader_sets[index], binding, swapchain.images[index].view);
     }
 }
 

@@ -31,7 +31,6 @@ class vkrenderer {
 
         std::vector<VkCommandBuffer>    command_buffers;
 
-        VkDescriptorPool                descriptor_pool;
         std::vector<VkDescriptorSet>    compute_shader_sets;
 
         ComputePipeline                 compute_pipeline;
@@ -40,9 +39,7 @@ class vkrenderer {
         std::vector<VkSemaphore>        execution_semaphores;
         std::vector<VkSemaphore>        acquire_semaphores;
 
-        VkSurfaceFormatKHR              surface_format;
-        VkSurfaceKHR                    platform_surface = VK_NULL_HANDLE;
-
+        VkSurfaceKHR                    platform_surface;
         Swapchain                       swapchain;
 
         const uint32_t                  min_swapchain_image_count = 3;

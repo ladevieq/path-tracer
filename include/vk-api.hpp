@@ -73,7 +73,6 @@ class vkapi {
         void destroy_descriptor_sets(std::vector<VkDescriptorSet> &descriptor_sets);
 
 
-        // TODO: Maybe includes surface in the swapchain structure
         VkSurfaceKHR create_surface(window& wnd);
         void destroy_surface(VkSurfaceKHR surface);
 

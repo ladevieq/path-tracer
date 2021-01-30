@@ -44,8 +44,8 @@ int main() {
 
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
-    const uint32_t width = 400;
-    const uint32_t height = width / aspect_ratio;
+    uint32_t width = 400;
+    uint32_t height = width / aspect_ratio;
 
     window wnd { width , height };
 
@@ -68,8 +68,10 @@ int main() {
         for (auto event: wnd.events) {
             switch(event.type) {
                 case EVENT_TYPES::RESIZE: {
-                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->width = event.width;
-                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->height = event.height;
+                    width = event.width;
+                    height = event.height;
+                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->width = width;
+                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->height = height;
 
                     if (event.width == 0 && event.height == 0) {
                         canRender = false;
