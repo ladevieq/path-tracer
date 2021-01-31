@@ -77,61 +77,21 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
-    auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &current_image_index);
+    uint32_t swapchain_image_index = 0;
+    auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &swapchain_image_index);
     handle_swapchain_result(acquire_result);
 
-    // API frame skeleton
-    // api.start_record(cmd_buffer);
-    // api.command_barrier();
-    // bind pipeline
-    // bind descriptor set
-    // dispatch
-    // api.command_barrier();
-    // api.stop_record();
-    // api.execute(cmd_buffer, wait_semaphore, signal_semaphore);
-    // api.present(swapchain, img_index, wait_semaphore);
-
     auto cmd_buf = command_buffers[frame_index];
+
     api.start_record(cmd_buf);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, swapchain.images[current_image_index]);
-
-
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.layout, 0, 1, &compute_shader_sets[current_image_index], 0, nullptr);
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline.handle);
-
-    vkCmdDispatch(cmd_buf, width / 8, height / 8, 1);
-
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, swapchain.images[current_image_index]);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, swapchain.images[swapchain_image_index]);
+    api.run_compute_pipeline(cmd_buf, compute_pipeline, compute_shader_sets[swapchain_image_index], width / 8, height / 8, 1);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, swapchain.images[swapchain_image_index]);
     api.end_record(cmd_buf);
 
-    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    api.submit(cmd_buf, acquire_semaphores[frame_index], execution_semaphores[frame_index], submission_fences[frame_index]);
 
-    VkSubmitInfo submit_info            = {};
-    submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.pNext                   = nullptr;
-    submit_info.waitSemaphoreCount      = 1;
-    submit_info.pWaitSemaphores         = &acquire_semaphores[frame_index];
-    submit_info.pWaitDstStageMask       = &wait_stage;
-    submit_info.signalSemaphoreCount    = 1;
-    submit_info.pSignalSemaphores       = &execution_semaphores[frame_index];
-    submit_info.commandBufferCount      = 1;
-    submit_info.pCommandBuffers         = &command_buffers[frame_index];
-
-    VKRESULT(vkQueueSubmit(api.context.queue, 1, &submit_info, submission_fences[frame_index]))
-
-    VkPresentInfoKHR present_info   = {};
-    present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.pNext              = nullptr;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores    = &execution_semaphores[frame_index];
-    present_info.swapchainCount     = 1;
-    present_info.pSwapchains        = &swapchain.handle;
-    present_info.pImageIndices      = &current_image_index;
-    present_info.pResults           = nullptr;
-
-    auto present_result = vkQueuePresentKHR(api.context.queue, &present_info);
+    auto present_result = api.present(swapchain, swapchain_image_index, execution_semaphores[frame_index]);
     handle_swapchain_result(present_result);
 
     frame_index = ++frame_index % swapchain.image_count;

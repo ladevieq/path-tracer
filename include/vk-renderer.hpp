@@ -43,7 +43,6 @@ class vkrenderer {
         Swapchain                       swapchain;
 
         const uint32_t                  min_swapchain_image_count = 3;
-        uint32_t                        current_image_index;
 };
 
 #endif // !__VK_RENDERER_HPP_

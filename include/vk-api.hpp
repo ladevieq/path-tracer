@@ -88,7 +88,13 @@ class vkapi {
 
         void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, Image image);
 
+        void run_compute_pipeline(VkCommandBuffer command_buffer, ComputePipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+
         void end_record(VkCommandBuffer command_buffer);
+
+        VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence);
+
+        VkResult present(Swapchain swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
     // private:
 
         vkcontext           context;
