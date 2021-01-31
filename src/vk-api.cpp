@@ -544,6 +544,45 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layo
     );
 }
 
+void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, ComputePipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.layout, 0, 1, &set, 0, nullptr);
+
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle);
+
+    vkCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
+}
+
 void vkapi::end_record(VkCommandBuffer command_buffer) {
     VKRESULT(vkEndCommandBuffer(command_buffer))
+}
+
+VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) {
+    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+    VkSubmitInfo submit_info            = {};
+    submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pNext                   = nullptr;
+    submit_info.waitSemaphoreCount      = 1;
+    submit_info.pWaitSemaphores         = &wait_semaphore;
+    submit_info.pWaitDstStageMask       = &wait_stage;
+    submit_info.signalSemaphoreCount    = 1;
+    submit_info.pSignalSemaphores       = &signal_semaphore;
+    submit_info.commandBufferCount      = 1;
+    submit_info.pCommandBuffers         = &command_buffer;
+
+    return vkQueueSubmit(context.queue, 1, &submit_info, submission_fence);
+}
+
+VkResult vkapi::present(Swapchain swapchain, uint32_t image_index, VkSemaphore wait_semaphore) {
+    VkPresentInfoKHR present_info   = {};
+    present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.pNext              = nullptr;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores    = &wait_semaphore;
+    present_info.swapchainCount     = 1;
+    present_info.pSwapchains        = &swapchain.handle;
+    present_info.pImageIndices      = &image_index;
+    present_info.pResults           = nullptr;
+
+    return vkQueuePresentKHR(context.queue, &present_info);
 }
