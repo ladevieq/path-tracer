@@ -93,8 +93,8 @@ struct input_data create_inputs(uint32_t width, uint32_t height) {
     // Image dimensions
     const float aspect_ratio = (float)width / (float) height;
 
-    const uint32_t samples_per_pixel = 1;
-    const uint32_t max_depth = 2;
+    const uint32_t samples_per_pixel = 10;
+    const uint32_t max_depth = 5;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
     const vec3 camera_target{ 0.0, 0.0, 0.0 };

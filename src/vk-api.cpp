@@ -73,6 +73,8 @@ void vkapi::destroy_buffer(Buffer& buffer) {
 Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages) {
     Image image;
 
+    image.size = size;
+
     image.subresource_range.aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT;
     image.subresource_range.baseMipLevel    = 0;
     image.subresource_range.levelCount      = 1;
@@ -96,7 +98,10 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
     img_create_info.pQueueFamilyIndices     = nullptr;
     img_create_info.initialLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    vkCreateImage(context.device, &img_create_info, VK_NULL_HANDLE, &image.handle); 
+    VmaAllocationCreateInfo alloc_create_info = {};
+    alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, nullptr);
 
     VkImageViewCreateInfo image_view_create_info    = {};
     image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -113,7 +118,7 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
     };
     image_view_create_info.subresourceRange        = image.subresource_range;
 
-    vkCreateImage(context.device, &img_create_info, VK_NULL_HANDLE, &image.handle); 
+    VKRESULT(vkCreateImageView(context.device, &image_view_create_info, VK_NULL_HANDLE, &image.view))
 
     return std::move(image);
 }
@@ -360,18 +365,18 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     VkSurfaceCapabilitiesKHR caps;
     VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, surface, &caps))
 
-    VkExtent2D wantedExtent = caps.currentExtent;
+    swapchain.extent = caps.currentExtent;
 
-    if (wantedExtent.width < caps.minImageExtent.width) {
-        wantedExtent.width = caps.minImageExtent.width;
-    } else if (wantedExtent.width > caps.maxImageExtent.width) {
-        wantedExtent.width = caps.maxImageExtent.width;
+    if (swapchain.extent.width < caps.minImageExtent.width) {
+        swapchain.extent.width = caps.minImageExtent.width;
+    } else if (swapchain.extent.width > caps.maxImageExtent.width) {
+        swapchain.extent.width = caps.maxImageExtent.width;
     }
 
-    if (wantedExtent.height < caps.minImageExtent.height) {
-        wantedExtent.height = caps.minImageExtent.height;
-    } else if (wantedExtent.height > caps.maxImageExtent.height) {
-        wantedExtent.height = caps.maxImageExtent.height;
+    if (swapchain.extent.height < caps.minImageExtent.height) {
+        swapchain.extent.height = caps.minImageExtent.height;
+    } else if (swapchain.extent.height > caps.maxImageExtent.height) {
+        swapchain.extent.height = caps.maxImageExtent.height;
     }
 
     uint32_t supported_formats_count = 0;
@@ -386,7 +391,7 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     std::vector<VkPresentModeKHR> supported_present_modes { supported_present_modes_count };
     VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, surface, &supported_present_modes_count, supported_present_modes.data()))
 
-    VkSurfaceFormatKHR surface_format = supported_formats[0];
+    swapchain.surface_format = supported_formats[0];
     VkSwapchainKHR old_swapchain_handle = (old_swapchain != std::nullopt) ? old_swapchain.value().handle : VK_NULL_HANDLE;
 
     VkSwapchainCreateInfoKHR create_info    = {};
@@ -395,9 +400,9 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     create_info.flags                       = 0;
     create_info.surface                     = surface;
     create_info.minImageCount               = min_image_count;
-    create_info.imageFormat                 = surface_format.format;
-    create_info.imageColorSpace             = surface_format.colorSpace;
-    create_info.imageExtent                 = wantedExtent;
+    create_info.imageFormat                 = swapchain.surface_format.format;
+    create_info.imageColorSpace             = swapchain.surface_format.colorSpace;
+    create_info.imageExtent                 = swapchain.extent;
     create_info.imageArrayLayers            = 1;
     create_info.imageUsage                  = usages;
     create_info.imageSharingMode            = VK_SHARING_MODE_EXCLUSIVE;
@@ -430,8 +435,15 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     image_subresource_range.baseArrayLayer          = 0;
     image_subresource_range.layerCount              = 1;
 
+    VkExtent3D image_size = {
+        .width   = swapchain.extent.width,
+        .height  = swapchain.extent.height,
+        .depth   = 1,
+    };
+
     for (size_t image_index = 0; image_index < swapchain.image_count; image_index++) {
         swapchain.images[image_index].handle = images[image_index];
+        swapchain.images[image_index].size = image_size;
         swapchain.images[image_index].subresource_range = image_subresource_range;
 
         VkImageViewCreateInfo image_view_create_info    = {};
@@ -440,7 +452,7 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
         image_view_create_info.flags                    = 0;
         image_view_create_info.image                    = swapchain.images[image_index].handle;
         image_view_create_info.viewType                 = VK_IMAGE_VIEW_TYPE_2D;
-        image_view_create_info.format                   = surface_format.format;
+        image_view_create_info.format                   = swapchain.surface_format.format;
         image_view_create_info.components               = {
             VK_COMPONENT_SWIZZLE_IDENTITY,
             VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -529,7 +541,6 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layo
     undefined_to_general_barrier.image                  = image.handle;
     undefined_to_general_barrier.subresourceRange       = image.subresource_range;
 
-    // api.image_barrier(cmd_buffer, src_stage, dst_stage, image);
     vkCmdPipelineBarrier(
         command_buffer,
         src_stage,
@@ -550,6 +561,35 @@ void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, ComputePipeline
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle);
 
     vkCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
+}
+
+void vkapi::blit_full(VkCommandBuffer command_buffer, Image src_image, Image dst_image) {
+    VkImageSubresourceLayers images_subres_layers {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel       = 0,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
+
+    VkOffset3D start_offset {
+        .x  = 0,
+        .y  = 0,
+        .z  = 0,
+    };
+    VkOffset3D end_offset {
+        .x  = (int32_t)src_image.size.width,
+        .y  = (int32_t)src_image.size.height,
+        .z  = (int32_t)src_image.size.depth,
+    };
+
+    VkImageBlit blit_region {
+        .srcSubresource = images_subres_layers,
+        .srcOffsets     = { start_offset, end_offset },
+        .dstSubresource = images_subres_layers,
+        .dstOffsets     = { start_offset, end_offset },
+    };
+
+    vkCmdBlitImage(command_buffer, src_image.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit_region, VK_FILTER_NEAREST);
 }
 
 void vkapi::end_record(VkCommandBuffer command_buffer) {

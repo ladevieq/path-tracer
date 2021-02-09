@@ -22,14 +22,18 @@ struct ComputePipeline {
 struct Image {
     VkImage                 handle;
     VkImageView             view;
+    VmaAllocation           alloc;
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
+    VkExtent3D              size;
 };
 
 struct Swapchain {
     size_t                      image_count;
     std::vector<Image>          images;
     VkSwapchainKHR              handle;
+    VkSurfaceFormatKHR          surface_format;
+    VkExtent2D                  extent;
 };
 
 class window;
@@ -89,6 +93,8 @@ class vkapi {
         void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, Image image);
 
         void run_compute_pipeline(VkCommandBuffer command_buffer, ComputePipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+
+        void blit_full(VkCommandBuffer command_buffer, Image src_image, Image dst_image);
 
         void end_record(VkCommandBuffer command_buffer);
 

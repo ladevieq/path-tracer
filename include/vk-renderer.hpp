@@ -29,6 +29,8 @@ class vkrenderer {
 
         uint64_t                        frame_index = 0;
 
+        Image                           accumulation_image;
+
         std::vector<VkCommandBuffer>    command_buffers;
 
         std::vector<VkDescriptorSet>    compute_shader_sets;
