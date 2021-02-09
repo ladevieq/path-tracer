@@ -84,6 +84,7 @@
     X(vkCmdBindDescriptorSets)        \
     X(vkCmdCopyBuffer)                \
     X(vkCmdCopyImage)                 \
+    X(vkCmdBlitImage)                 \
     X(vkCmdCopyBufferToImage)         \
     X(vkCmdDraw)                      \
     X(vkCmdDrawIndexed)               \

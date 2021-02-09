@@ -16,7 +16,9 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     swapchain = api.create_swapchain(
         platform_surface,
         min_swapchain_image_count,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_STORAGE_BIT |
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         std::nullopt
     );
 
@@ -43,6 +45,13 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 
     compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain.image_count);
 
+    VkExtent3D image_size = {
+        .width = swapchain.extent.width,
+        .height = swapchain.extent.height,
+        .depth = 1,
+    };
+    accumulation_image = api.create_image(image_size, swapchain.surface_format.format, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+
     submission_fences = api.create_fences(swapchain.image_count);
     execution_semaphores = api.create_semaphores(swapchain.image_count);
     acquire_semaphores = api.create_semaphores(swapchain.image_count);
@@ -52,7 +61,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
         api.update_descriptor_set_buffer(compute_shader_sets[index], bindings[0], compute_shader_buffer);
-        api.update_descriptor_set_image(compute_shader_sets[index], bindings[1], swapchain.images[index].view);
+        api.update_descriptor_set_image(compute_shader_sets[index], bindings[1], accumulation_image.view);
     }
 }
 
@@ -84,9 +93,18 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto cmd_buf = command_buffers[frame_index];
 
     api.start_record(cmd_buf);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, swapchain.images[swapchain_image_index]);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, accumulation_image);
     api.run_compute_pipeline(cmd_buf, compute_pipeline, compute_shader_sets[swapchain_image_index], width / 8, height / 8, 1);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, swapchain.images[swapchain_image_index]);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, accumulation_image);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, swapchain.images[swapchain_image_index]);
+
+    api.blit_full(cmd_buf, accumulation_image, swapchain.images[swapchain_image_index]);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, swapchain.images[swapchain_image_index]);
+
     api.end_record(cmd_buf);
 
     api.submit(cmd_buf, acquire_semaphores[frame_index], execution_semaphores[frame_index], submission_fences[frame_index]);
@@ -107,6 +125,13 @@ void vkrenderer::recreate_swapchain() {
         std::optional<Swapchain> { swapchain }
     );
 
+    VkExtent3D image_size = {
+        .width = swapchain.extent.width,
+        .height = swapchain.extent.height,
+        .depth = 1,
+    };
+    accumulation_image = api.create_image(image_size, swapchain.surface_format.format, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+
     VkDescriptorSetLayoutBinding binding {
         .binding = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -116,7 +141,7 @@ void vkrenderer::recreate_swapchain() {
     };
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
-        api.update_descriptor_set_image(compute_shader_sets[index], binding, swapchain.images[index].view);
+        api.update_descriptor_set_image(compute_shader_sets[index], binding, accumulation_image.view);
     }
 }
 
