@@ -46,7 +46,7 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 10;
+    const uint32_t samples_per_pixel = 25;
 
     window wnd { width , height };
 
@@ -80,6 +80,7 @@ int main() {
                         canRender = true;
                         renderer.recreate_swapchain();
                         ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.set_aspect_ratio((float)event.width / (float)event.height);
+                        ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index = 0;
                     }
                     break;
                 }
