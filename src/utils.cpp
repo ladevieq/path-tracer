@@ -89,11 +89,10 @@ void random_scene(sphere *world) {
     world[world_sphere_index + 2] = { { 4, 1, 0 }, material3, 1.0 };
 }
 
-struct input_data create_inputs(uint32_t width, uint32_t height) {
+struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t samples_per_pixel) {
     // Image dimensions
     const float aspect_ratio = (float)width / (float) height;
 
-    const uint32_t samples_per_pixel = 10;
     const uint32_t max_depth = 5;
 
     const vec3 camera_position{ 13.0, 2.0, 3.0 };
@@ -113,7 +112,9 @@ struct input_data create_inputs(uint32_t width, uint32_t height) {
         .max_bounce = max_depth,
         .samples_per_pixel = samples_per_pixel,
         .width = width,
-        .height = height
+        .height = height,
+
+        .sample_index = 0,
     };
 
     // Random numbers pools

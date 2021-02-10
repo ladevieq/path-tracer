@@ -123,7 +123,7 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
     return std::move(image);
 }
 void vkapi::destroy_image(Image &image) {
-    vkDestroyImage(context.device, image.handle, nullptr);
+    vmaDestroyImage(context.allocator, image.handle, image.alloc);
     vkDestroyImageView(context.device, image.view, nullptr);
 }
 
