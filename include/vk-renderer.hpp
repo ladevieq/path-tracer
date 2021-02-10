@@ -15,7 +15,7 @@ class vkrenderer {
 
         ~vkrenderer();
 
-        void compute(uint32_t width, uint32_t height);
+        void compute(uint32_t width, uint32_t height, bool clear);
 
         void recreate_swapchain();
 

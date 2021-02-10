@@ -27,11 +27,13 @@ struct input_data {
     // Output image resolution
     uint32_t width;
     uint32_t height;
+
+    uint32_t sample_index;
 };
 
 std::vector<uint8_t> get_shader_code(const char* path);
 
-struct input_data create_inputs(uint32_t width, uint32_t height);
+struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t samples_per_pixel);
 
 #define PI 3.14159265359
 

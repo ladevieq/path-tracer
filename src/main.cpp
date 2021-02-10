@@ -46,13 +46,14 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
+    const uint32_t samples_per_pixel = 10;
 
     window wnd { width , height };
 
     float delta_time = 0.f;
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
-    auto inputs = create_inputs(width, height);
+    auto inputs = create_inputs(width, height, samples_per_pixel);
     auto canRender = true;
     vkrenderer renderer { wnd, inputs };
 
@@ -113,6 +114,10 @@ int main() {
 
                     ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.move(move_vec);
 
+                    if (!move_vec.near_zero()) {
+                        ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index = 0;
+                    }
+
                     break;
                 }
                 default:
@@ -129,7 +134,12 @@ int main() {
         if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
         if (canRender) {
-            renderer.compute(width, height);
+            if (((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index < samples_per_pixel) {
+                bool clear = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index == 0;
+                renderer.compute(width, height, clear);
+
+                ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index++;
+            }
         }
 
         // stop the capture
