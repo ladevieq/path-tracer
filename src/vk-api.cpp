@@ -57,7 +57,7 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = mem_usage;
      
-    vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, nullptr);
+    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, nullptr))
 
     vmaMapMemory(context.allocator, buffer.alloc, (void**) &buffer.mapped_ptr);
 
@@ -101,7 +101,7 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-    vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, nullptr);
+    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, nullptr))
 
     VkImageViewCreateInfo image_view_create_info    = {};
     image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -475,7 +475,7 @@ void vkapi::destroy_swapchain(Swapchain swapchain) {
 }
 
 
-void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding,Buffer& buffer) {
+void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer) {
     VkDescriptorBufferInfo descriptor_buffer_info = {};
     descriptor_buffer_info.buffer           = buffer.handle;
     descriptor_buffer_info.offset           = 0;
@@ -485,7 +485,7 @@ void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLay
     write_descriptor.sType                  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write_descriptor.pNext                  = nullptr;
     write_descriptor.dstSet                 = set;
-    write_descriptor.dstBinding             = 0;
+    write_descriptor.dstBinding             = binding.binding;
     write_descriptor.dstArrayElement        = 0;
     write_descriptor.descriptorCount        = 1;
     write_descriptor.descriptorType         = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -506,7 +506,7 @@ void vkapi::update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayo
     write_descriptor.sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write_descriptor.pNext                      = nullptr;
     write_descriptor.dstSet                     = set;
-    write_descriptor.dstBinding                 = 1;
+    write_descriptor.dstBinding                 = binding.binding;
     write_descriptor.dstArrayElement            = 0;
     write_descriptor.descriptorCount            = binding.descriptorCount;
     write_descriptor.descriptorType             = binding.descriptorType;
