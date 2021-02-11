@@ -218,15 +218,14 @@ void main() {
 
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
 
-    vec4 out_color = vec4(0.0);
-
     vec2 jittered_uvs = uv + vec2(random_disk[sample_index].x / (width - 1), random_disk[sample_index].y / (height - 1));
     vec2 lens_disk = random_disk[sample_index] * cam.lens_radius;
     vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
     vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
+
     ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
 
-    out_color += ray_color(r, sample_index);
+    vec4 out_color = ray_color(r, sample_index);
 
     float spp_scale = (1.0 / samples_per_pixel);
     vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));
