@@ -97,9 +97,8 @@ void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &swapchain_image_index);
     handle_swapchain_result(acquire_result);
 
-    auto accumulation_image_index = frame_index % 2;
-    auto output_image = accumulation_images[accumulation_image_index];
-    auto accumulation_image = accumulation_images[(accumulation_image_index + 1) % 2];
+    auto output_image = accumulation_images[0];
+    auto accumulation_image = accumulation_images[1];
 
     VkDescriptorSetLayoutBinding images[2] {
         {
@@ -124,7 +123,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
     api.start_record(cmd_buf);
 
     if (clear) {
-        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, accumulation_image);
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, accumulation_image);
 
         VkClearColorValue color = { 0.f, 0.f, 0.f, 1.f };
         vkCmdClearColorImage(cmd_buf, accumulation_image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &color, 1, &accumulation_image.subresource_range);
@@ -133,7 +132,7 @@ void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
 
         api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, output_image);
     } else {
-        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_READ_BIT, accumulation_image);
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT, accumulation_image);
         api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, output_image);
     }
 
@@ -153,6 +152,8 @@ void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
 
     auto present_result = api.present(swapchain, swapchain_image_index, execution_semaphores[frame_index]);
     handle_swapchain_result(present_result);
+
+    std::swap(accumulation_images[0], accumulation_images[1]);
 
     frame_index = ++frame_index % swapchain.image_count;
 }
