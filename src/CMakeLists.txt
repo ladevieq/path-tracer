@@ -1,5 +1,8 @@
 add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
 
+# VCPKG includes
+include_directories(./vcpkg/installed/$ENV{VCPKG_TARGET_TRIPLET}/include)
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
@@ -22,9 +25,11 @@ add_executable(
     window.cpp
 )
 
+# VCPKG libs
+link_directories(./vcpkg/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib)
+
 if(UNIX)
     target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xcb_LIB})
     target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xkbcommon_LIB})
     target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xkbcommon_X11_LIB})
-
 endif()
