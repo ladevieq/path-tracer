@@ -32,6 +32,10 @@ std::vector<uint8_t> get_shader_code(const char* path) {
     return shader_code;
 }
 
+std::vector<uint8_t> get_shader_code(std::string& path) {
+    return get_shader_code(path.c_str());
+}
+
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
 

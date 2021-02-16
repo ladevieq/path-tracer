@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <optional>
+#include <string>
 
 #include "vk-context.hpp"
 
@@ -12,11 +13,11 @@ struct Buffer {
     void*           mapped_ptr;
 };
 
-struct ComputePipeline {
-    VkShaderModule          shader_module;
-    VkDescriptorSetLayout   descriptor_set_layout;
-    VkPipelineLayout        layout;
-    VkPipeline              handle;
+struct Pipeline {
+    std::vector<VkShaderModule> shader_modules;
+    VkDescriptorSetLayout       descriptor_set_layout;
+    VkPipelineLayout            layout;
+    VkPipeline                  handle;
 };
 
 struct Image {
@@ -69,8 +70,9 @@ class vkapi {
         void destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers);
 
 
-        ComputePipeline create_compute_pipeline(const char* shader_path, std::vector<VkDescriptorSetLayoutBinding> bindings);
-        void destroy_compute_pipeline(ComputePipeline &pipeline);
+        Pipeline create_compute_pipeline(std::string& shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings);
+        Pipeline create_graphics_pipeline(std::string& shader_name, VkShaderStageFlagBits shader_stages, std::vector<VkDescriptorSetLayoutBinding> bindings);
+        void destroy_pipeline(Pipeline &pipeline);
 
 
         std::vector<VkDescriptorSet> create_descriptor_sets(VkDescriptorSetLayout descriptor_sets_layout, size_t descriptor_sets_count);
@@ -104,6 +106,10 @@ class vkapi {
     // private:
 
         vkcontext           context;
+
+    private:
+
+        std::string shader_stage_extension(VkShaderStageFlags shader_stage);
 
         VkCommandPool       command_pool;
         VkDescriptorPool    descriptor_pool;

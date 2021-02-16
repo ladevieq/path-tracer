@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cassert>
 
+#include "imgui.h"
 #include "thirdparty/renderdoc.h"
 
 #include "vk-renderer.hpp"
@@ -56,6 +57,9 @@ int main() {
     auto inputs = create_inputs(width, height, samples_per_pixel);
     auto canRender = true;
     vkrenderer renderer { wnd, inputs };
+
+    ImGui::Text("Hello, world %d", 123);
+
 
     while(wnd.isOpen) {
         end = std::chrono::high_resolution_clock::now();

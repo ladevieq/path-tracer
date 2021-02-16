@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cassert>
 
+#include "imgui.h"
 #include "vk-renderer.hpp"
 #include "thirdparty/vk_mem_alloc.h"
 
@@ -88,6 +89,11 @@ vkrenderer::~vkrenderer() {
     api.destroy_surface(platform_surface);
 }
 
+void vkrenderer::ui() {
+    ImGui::NewFrame();
+    ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+}
 
 void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
