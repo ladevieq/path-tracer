@@ -32,6 +32,7 @@ struct input_data {
 };
 
 std::vector<uint8_t> get_shader_code(const char* path);
+std::vector<uint8_t> get_shader_code(std::string& path);
 
 struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t samples_per_pixel);
 
