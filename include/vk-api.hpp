@@ -69,9 +69,12 @@ class vkapi {
         std::vector<VkCommandBuffer> create_command_buffers(size_t command_buffers_count);
         void destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers);
 
+        VkRenderPass create_render_pass(std::vector<VkFormat>& attachments_format);
+        void destroy_renderpass(VkRenderPass render_pass);
 
-        Pipeline create_compute_pipeline(std::string& shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings);
-        Pipeline create_graphics_pipeline(std::string& shader_name, VkShaderStageFlagBits shader_stages, std::vector<VkDescriptorSetLayoutBinding> bindings);
+
+        Pipeline create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings);
+        Pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, std::vector<VkDescriptorSetLayoutBinding> bindings, VkRenderPass render_pass, uint32_t subpass);
         void destroy_pipeline(Pipeline &pipeline);
 
 
@@ -94,7 +97,7 @@ class vkapi {
 
         void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, Image image);
 
-        void run_compute_pipeline(VkCommandBuffer command_buffer, ComputePipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+        void run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z);
 
         void blit_full(VkCommandBuffer command_buffer, Image src_image, Image dst_image);
 
@@ -109,7 +112,7 @@ class vkapi {
 
     private:
 
-        std::string shader_stage_extension(VkShaderStageFlags shader_stage);
+        const char* shader_stage_extension(VkShaderStageFlags shader_stage);
 
         VkCommandPool       command_pool;
         VkDescriptorPool    descriptor_pool;
