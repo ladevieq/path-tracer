@@ -46,7 +46,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         }
     };
 
-    compute_pipeline = api.create_compute_pipeline("./shaders/compute.comp.spv", bindings);
+    compute_pipeline = api.create_compute_pipeline("./shaders/compute", bindings);
 
     command_buffers = api.create_command_buffers(swapchain.image_count);
 
@@ -83,7 +83,7 @@ vkrenderer::~vkrenderer() {
     api.destroy_images(accumulation_images);
 
     api.destroy_command_buffers(command_buffers);
-    api.destroy_compute_pipeline(compute_pipeline);
+    api.destroy_pipeline(compute_pipeline);
 
     api.destroy_swapchain(swapchain);
     api.destroy_surface(platform_surface);

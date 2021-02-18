@@ -37,7 +37,7 @@ class vkrenderer {
 
         std::vector<VkDescriptorSet>    compute_shader_sets;
 
-        ComputePipeline                 compute_pipeline;
+        Pipeline                        compute_pipeline;
 
         std::vector<VkFence>            submission_fences;
         std::vector<VkSemaphore>        execution_semaphores;
