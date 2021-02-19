@@ -230,10 +230,12 @@ void vkapi::destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffer
 
 
 // TODO: attachment structure
-VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& attachments_format) {
-    std::vector<VkAttachmentDescription> attachments_description    = {};
+VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_format) {
+    std::vector<VkAttachmentDescription> attachments_description        = {};
+    std::vector<VkAttachmentReference> attachments_reference            = {};
 
-    for (auto& format: attachments_format) {
+    for (size_t attachment_index = 0; attachment_index < color_attachments_format.size(); attachment_index++) {
+        auto format = color_attachments_format[attachment_index];
         VkAttachmentDescription attachment_description                  = {};
         attachment_description.flags                                    = 0;
         attachment_description.format                                   = format;
@@ -244,36 +246,30 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& attachments_format
         attachment_description.finalLayout                              = VK_IMAGE_LAYOUT_GENERAL;
 
         attachments_description.push_back(attachment_description);
+
+        VkAttachmentReference attachment_reference                      = {};
+        attachment_reference.attachment                                 = attachment_index;
+        attachment_reference.layout                                     = VK_IMAGE_LAYOUT_GENERAL;
+
+        attachments_reference.push_back(attachment_reference);
     }
 
-    std::vector<VkSubpassDescription> subpasses_description         = {};
-    VkSubpassDescription subpass_description                        = {};
-    subpass_description.flags                                       = 0;
-    subpass_description.pipelineBindPoint                           = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass_description.inputAttachmentCount                        = 0;
-    subpass_description.pInputAttachments                           = 0;
-    subpass_description.colorAttachmentCount                        = 0;
-    subpass_description.pColorAttachments                           = 0;
-    subpass_description.pResolveAttachments                         = VK_NULL_HANDLE;
-    subpass_description.pDepthStencilAttachment                     = VK_NULL_HANDLE;
-    subpass_description.preserveAttachmentCount                     = 0;
-    subpass_description.pPreserveAttachments                        = VK_NULL_HANDLE;
-
-    subpasses_description.push_back(subpass_description);
-
-    std::vector<VkSubpassDependency> subpasses_dependency           = {};
+    VkSubpassDescription subpass_description                            = {};
+    subpass_description.flags                                           = 0;
+    subpass_description.pipelineBindPoint                               = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass_description.colorAttachmentCount                            = attachments_reference.size();
+    subpass_description.pColorAttachments                               = attachments_reference.data();
+    subpass_description.pDepthStencilAttachment                         = VK_NULL_HANDLE;
 
     VkRenderPass render_pass;
-    VkRenderPassCreateInfo create_info                              = {};
-    create_info.sType                                               = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    create_info.pNext                                               = VK_NULL_HANDLE;
-    create_info.flags                                               = 0;
-    create_info.attachmentCount                                     = attachments_description.size();
-    create_info.pAttachments                                        = attachments_description.data();
-    create_info.subpassCount                                        = subpasses_description.size();
-    create_info.pSubpasses                                          = subpasses_description.data();
-    create_info.dependencyCount                                     = subpasses_dependency.size();
-    create_info.pDependencies                                       = subpasses_dependency.data();
+    VkRenderPassCreateInfo create_info                                  = {};
+    create_info.sType                                                   = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    create_info.pNext                                                   = VK_NULL_HANDLE;
+    create_info.flags                                                   = 0;
+    create_info.attachmentCount                                         = attachments_description.size();
+    create_info.pAttachments                                            = attachments_description.data();
+    create_info.subpassCount                                            = 1;
+    create_info.pSubpasses                                              = &subpass_description;
 
     VKRESULT(vkCreateRenderPass(context.device, &create_info, VK_NULL_HANDLE, &render_pass))
 
@@ -282,6 +278,50 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& attachments_format
 
 void vkapi::destroy_renderpass(VkRenderPass render_pass) {
     vkDestroyRenderPass(context.device, render_pass, VK_NULL_HANDLE);
+}
+
+
+VkFramebuffer vkapi::create_framebuffer(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size) {
+    VkFramebuffer framebuffer;
+    std::vector<VkImageView> attachements;
+    for (auto& image: images) {
+        attachements.push_back(image.view);
+    }
+
+    VkFramebufferCreateInfo create_info = {};
+    create_info.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    create_info.pNext                   = VK_NULL_HANDLE;
+    create_info.flags                   = 0;
+    create_info.renderPass              = render_pass;
+    create_info.attachmentCount         = attachements.size();
+    create_info.pAttachments            = attachements.data();
+    create_info.width                   = size.width;
+    create_info.height                  = size.height;
+    create_info.layers                  = 1;
+
+    VKRESULT(vkCreateFramebuffer(context.device, &create_info, VK_NULL_HANDLE, &framebuffer))
+
+    return framebuffer;
+}
+
+std::vector<VkFramebuffer> vkapi::create_framebuffers(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size, uint32_t framebuffer_count) {
+    std::vector<VkFramebuffer> framebuffers { framebuffer_count };
+
+    for (auto& framebuffer: framebuffers) {
+        framebuffer = create_framebuffer(render_pass, images, size);
+    }
+
+    return std::move(framebuffers);
+}
+
+void vkapi::destroy_framebuffer(VkFramebuffer framebuffer) {
+    vkDestroyFramebuffer(context.device, framebuffer, VK_NULL_HANDLE);
+}
+
+void vkapi::destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers) {
+    for (auto& framebuffer: framebuffers) {
+        vkDestroyFramebuffer(context.device, framebuffer, VK_NULL_HANDLE);
+    }
 }
 
 
@@ -355,7 +395,7 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
     return std::move(pipeline);
 }
 
-Pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, std::vector<VkDescriptorSetLayoutBinding> bindings, VkRenderPass render_pass, uint32_t subpass) {
+Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass) {
     Pipeline pipeline;
 
     std::vector<VkPipelineShaderStageCreateInfo> stages_create_info = {};
@@ -497,7 +537,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageF
     pipeline_create_info.pColorBlendState                                   = &color_blend_state_create_info;
     pipeline_create_info.layout                                             = pipeline.layout;
     pipeline_create_info.renderPass                                         = render_pass;
-    pipeline_create_info.subpass                                            = subpass;
+    pipeline_create_info.subpass                                            = 0;
 
     VKRESULT(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipeline_create_info, VK_NULL_HANDLE, &pipeline.handle))
 
