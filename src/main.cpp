@@ -139,12 +139,17 @@ int main() {
         if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
         if (canRender) {
+            renderer.begin_frame();
+            // renderer.ui();
+
             if (((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index < samples_per_pixel) {
                 bool clear = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index == 0;
                 renderer.compute(width, height, clear);
 
                 ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index++;
             }
+
+            renderer.finish_frame();
         }
 
         // stop the capture

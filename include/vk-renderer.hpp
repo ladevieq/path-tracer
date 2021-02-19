@@ -15,9 +15,13 @@ class vkrenderer {
 
         ~vkrenderer();
 
+        void begin_frame();
+
         void ui();
 
         void compute(uint32_t width, uint32_t height, bool clear);
+
+        void finish_frame();
 
         void recreate_swapchain();
 
@@ -30,14 +34,21 @@ class vkrenderer {
         vkapi                           api;
 
         uint64_t                        frame_index = 0;
+        uint32_t                        swapchain_image_index = 0;
 
         std::vector<Image>              accumulation_images;
 
         std::vector<VkCommandBuffer>    command_buffers;
 
         std::vector<VkDescriptorSet>    compute_shader_sets;
-
         Pipeline                        compute_pipeline;
+
+        std::vector<Buffer>             ui_vertex_buffers;
+        std::vector<Buffer>             ui_index_buffers;
+        std::vector<VkDescriptorSet>    ui_sets;
+        Pipeline                        ui_pipeline;
+        VkRenderPass                    render_pass;
+        std::vector<VkFramebuffer>      framebuffers;
 
         std::vector<VkFence>            submission_fences;
         std::vector<VkSemaphore>        execution_semaphores;

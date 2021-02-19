@@ -69,12 +69,18 @@ class vkapi {
         std::vector<VkCommandBuffer> create_command_buffers(size_t command_buffers_count);
         void destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers);
 
-        VkRenderPass create_render_pass(std::vector<VkFormat>& attachments_format);
+        VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format);
+        VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format, VkFormat depth_attachement_format);
         void destroy_renderpass(VkRenderPass render_pass);
+
+        VkFramebuffer create_framebuffer(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size);
+        std::vector<VkFramebuffer> create_framebuffers(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size, uint32_t framebuffer_count);
+        void destroy_framebuffer(VkFramebuffer framebuffer);
+        void destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers);
 
 
         Pipeline create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings);
-        Pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, std::vector<VkDescriptorSetLayoutBinding> bindings, VkRenderPass render_pass, uint32_t subpass);
+        Pipeline create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass);
         void destroy_pipeline(Pipeline &pipeline);
 
 
