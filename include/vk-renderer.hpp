@@ -37,6 +37,7 @@ class vkrenderer {
         uint32_t                        swapchain_image_index = 0;
 
         std::vector<Image>              accumulation_images;
+        Image                           ui_texture;
 
         std::vector<VkCommandBuffer>    command_buffers;
 

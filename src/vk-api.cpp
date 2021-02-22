@@ -46,8 +46,12 @@ vkapi::~vkapi() {
 }
 
 
-Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
+Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage, void* ptr) {
     Buffer buffer = {};
+
+    if (ptr) {
+        buffer.mapped_ptr = ptr;
+    }
 
     VkBufferCreateInfo buffer_info  = {  };
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -70,8 +74,12 @@ void vkapi::destroy_buffer(Buffer& buffer) {
 }
 
 
-Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages) {
+Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, void* ptr) {
     Image image;
+
+    if (ptr) {
+        image.mapped_ptr = ptr;
+    }
 
     image.size = size;
 
@@ -131,7 +139,7 @@ std::vector<Image> vkapi::create_images(VkExtent3D size, VkFormat format, VkImag
     std::vector<Image> images { image_count };
 
     for (size_t image_index = 0; image_index < image_count; image_index++) {
-        images[image_index] = create_image(size, format, usages);
+        images[image_index] = create_image(size, format, usages, nullptr);
     }
 
     return std::move(images);
@@ -242,14 +250,16 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
         attachment_description.samples                                  = VK_SAMPLE_COUNT_1_BIT;
         attachment_description.loadOp                                   = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment_description.storeOp                                  = VK_ATTACHMENT_STORE_OP_STORE;
-        attachment_description.initialLayout                            = VK_IMAGE_LAYOUT_GENERAL; // TODO: Change this
-        attachment_description.finalLayout                              = VK_IMAGE_LAYOUT_GENERAL;
+        attachment_description.stencilLoadOp                            = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment_description.stencilStoreOp                           = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment_description.initialLayout                            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // TODO: Change this
+        attachment_description.finalLayout                              = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         attachments_description.push_back(attachment_description);
 
         VkAttachmentReference attachment_reference                      = {};
         attachment_reference.attachment                                 = attachment_index;
-        attachment_reference.layout                                     = VK_IMAGE_LAYOUT_GENERAL;
+        attachment_reference.layout                                     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         attachments_reference.push_back(attachment_reference);
     }
@@ -260,6 +270,9 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
     subpass_description.colorAttachmentCount                            = attachments_reference.size();
     subpass_description.pColorAttachments                               = attachments_reference.data();
     subpass_description.pDepthStencilAttachment                         = VK_NULL_HANDLE;
+    subpass_description.pResolveAttachments                             = VK_NULL_HANDLE;
+    subpass_description.preserveAttachmentCount                         = 0;
+    subpass_description.pPreserveAttachments                            = VK_NULL_HANDLE;
 
     VkRenderPass render_pass;
     VkRenderPassCreateInfo create_info                                  = {};
@@ -276,7 +289,7 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
     return render_pass;
 }
 
-void vkapi::destroy_renderpass(VkRenderPass render_pass) {
+void vkapi::destroy_render_pass(VkRenderPass render_pass) {
     vkDestroyRenderPass(context.device, render_pass, VK_NULL_HANDLE);
 }
 
@@ -400,7 +413,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
 
     std::vector<VkPipelineShaderStageCreateInfo> stages_create_info = {};
 
-    for (VkShaderStageFlags stage_flag = VK_SHADER_STAGE_VERTEX_BIT; stage_flag <= VK_SHADER_STAGE_ALL_GRAPHICS; stage_flag >>= 2) {
+    for (VkShaderStageFlags stage_flag = VK_SHADER_STAGE_VERTEX_BIT; stage_flag <= VK_SHADER_STAGE_ALL_GRAPHICS; stage_flag <<= 2) {
         if (stage_flag & shader_stages) {
             VkShaderModule shader_module;
 
@@ -426,7 +439,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
             stage_create_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
             stage_create_info.pNext                         = nullptr;
             stage_create_info.flags                         = 0;
-            stage_create_info.stage                         = VK_SHADER_STAGE_COMPUTE_BIT;
+            stage_create_info.stage                         = (VkShaderStageFlagBits)stage_flag;
             stage_create_info.module                        = shader_module;
             stage_create_info.pName                         = "main";
             stage_create_info.pSpecializationInfo           = nullptr;
@@ -497,12 +510,13 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     rasterization_state_create_info.sType                                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterization_state_create_info.pNext                                   = nullptr;
     rasterization_state_create_info.flags                                   = 0;
-    rasterization_state_create_info.depthClampEnable                        = VK_TRUE;
+    rasterization_state_create_info.depthClampEnable                        = VK_FALSE;
     rasterization_state_create_info.rasterizerDiscardEnable                 = VK_TRUE;
     rasterization_state_create_info.polygonMode                             = VK_POLYGON_MODE_FILL;
     rasterization_state_create_info.cullMode                                = VK_CULL_MODE_BACK_BIT;
     rasterization_state_create_info.frontFace                               = VK_FRONT_FACE_CLOCKWISE;
     rasterization_state_create_info.depthBiasEnable                         = VK_FALSE;
+    rasterization_state_create_info.lineWidth                               = 1.f;
 
     VkPipelineMultisampleStateCreateInfo multisample_state_create_info      = {};
     multisample_state_create_info.sType                                     = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -607,7 +621,7 @@ void vkapi::destroy_surface(VkSurfaceKHR surface) {
 }
 
 
-Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, std::optional<Swapchain> old_swapchain) {
+Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, std::optional<std::reference_wrapper<Swapchain>> old_swapchain) {
     Swapchain swapchain;
     VkBool32 queue_support_presentation = VK_FALSE;
     VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.queue_index, surface, &queue_support_presentation))
@@ -644,7 +658,7 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, surface, &supported_present_modes_count, supported_present_modes.data()))
 
     swapchain.surface_format = supported_formats[0];
-    VkSwapchainKHR old_swapchain_handle = (old_swapchain != std::nullopt) ? old_swapchain.value().handle : VK_NULL_HANDLE;
+    VkSwapchainKHR old_swapchain_handle = (old_swapchain != std::nullopt) ? old_swapchain.value().get().handle : VK_NULL_HANDLE;
 
     VkSwapchainCreateInfoKHR create_info    = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -719,7 +733,7 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     return std::move(swapchain);
 }
 
-void vkapi::destroy_swapchain(Swapchain swapchain) {
+void vkapi::destroy_swapchain(Swapchain& swapchain) {
     for(auto &image: swapchain.images) {
         vkDestroyImageView(context.device, image.view, nullptr);
     }
@@ -739,8 +753,8 @@ void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLay
     write_descriptor.dstSet                 = set;
     write_descriptor.dstBinding             = binding.binding;
     write_descriptor.dstArrayElement        = 0;
-    write_descriptor.descriptorCount        = 1;
-    write_descriptor.descriptorType         = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write_descriptor.descriptorCount        = binding.descriptorCount;
+    write_descriptor.descriptorType         = binding.descriptorType;
     write_descriptor.pImageInfo             = VK_NULL_HANDLE;
     write_descriptor.pBufferInfo            = &descriptor_buffer_info;
     write_descriptor.pTexelBufferView       = VK_NULL_HANDLE;
@@ -865,7 +879,7 @@ VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphor
     return vkQueueSubmit(context.queue, 1, &submit_info, submission_fence);
 }
 
-VkResult vkapi::present(Swapchain swapchain, uint32_t image_index, VkSemaphore wait_semaphore) {
+VkResult vkapi::present(Swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) {
     VkPresentInfoKHR present_info   = {};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.pNext              = nullptr;
