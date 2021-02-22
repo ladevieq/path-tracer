@@ -27,6 +27,7 @@ struct Image {
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
     VkExtent3D              size;
+    void*                   mapped_ptr;
 };
 
 struct Swapchain {
@@ -44,11 +45,11 @@ class vkapi {
         vkapi();
         ~vkapi();
 
-        Buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
+        Buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage, void* ptr);
         void destroy_buffer(Buffer& buffer);
 
 
-        Image create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages);
+        Image create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, void* ptr);
         void destroy_image(Image &image);
         std::vector<Image> create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count);
         void destroy_images(std::vector<Image> &images);
@@ -71,7 +72,7 @@ class vkapi {
 
         VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format);
         VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format, VkFormat depth_attachement_format);
-        void destroy_renderpass(VkRenderPass render_pass);
+        void destroy_render_pass(VkRenderPass render_pass);
 
         VkFramebuffer create_framebuffer(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size);
         std::vector<VkFramebuffer> create_framebuffers(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size, uint32_t framebuffer_count);
@@ -92,8 +93,8 @@ class vkapi {
         void destroy_surface(VkSurfaceKHR surface);
 
 
-        Swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, std::optional<Swapchain> old_swapchain);
-        void destroy_swapchain(Swapchain swapchain);
+        Swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, std::optional<std::reference_wrapper<Swapchain>> old_swapchain);
+        void destroy_swapchain(Swapchain& swapchain);
 
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer);
         void update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view);
@@ -111,7 +112,7 @@ class vkapi {
 
         VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence);
 
-        VkResult present(Swapchain swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
+        VkResult present(Swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
     // private:
 
         vkcontext           context;

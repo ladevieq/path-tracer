@@ -45,12 +45,10 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
             .pImmutableSamplers = VK_NULL_HANDLE,
         }
     };
-
     compute_pipeline = api.create_compute_pipeline("compute", bindings);
+    compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain.image_count);
 
     command_buffers = api.create_command_buffers(swapchain.image_count);
-
-    compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain.image_count);
 
     VkExtent3D image_size = {
         .width = swapchain.extent.width,
@@ -63,32 +61,49 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     execution_semaphores = api.create_semaphores(swapchain.image_count);
     acquire_semaphores = api.create_semaphores(swapchain.image_count);
 
-    // std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
-    // render_pass = api.create_render_pass(attachments_format);
-
-    // std::vector<VkDescriptorSetLayoutBinding> ui_pipeline_bindings {
-    //     {
-    //         .binding = 0,
-    //         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    //         .descriptorCount = 1,
-    //         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-    //         .pImmutableSamplers = VK_NULL_HANDLE,
-    //     },
-    // };
-    // ui_pipeline = api.create_graphics_pipeline("ui", ui_pipeline_bindings, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass);
-    // ui_sets = api.create_descriptor_sets(ui_pipeline.descriptor_set_layout, swapchain.image_count);
-
-    // for (auto& image : swapchain.images) {
-    //     std::vector<Image> attachments { image };
-    //     framebuffers.push_back(api.create_framebuffer(render_pass, attachments, swapchain.extent));
-    // }
-
-    compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
     std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
         api.update_descriptor_set_buffer(compute_shader_sets[index], bindings[0], compute_shader_buffer);
     }
+
+    std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
+    render_pass = api.create_render_pass(attachments_format);
+
+    for (auto& image : swapchain.images) {
+        std::vector<Image> attachments { image };
+        framebuffers.push_back(api.create_framebuffer(render_pass, attachments, swapchain.extent));
+    }
+
+    std::vector<VkDescriptorSetLayoutBinding> ui_pipeline_bindings {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
+    };
+    ui_pipeline = api.create_graphics_pipeline("ui", ui_pipeline_bindings, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass);
+    ui_sets = api.create_descriptor_sets(ui_pipeline.descriptor_set_layout, swapchain.image_count);
+
+    ImGui::CreateContext();
+    auto io = ImGui::GetIO();
+
+    ImGui::StyleColorsDark();
+
+    uint8_t* pixels = nullptr;
+    int atlas_width, atlas_height;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &atlas_width, &atlas_height);
+
+    VkExtent3D atlas_size = {
+        .width = (uint32_t)atlas_width,
+        .height = (uint32_t)atlas_height,
+        .depth = 1,
+    };
+    ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, pixels);
+    io.Fonts->SetTexID((void*)&ui_texture);
 }
 
 vkrenderer::~vkrenderer() {
@@ -102,8 +117,17 @@ vkrenderer::~vkrenderer() {
     api.destroy_descriptor_sets(compute_shader_sets);
     api.destroy_images(accumulation_images);
 
+    api.destroy_render_pass(render_pass);
+
+    api.destroy_image(ui_texture);
+
+    for (auto& framebuffer: framebuffers) {
+        api.destroy_framebuffer(framebuffer);
+    }
+
     api.destroy_command_buffers(command_buffers);
     api.destroy_pipeline(compute_pipeline);
+    api.destroy_pipeline(ui_pipeline);
 
     api.destroy_swapchain(swapchain);
     api.destroy_surface(platform_surface);
@@ -145,19 +169,31 @@ void vkrenderer::begin_frame() {
 }
 
 void vkrenderer::ui() {
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize.x = (float)swapchain.extent.width;
+    io.DisplaySize.y = (float)swapchain.extent.height;
+    io.DisplayFramebufferScale = { 1.f, 1.f };
+
     ImGui::NewFrame();
+
+    ImGui::Text("Hello, world!");
+
+    ImGui::EndFrame();
+
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
 
+    // TODO: Deallocate buffer when not used anymore
+    // Update descriptor with only the part of the buffer we are interested in
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
         ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
         ImVector vertex_buffer = draw_list->VtxBuffer;
         ImVector index_buffer = draw_list->IdxBuffer;
 
-        auto vk_vtx_buf = api.create_buffer(vertex_buffer.Size * sizeof(vertex_buffer.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        auto vk_vtx_buf = api.create_buffer(vertex_buffer.Size * sizeof(vertex_buffer.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
         std::memcpy(vk_vtx_buf.mapped_ptr, vertex_buffer.Data, vertex_buffer.Size * sizeof(vertex_buffer.Data[0]));
 
-        auto vk_idx_buf = api.create_buffer(index_buffer.Size * sizeof(index_buffer.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        auto vk_idx_buf = api.create_buffer(index_buffer.Size * sizeof(index_buffer.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
         std::memcpy(vk_idx_buf.mapped_ptr, index_buffer.Data, index_buffer.Size * sizeof(index_buffer.Data[0]));
 
         ui_vertex_buffers.push_back(vk_vtx_buf);
@@ -183,6 +219,7 @@ void vkrenderer::ui() {
     render_pass_begin_info.clearValueCount          = 1;
     render_pass_begin_info.pClearValues             = &clear_value;
 
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, swapchain.images[swapchain_image_index]);
     vkCmdBeginRenderPass(cmd_buf, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline.layout, 0, 1, &ui_sets[frame_index], 0, nullptr);
@@ -200,7 +237,7 @@ void vkrenderer::ui() {
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
         ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
 
-        api.update_descriptor_set_buffer(compute_shader_sets[frame_index], binding, ui_vertex_buffers[cmd_index]);
+        api.update_descriptor_set_buffer(ui_sets[frame_index], binding, ui_vertex_buffers[cmd_index]);
 
         vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[cmd_index].handle, 0, VK_INDEX_TYPE_UINT16);
 
@@ -210,6 +247,8 @@ void vkrenderer::ui() {
     }
 
     vkCmdEndRenderPass(cmd_buf);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, 0, swapchain.images[swapchain_image_index]);
 }
 
 void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
@@ -265,7 +304,7 @@ void vkrenderer::recreate_swapchain() {
         platform_surface,
         min_swapchain_image_count,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        std::optional<Swapchain> { swapchain }
+        std::optional<std::reference_wrapper<Swapchain>> { swapchain }
     );
 
     api.destroy_images(accumulation_images);
@@ -275,6 +314,19 @@ void vkrenderer::recreate_swapchain() {
         .depth = 1,
     };
     accumulation_images = api.create_images(image_size, swapchain.surface_format.format, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
+
+    for (auto& framebuffer: framebuffers) {
+        api.destroy_framebuffer(framebuffer);
+    }
+    framebuffers.clear();
+
+    std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
+    render_pass = api.create_render_pass(attachments_format);
+
+    for (auto& image : swapchain.images) {
+        std::vector<Image> attachments { image };
+        framebuffers.push_back(api.create_framebuffer(render_pass, attachments, swapchain.extent));
+    }
 }
 
 void vkrenderer::handle_swapchain_result(VkResult function_result) {

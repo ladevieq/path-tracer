@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <cassert>
 
-#include "imgui.h"
 #include "thirdparty/renderdoc.h"
 
 #include "vk-renderer.hpp"
@@ -57,8 +56,6 @@ int main() {
     auto inputs = create_inputs(width, height, samples_per_pixel);
     auto canRender = true;
     vkrenderer renderer { wnd, inputs };
-
-    ImGui::Text("Hello, world %d", 123);
 
 
     while(wnd.isOpen) {
@@ -140,11 +137,11 @@ int main() {
 
         if (canRender) {
             renderer.begin_frame();
-            // renderer.ui();
+            renderer.ui();
 
             if (((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index < samples_per_pixel) {
                 bool clear = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index == 0;
-                renderer.compute(width, height, clear);
+                // renderer.compute(width, height, clear);
 
                 ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index++;
             }
