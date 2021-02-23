@@ -338,7 +338,7 @@ void vkapi::destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers) {
 }
 
 
-Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings) {
+Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings) {
     Pipeline pipeline;
 
     char shader_path[256] = {};
@@ -408,7 +408,7 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
     return std::move(pipeline);
 }
 
-Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass) {
+Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass) {
     Pipeline pipeline;
 
     std::vector<VkPipelineShaderStageCreateInfo> stages_create_info = {};
