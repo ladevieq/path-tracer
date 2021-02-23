@@ -40,6 +40,7 @@ struct Swapchain {
 
 class window;
 
+// TODO: Make the api manage ressources
 class vkapi {
     public:
         vkapi();
@@ -80,8 +81,8 @@ class vkapi {
         void destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers);
 
 
-        Pipeline create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings);
-        Pipeline create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding> bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass);
+        Pipeline create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings);
+        Pipeline create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass);
         void destroy_pipeline(Pipeline &pipeline);
 
 

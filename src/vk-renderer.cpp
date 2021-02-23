@@ -104,6 +104,9 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     };
     ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, pixels);
     io.Fonts->SetTexID((void*)&ui_texture);
+
+    ui_vertex_buffers.resize(swapchain.image_count);
+    ui_index_buffers.resize(swapchain.image_count);
 }
 
 vkrenderer::~vkrenderer() {
@@ -125,6 +128,18 @@ vkrenderer::~vkrenderer() {
         api.destroy_framebuffer(framebuffer);
     }
 
+    for (auto& v_buffer_array: ui_vertex_buffers) {
+        for (auto& vertex_buffer: v_buffer_array) {
+            api.destroy_buffer(vertex_buffer);
+        }
+    }
+
+    for (auto& i_buffer_array: ui_index_buffers) {
+        for (auto& index_buffer: i_buffer_array) {
+            api.destroy_buffer(index_buffer);
+        }
+    }
+
     api.destroy_command_buffers(command_buffers);
     api.destroy_pipeline(compute_pipeline);
     api.destroy_pipeline(ui_pipeline);
@@ -134,8 +149,57 @@ vkrenderer::~vkrenderer() {
 }
 
 void vkrenderer::begin_frame() {
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize.x = (float)swapchain.extent.width;
+    io.DisplaySize.y = (float)swapchain.extent.height;
+    io.DisplayFramebufferScale = { 1.f, 1.f };
+
+    ImGui::NewFrame();
+
+    ImGui::Text("Hello, world!");
+
+    ImGui::EndFrame();
+
+    ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+
+    std::vector<Buffer> temp_vertex_buffers {};
+    std::vector<Buffer> temp_index_buffers {};
+
+    // Update descriptor with only the part of the buffer we are interested in
+    for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
+        ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
+        ImVector vertex_buffer = draw_list->VtxBuffer;
+        ImVector index_buffer = draw_list->IdxBuffer;
+
+        auto vk_vtx_buf = api.create_buffer(vertex_buffer.Size * sizeof(vertex_buffer.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
+        std::memcpy(vk_vtx_buf.mapped_ptr, vertex_buffer.Data, vertex_buffer.Size * sizeof(vertex_buffer.Data[0]));
+
+        auto vk_idx_buf = api.create_buffer(index_buffer.Size * sizeof(index_buffer.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
+        std::memcpy(vk_idx_buf.mapped_ptr, index_buffer.Data, index_buffer.Size * sizeof(index_buffer.Data[0]));
+
+        temp_vertex_buffers.push_back(vk_vtx_buf);
+        temp_index_buffers.push_back(vk_idx_buf);
+    }
+
+
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
+
+    for (auto& vertex_buffer: ui_vertex_buffers[frame_index]) {
+        api.destroy_buffer(vertex_buffer);
+    }
+
+    for (auto& index_buffer: ui_index_buffers[frame_index]) {
+        api.destroy_buffer(index_buffer);
+    }
+
+    ui_vertex_buffers[frame_index].clear();
+    ui_index_buffers[frame_index].clear();
+
+    ui_vertex_buffers[frame_index] = std::move(temp_vertex_buffers);
+    ui_index_buffers[frame_index] = std::move(temp_index_buffers);
 
     swapchain_image_index = 0;
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &swapchain_image_index);
@@ -169,36 +233,7 @@ void vkrenderer::begin_frame() {
 }
 
 void vkrenderer::ui() {
-    ImGuiIO& io = ImGui::GetIO();
-    io.DisplaySize.x = (float)swapchain.extent.width;
-    io.DisplaySize.y = (float)swapchain.extent.height;
-    io.DisplayFramebufferScale = { 1.f, 1.f };
-
-    ImGui::NewFrame();
-
-    ImGui::Text("Hello, world!");
-
-    ImGui::EndFrame();
-
-    ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
-
-    // TODO: Deallocate buffer when not used anymore
-    // Update descriptor with only the part of the buffer we are interested in
-    for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
-        ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
-        ImVector vertex_buffer = draw_list->VtxBuffer;
-        ImVector index_buffer = draw_list->IdxBuffer;
-
-        auto vk_vtx_buf = api.create_buffer(vertex_buffer.Size * sizeof(vertex_buffer.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
-        std::memcpy(vk_vtx_buf.mapped_ptr, vertex_buffer.Data, vertex_buffer.Size * sizeof(vertex_buffer.Data[0]));
-
-        auto vk_idx_buf = api.create_buffer(index_buffer.Size * sizeof(index_buffer.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
-        std::memcpy(vk_idx_buf.mapped_ptr, index_buffer.Data, index_buffer.Size * sizeof(index_buffer.Data[0]));
-
-        ui_vertex_buffers.push_back(vk_vtx_buf);
-        ui_index_buffers.push_back(vk_idx_buf);
-    }
 
     auto cmd_buf = command_buffers[frame_index];
 
@@ -237,9 +272,9 @@ void vkrenderer::ui() {
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
         ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
 
-        api.update_descriptor_set_buffer(ui_sets[frame_index], binding, ui_vertex_buffers[cmd_index]);
+        api.update_descriptor_set_buffer(ui_sets[frame_index], binding, ui_vertex_buffers[frame_index][cmd_index]);
 
-        vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[cmd_index].handle, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[frame_index][cmd_index].handle, 0, VK_INDEX_TYPE_UINT16);
 
         for (auto& draw_cmd: draw_list->CmdBuffer) {
             vkCmdDrawIndexed(cmd_buf, draw_cmd.ElemCount, 1, draw_cmd.IdxOffset, draw_cmd.VtxOffset, 0);
@@ -319,9 +354,6 @@ void vkrenderer::recreate_swapchain() {
         api.destroy_framebuffer(framebuffer);
     }
     framebuffers.clear();
-
-    std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
-    render_pass = api.create_render_pass(attachments_format);
 
     for (auto& image : swapchain.images) {
         std::vector<Image> attachments { image };
