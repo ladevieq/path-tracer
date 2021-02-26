@@ -742,6 +742,10 @@ void vkapi::destroy_swapchain(Swapchain& swapchain) {
 
 
 void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer) {
+    update_descriptor_set_buffer(set, binding, buffer, 0, VK_WHOLE_SIZE);
+}
+
+void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer, VkDeviceSize offset, VkDeviceSize range) {
     VkDescriptorBufferInfo descriptor_buffer_info = {};
     descriptor_buffer_info.buffer           = buffer.handle;
     descriptor_buffer_info.offset           = 0;

@@ -22,7 +22,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         std::nullopt
     );
 
-    std::vector<VkDescriptorSetLayoutBinding> bindings {
+    compute_sets_bindings = {
         {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -45,7 +45,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
             .pImmutableSamplers = VK_NULL_HANDLE,
         }
     };
-    compute_pipeline = api.create_compute_pipeline("compute", bindings);
+    compute_pipeline = api.create_compute_pipeline("compute", compute_sets_bindings);
     compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain.image_count);
 
     command_buffers = api.create_command_buffers(swapchain.image_count);
@@ -65,7 +65,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
-        api.update_descriptor_set_buffer(compute_shader_sets[index], bindings[0], compute_shader_buffer);
+        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], compute_shader_buffer);
     }
 
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
@@ -76,7 +76,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         framebuffers.push_back(api.create_framebuffer(render_pass, attachments, swapchain.extent));
     }
 
-    std::vector<VkDescriptorSetLayoutBinding> ui_pipeline_bindings {
+    ui_sets_bindings = {
         {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -85,7 +85,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
             .pImmutableSamplers = VK_NULL_HANDLE,
         },
     };
-    ui_pipeline = api.create_graphics_pipeline("ui", ui_pipeline_bindings, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass);
+    ui_pipeline = api.create_graphics_pipeline("ui", ui_sets_bindings, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass);
     ui_sets = api.create_descriptor_sets(ui_pipeline.descriptor_set_layout, swapchain.image_count);
 
     ImGui::CreateContext();
@@ -210,23 +210,8 @@ void vkrenderer::begin_frame() {
     auto output_image = accumulation_images[0];
     auto accumulation_image = accumulation_images[1];
 
-    VkDescriptorSetLayoutBinding images[2] {
-        {
-            .binding = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        }, {
-            .binding = 2,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        }
-    };
-    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], images[0], output_image.view);
-    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], images[1], accumulation_image.view);
+    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[1], output_image.view);
+    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[2], accumulation_image.view);
 
     api.start_record(cmd_buf);
 
@@ -261,18 +246,10 @@ void vkrenderer::ui() {
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline.handle);
 
-    VkDescriptorSetLayoutBinding binding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = VK_NULL_HANDLE,
-    };
-
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
         ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
 
-        api.update_descriptor_set_buffer(ui_sets[frame_index], binding, ui_vertex_buffers[frame_index][cmd_index]);
+        api.update_descriptor_set_buffer(ui_sets[frame_index], ui_sets_bindings[0], ui_vertex_buffers[frame_index][cmd_index]);
 
         vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[frame_index][cmd_index].handle, 0, VK_INDEX_TYPE_UINT16);
 

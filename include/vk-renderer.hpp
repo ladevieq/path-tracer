@@ -41,9 +41,12 @@ class vkrenderer {
 
         std::vector<VkCommandBuffer>    command_buffers;
 
+        // TODO: Maybe use a map in the future
+        std::vector<VkDescriptorSetLayoutBinding> compute_sets_bindings;
         std::vector<VkDescriptorSet>    compute_shader_sets;
         Pipeline                        compute_pipeline;
 
+        std::vector<VkDescriptorSetLayoutBinding> ui_sets_bindings;
         std::vector<std::vector<Buffer>>ui_vertex_buffers;
         std::vector<std::vector<Buffer>>ui_index_buffers;
         std::vector<VkDescriptorSet>    ui_sets;
