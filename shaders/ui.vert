@@ -5,12 +5,7 @@ struct Vertex {
 };
 
 layout(set = 0, binding = 0) uniform Vertices {
-    Vertex[10000] vertices;
-};
-
-out gl_PerVertex
-{
-  vec4 gl_Position;
+    Vertex[158] vertices;
 };
 
 void main() {

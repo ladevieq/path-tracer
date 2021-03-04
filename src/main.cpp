@@ -72,16 +72,16 @@ int main() {
                 case EVENT_TYPES::RESIZE: {
                     width = event.width;
                     height = event.height;
-                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->width = width;
-                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->height = height;
+                    ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->width = width;
+                    ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->height = height;
 
                     if (event.width == 0 && event.height == 0) {
                         canRender = false;
                     } else {
                         canRender = true;
                         renderer.recreate_swapchain();
-                        ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.set_aspect_ratio((float)event.width / (float)event.height);
-                        ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index = 0;
+                        ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.set_aspect_ratio((float)event.width / (float)event.height);
+                        ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
                     }
                     break;
                 }
@@ -95,29 +95,29 @@ int main() {
 
                     switch (event.key) {
                         case KEYS::W: {
-                            move_vec = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.forward.unit() * move_speed;
+                            move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::S: {
-                            move_vec = -((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.forward.unit() * move_speed;
+                            move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::D: {
-                            move_vec = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.right.unit() * move_speed;
+                            move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.right.unit() * move_speed;
                             break;
                         }
                         case KEYS::A: {
-                            move_vec = -((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.right.unit() * move_speed;
+                            move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.right.unit() * move_speed;
                             break;
                         }
                         default:
                             break;
                     }
 
-                    ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->cam.move(move_vec);
+                    ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.move(move_vec);
 
                     if (!move_vec.near_zero()) {
-                        ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index = 0;
+                        ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
                     }
 
                     break;
@@ -139,12 +139,12 @@ int main() {
             renderer.begin_frame();
             renderer.ui();
 
-            if (((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index < samples_per_pixel) {
-                bool clear = ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index == 0;
-                // renderer.compute(width, height, clear);
+            // if (((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index < samples_per_pixel) {
+            //     bool clear = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index == 0;
+            //     renderer.compute(width, height, clear);
 
-                ((input_data*) renderer.compute_shader_buffer.mapped_ptr)->sample_index++;
-            }
+            //     ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
+            // }
 
             renderer.finish_frame();
         }
