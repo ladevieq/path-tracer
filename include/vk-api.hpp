@@ -99,7 +99,7 @@ class vkapi {
 
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer);
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer, VkDeviceSize offset, VkDeviceSize range);
-        void update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view);
+        void update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view, VkSampler sampler);
 
 
         void start_record(VkCommandBuffer command_buffer);
