@@ -20,11 +20,19 @@ vkapi::vkapi() {
 
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
         {
+            .type                               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount                    = (uint32_t)0xff,
+        },
+        {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .descriptorCount                    = (uint32_t)0xff,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount                    = (uint32_t)0xff,
+        },
+        {
+            .type                               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount                    = (uint32_t)0xff,
         }
     };
@@ -57,7 +65,6 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = mem_usage;
     alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    alloc_create_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
      
     VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, &buffer.alloc_info))
 
@@ -767,9 +774,9 @@ void vkapi::update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLay
     vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
 }
 
-void vkapi::update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view) {
+void vkapi::update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view, VkSampler sampler) {
     VkDescriptorImageInfo descriptor_image_info = {};
-    descriptor_image_info.sampler               = VK_NULL_HANDLE;
+    descriptor_image_info.sampler               = sampler;
     descriptor_image_info.imageView             = view;
     descriptor_image_info.imageLayout           = VK_IMAGE_LAYOUT_GENERAL;
 

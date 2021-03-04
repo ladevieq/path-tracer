@@ -46,9 +46,6 @@ class vkrenderer {
         std::vector<VkDescriptorSet>    compute_shader_sets;
         Pipeline                        compute_pipeline;
 
-        Buffer                          vertex_buffer;
-        Buffer                          index_buffer;
-
         std::vector<VkDescriptorSetLayoutBinding> ui_sets_bindings;
         std::vector<std::vector<Buffer>>ui_vertex_buffers;
         std::vector<std::vector<Buffer>>ui_index_buffers;

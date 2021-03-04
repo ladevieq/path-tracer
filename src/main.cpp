@@ -133,7 +133,7 @@ int main() {
         // You can specify NULL, NULL for the device to capture on if you have only one device and
         // either no windows at all or only one window, and it will capture from that device.
         // See the documentation below for a longer explanation
-        if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+        // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
         if (canRender) {
             renderer.begin_frame();
@@ -150,7 +150,7 @@ int main() {
         }
 
         // stop the capture
-        if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+        // if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
     }
 
     //-------------------------
