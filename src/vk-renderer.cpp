@@ -61,8 +61,8 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     execution_semaphores = api.create_semaphores(swapchain.image_count);
     acquire_semaphores = api.create_semaphores(swapchain.image_count);
 
-    compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
-    std::memcpy(compute_shader_buffer.mapped_ptr, &inputs, sizeof(inputs));
+    compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(compute_shader_buffer.alloc_info.pMappedData, &inputs, sizeof(inputs));
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
         api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], compute_shader_buffer);
@@ -102,7 +102,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         .height = (uint32_t)atlas_height,
         .depth = 1,
     };
-    ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, pixels);
+    ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
     io.Fonts->SetTexID((void*)&ui_texture);
 
     ui_vertex_buffers.resize(swapchain.image_count);
@@ -170,36 +170,44 @@ void vkrenderer::begin_frame() {
     // Update descriptor with only the part of the buffer we are interested in
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
         ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
-        ImVector vertex_buffer = draw_list->VtxBuffer;
-        ImVector index_buffer = draw_list->IdxBuffer;
+        auto vbuf = draw_list->VtxBuffer;
+        auto ibuf = draw_list->IdxBuffer;
 
-        auto vk_vtx_buf = api.create_buffer(vertex_buffer.Size * sizeof(vertex_buffer.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
-        std::memcpy(vk_vtx_buf.mapped_ptr, vertex_buffer.Data, vertex_buffer.Size * sizeof(vertex_buffer.Data[0]));
+        // auto vk_vtx_buf = api.create_buffer(vertex_buffer.Size * sizeof(vertex_buffer.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        // std::memcpy(vk_vtx_buf.alloc_info.pMappedData, vertex_buffer.Data, vertex_buffer.Size * sizeof(vertex_buffer.Data[0]));
 
-        auto vk_idx_buf = api.create_buffer(index_buffer.Size * sizeof(index_buffer.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, nullptr);
-        std::memcpy(vk_idx_buf.mapped_ptr, index_buffer.Data, index_buffer.Size * sizeof(index_buffer.Data[0]));
+        // auto vk_idx_buf = api.create_buffer(index_buffer.Size * sizeof(index_buffer.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        // std::memcpy(vk_idx_buf.alloc_info.pMappedData, index_buffer.Data, index_buffer.Size * sizeof(index_buffer.Data[0]));
 
-        temp_vertex_buffers.push_back(vk_vtx_buf);
-        temp_index_buffers.push_back(vk_idx_buf);
+        // temp_vertex_buffers.push_back(vk_vtx_buf);
+        // temp_index_buffers.push_back(vk_idx_buf);
+
+        vertex_buffer = api.create_buffer(vbuf.Size * sizeof(vbuf.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        std::memcpy(vertex_buffer.alloc_info.pMappedData, vbuf.Data, vbuf.Size * sizeof(vbuf.Data[0]));
+        vmaFlushAllocation(api.context.allocator, vertex_buffer.alloc, 0, VK_WHOLE_SIZE);
+
+        index_buffer = api.create_buffer(ibuf.Size * sizeof(ibuf.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        std::memcpy(index_buffer.alloc_info.pMappedData, ibuf.Data, ibuf.Size * sizeof(ibuf.Data[0]));
+        vmaFlushAllocation(api.context.allocator, index_buffer.alloc, 0, VK_WHOLE_SIZE);
     }
 
 
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
-    for (auto& vertex_buffer: ui_vertex_buffers[frame_index]) {
-        api.destroy_buffer(vertex_buffer);
-    }
+    // for (auto& vertex_buffer: ui_vertex_buffers[frame_index]) {
+    //     api.destroy_buffer(vertex_buffer);
+    // }
 
-    for (auto& index_buffer: ui_index_buffers[frame_index]) {
-        api.destroy_buffer(index_buffer);
-    }
+    // for (auto& index_buffer: ui_index_buffers[frame_index]) {
+    //     api.destroy_buffer(index_buffer);
+    // }
 
-    ui_vertex_buffers[frame_index].clear();
-    ui_index_buffers[frame_index].clear();
+    // ui_vertex_buffers[frame_index].clear();
+    // ui_index_buffers[frame_index].clear();
 
-    ui_vertex_buffers[frame_index] = std::move(temp_vertex_buffers);
-    ui_index_buffers[frame_index] = std::move(temp_index_buffers);
+    // ui_vertex_buffers[frame_index] = std::move(temp_vertex_buffers);
+    // ui_index_buffers[frame_index] = std::move(temp_index_buffers);
 
     swapchain_image_index = 0;
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &swapchain_image_index);
@@ -239,28 +247,102 @@ void vkrenderer::ui() {
     render_pass_begin_info.clearValueCount          = 1;
     render_pass_begin_info.pClearValues             = &clear_value;
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, swapchain.images[swapchain_image_index]);
+
+    // std::vector<VkBufferMemoryBarrier> buffers_barrier = {};
+    // VkBufferMemoryBarrier vertex_buffer_barrier  = {};
+    // vertex_buffer_barrier.sType                  = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    // vertex_buffer_barrier.pNext                  = VK_NULL_HANDLE;
+    // vertex_buffer_barrier.srcAccessMask          = VK_ACCESS_MEMORY_WRITE_BIT;
+    // vertex_buffer_barrier.dstAccessMask          = VK_ACCESS_MEMORY_WRITE_BIT;
+    // vertex_buffer_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    // vertex_buffer_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    // vertex_buffer_barrier.buffer                 = vertex_buffer.handle;
+    // vertex_buffer_barrier.offset                 = 0;
+    // vertex_buffer_barrier.size                   = VK_WHOLE_SIZE;
+    // buffers_barrier.push_back(vertex_buffer_barrier);
+
+    // VkBufferMemoryBarrier index_buffer_barrier  = {};
+    // index_buffer_barrier.sType                  = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    // index_buffer_barrier.pNext                  = VK_NULL_HANDLE;
+    // index_buffer_barrier.srcAccessMask          = VK_ACCESS_MEMORY_WRITE_BIT;
+    // index_buffer_barrier.dstAccessMask          = VK_ACCESS_MEMORY_WRITE_BIT;
+    // index_buffer_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    // index_buffer_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    // index_buffer_barrier.buffer                 = index_buffer.handle;
+    // index_buffer_barrier.offset                 = 0;
+    // index_buffer_barrier.size                   = VK_WHOLE_SIZE;
+    // buffers_barrier.push_back(index_buffer_barrier);
+
+    // vkCmdPipelineBarrier(
+    //     cmd_buf,
+    //     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    //     VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+    //     0,
+    //     0,
+    //     nullptr,
+    //     2,
+    //     buffers_barrier.data(),
+    //     0,
+    //     nullptr
+    // );
+
+    // VkMemoryBarrier memory_barrier  = {};
+    // memory_barrier.sType            = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    // memory_barrier.pNext            = VK_NULL_HANDLE;
+    // memory_barrier.srcAccessMask    = VK_ACCESS_MEMORY_WRITE_BIT;
+    // memory_barrier.dstAccessMask    = VK_ACCESS_INDEX_READ_BIT;
+
+    // vkCmdPipelineBarrier(
+    //     cmd_buf,
+    //     VK_PIPELINE_STAGE_HOST_BIT,
+    //     VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+    //     0,
+    //     1,
+    //     &memory_barrier,
+    //     0,
+    //     nullptr,
+    //     0,
+    //     nullptr
+    // );
+
+    vkCmdPipelineBarrier(
+        cmd_buf,
+        VK_PIPELINE_STAGE_HOST_BIT,
+        VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr
+    );
+
     vkCmdBeginRenderPass(cmd_buf, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline.layout, 0, 1, &ui_sets[frame_index], 0, nullptr);
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline.handle);
 
-    for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
-        ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
+    // for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
+    //     ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
 
-        api.update_descriptor_set_buffer(ui_sets[frame_index], ui_sets_bindings[0], ui_vertex_buffers[frame_index][cmd_index]);
+        // api.update_descriptor_set_buffer(ui_sets[frame_index], ui_sets_bindings[0], ui_vertex_buffers[frame_index][cmd_index]);
 
-        vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[frame_index][cmd_index].handle, 0, VK_INDEX_TYPE_UINT16);
+        // vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[frame_index][cmd_index].handle, 0, VK_INDEX_TYPE_UINT16);
 
-        for (auto& draw_cmd: draw_list->CmdBuffer) {
-            vkCmdDrawIndexed(cmd_buf, draw_cmd.ElemCount, 1, draw_cmd.IdxOffset, draw_cmd.VtxOffset, 0);
-        }
-    }
+        api.update_descriptor_set_buffer(ui_sets[frame_index], ui_sets_bindings[0], vertex_buffer);
+        // auto temp_buffer = { 0, 1, 2, 2, 1, 3 };
+        // std::memcpy(ui_index_buffers[frame_index][cmd_index].alloc_info.pMappedData, &temp_buffer, sizeof(temp_buffer));
+        vkCmdBindIndexBuffer(cmd_buf, index_buffer.handle, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(cmd_buf, 50, 1, 0, 0, 0);
+
+    //     for (auto& draw_cmd: draw_list->CmdBuffer) {
+    //         vkCmdDrawIndexed(cmd_buf, draw_cmd.ElemCount, 1, draw_cmd.IdxOffset, draw_cmd.VtxOffset, 0);
+    //     }
+    // }
 
     vkCmdEndRenderPass(cmd_buf);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, 0, swapchain.images[swapchain_image_index]);
 }
 
 void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {
@@ -304,7 +386,7 @@ void vkrenderer::finish_frame() {
     auto present_result = api.present(swapchain, swapchain_image_index, execution_semaphores[frame_index]);
     handle_swapchain_result(present_result);
 
-    std::swap(accumulation_images[0], accumulation_images[1]);
+    // std::swap(accumulation_images[0], accumulation_images[1]);
 
     frame_index = ++frame_index % swapchain.image_count;
 }

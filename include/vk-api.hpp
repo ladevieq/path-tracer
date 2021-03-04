@@ -8,9 +8,9 @@
 #include "vk-context.hpp"
 
 struct Buffer {
-    VmaAllocation   alloc;
-    VkBuffer        handle;
-    void*           mapped_ptr;
+    VmaAllocation       alloc;
+    VmaAllocationInfo   alloc_info;
+    VkBuffer            handle;
 };
 
 struct Pipeline {
@@ -24,10 +24,10 @@ struct Image {
     VkImage                 handle;
     VkImageView             view;
     VmaAllocation           alloc;
+    VmaAllocationInfo       alloc_info;
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
     VkExtent3D              size;
-    void*                   mapped_ptr;
 };
 
 struct Swapchain {
@@ -46,11 +46,11 @@ class vkapi {
         vkapi();
         ~vkapi();
 
-        Buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage, void* ptr);
+        Buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
         void destroy_buffer(Buffer& buffer);
 
 
-        Image create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, void* ptr);
+        Image create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages);
         void destroy_image(Image &image);
         std::vector<Image> create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count);
         void destroy_images(std::vector<Image> &images);

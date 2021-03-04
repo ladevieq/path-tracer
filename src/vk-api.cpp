@@ -46,24 +46,20 @@ vkapi::~vkapi() {
 }
 
 
-Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage, void* ptr) {
+Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
     Buffer buffer = {};
 
-    if (ptr) {
-        buffer.mapped_ptr = ptr;
-    }
-
-    VkBufferCreateInfo buffer_info  = {  };
+    VkBufferCreateInfo buffer_info  = {};
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size                = data_size;
     buffer_info.usage               = buffer_usage;
      
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = mem_usage;
+    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    alloc_create_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
      
-    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, nullptr))
-
-    vmaMapMemory(context.allocator, buffer.alloc, (void**) &buffer.mapped_ptr);
+    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, &buffer.alloc_info))
 
     return std::move(buffer);
 }
@@ -74,12 +70,8 @@ void vkapi::destroy_buffer(Buffer& buffer) {
 }
 
 
-Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, void* ptr) {
+Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages) {
     Image image;
-
-    if (ptr) {
-        image.mapped_ptr = ptr;
-    }
 
     image.size = size;
 
@@ -108,8 +100,9 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
 
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, nullptr))
+    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, &image.alloc_info))
 
     VkImageViewCreateInfo image_view_create_info    = {};
     image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -139,7 +132,7 @@ std::vector<Image> vkapi::create_images(VkExtent3D size, VkFormat format, VkImag
     std::vector<Image> images { image_count };
 
     for (size_t image_index = 0; image_index < image_count; image_index++) {
-        images[image_index] = create_image(size, format, usages, nullptr);
+        images[image_index] = create_image(size, format, usages);
     }
 
     return std::move(images);
@@ -252,8 +245,8 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
         attachment_description.storeOp                                  = VK_ATTACHMENT_STORE_OP_STORE;
         attachment_description.stencilLoadOp                            = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment_description.stencilStoreOp                           = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment_description.initialLayout                            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // TODO: Change this
-        attachment_description.finalLayout                              = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachment_description.initialLayout                            = VK_IMAGE_LAYOUT_UNDEFINED; // TODO: Change this
+        attachment_description.finalLayout                              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         attachments_description.push_back(attachment_description);
 
@@ -480,12 +473,12 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     input_assembly_state_create_info.topology                               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
     VkViewport viewport = {};
-    viewport.x          = 0;
-    viewport.y          = 0;
-    viewport.width      = 1;
-    viewport.height     = 1;
-    viewport.minDepth   = 0;
-    viewport.maxDepth   = 1;
+    viewport.x          = 0.f;
+    viewport.y          = 0.f;
+    viewport.width      = 384.f;
+    viewport.height     = 186.f;
+    viewport.minDepth   = 0.f;
+    viewport.maxDepth   = 1.f;
 
     VkRect2D scissor    = {};
     scissor.offset      = {
@@ -493,8 +486,8 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
         0,
     };
     scissor.extent      = {
-        400,
-        400,
+        384,
+        186,
     };
 
     VkPipelineViewportStateCreateInfo viewport_state_create_info            = {};
@@ -511,10 +504,10 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     rasterization_state_create_info.pNext                                   = nullptr;
     rasterization_state_create_info.flags                                   = 0;
     rasterization_state_create_info.depthClampEnable                        = VK_FALSE;
-    rasterization_state_create_info.rasterizerDiscardEnable                 = VK_TRUE;
+    rasterization_state_create_info.rasterizerDiscardEnable                 = VK_FALSE;
     rasterization_state_create_info.polygonMode                             = VK_POLYGON_MODE_FILL;
     rasterization_state_create_info.cullMode                                = VK_CULL_MODE_BACK_BIT;
-    rasterization_state_create_info.frontFace                               = VK_FRONT_FACE_CLOCKWISE;
+    rasterization_state_create_info.frontFace                               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterization_state_create_info.depthBiasEnable                         = VK_FALSE;
     rasterization_state_create_info.lineWidth                               = 1.f;
 
@@ -524,9 +517,17 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     multisample_state_create_info.flags                                     = 0;
     multisample_state_create_info.rasterizationSamples                      = VK_SAMPLE_COUNT_1_BIT;
     multisample_state_create_info.sampleShadingEnable                       = VK_FALSE;
+    multisample_state_create_info.minSampleShading                          = 1.f;
 
     VkPipelineColorBlendAttachmentState color_attachment_state              = {};
     color_attachment_state.blendEnable                                      = VK_FALSE;
+    color_attachment_state.srcColorBlendFactor                              = VK_BLEND_FACTOR_ONE;
+    color_attachment_state.dstColorBlendFactor                              = VK_BLEND_FACTOR_ZERO;
+    color_attachment_state.colorBlendOp                                     = VK_BLEND_OP_ADD;
+    color_attachment_state.srcAlphaBlendFactor                              = VK_BLEND_FACTOR_ONE;
+    color_attachment_state.dstAlphaBlendFactor                              = VK_BLEND_FACTOR_ZERO;
+    color_attachment_state.alphaBlendOp                                     = VK_BLEND_OP_ADD;
+    color_attachment_state.colorWriteMask                                   = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     VkPipelineColorBlendStateCreateInfo color_blend_state_create_info       = {};
     color_blend_state_create_info.sType                                     = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
