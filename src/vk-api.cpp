@@ -107,7 +107,6 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
 
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, &image.alloc_info))
 
@@ -513,7 +512,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     rasterization_state_create_info.depthClampEnable                        = VK_FALSE;
     rasterization_state_create_info.rasterizerDiscardEnable                 = VK_FALSE;
     rasterization_state_create_info.polygonMode                             = VK_POLYGON_MODE_FILL;
-    rasterization_state_create_info.cullMode                                = VK_CULL_MODE_BACK_BIT;
+    rasterization_state_create_info.cullMode                                = VK_CULL_MODE_NONE;
     rasterization_state_create_info.frontFace                               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterization_state_create_info.depthBiasEnable                         = VK_FALSE;
     rasterization_state_create_info.lineWidth                               = 1.f;
@@ -527,12 +526,12 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     multisample_state_create_info.minSampleShading                          = 1.f;
 
     VkPipelineColorBlendAttachmentState color_attachment_state              = {};
-    color_attachment_state.blendEnable                                      = VK_FALSE;
-    color_attachment_state.srcColorBlendFactor                              = VK_BLEND_FACTOR_ONE;
-    color_attachment_state.dstColorBlendFactor                              = VK_BLEND_FACTOR_ZERO;
+    color_attachment_state.blendEnable                                      = VK_TRUE;
+    color_attachment_state.srcColorBlendFactor                              = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_attachment_state.dstColorBlendFactor                              = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_attachment_state.colorBlendOp                                     = VK_BLEND_OP_ADD;
     color_attachment_state.srcAlphaBlendFactor                              = VK_BLEND_FACTOR_ONE;
-    color_attachment_state.dstAlphaBlendFactor                              = VK_BLEND_FACTOR_ZERO;
+    color_attachment_state.dstAlphaBlendFactor                              = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_attachment_state.alphaBlendOp                                     = VK_BLEND_OP_ADD;
     color_attachment_state.colorWriteMask                                   = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
@@ -880,10 +879,10 @@ VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphor
     VkSubmitInfo submit_info            = {};
     submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.pNext                   = nullptr;
-    submit_info.waitSemaphoreCount      = 1;
+    submit_info.waitSemaphoreCount      = wait_semaphore ? 1 : 0;
     submit_info.pWaitSemaphores         = &wait_semaphore;
-    submit_info.pWaitDstStageMask       = &wait_stage;
-    submit_info.signalSemaphoreCount    = 1;
+    submit_info.pWaitDstStageMask       = wait_semaphore ? &wait_stage : VK_NULL_HANDLE;
+    submit_info.signalSemaphoreCount    = signal_semaphore ? 1 : 0;
     submit_info.pSignalSemaphores       = &signal_semaphore;
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffer;

@@ -14,6 +14,13 @@
 
 #define VKRESULT(result) assert(result == VK_SUCCESS);
 
+struct VkVertex {
+    float x, y;
+    float u, v;
+    uint32_t color;
+    uint32_t padding[3];
+};
+
 vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     platform_surface = api.create_surface(wnd);
     swapchain = api.create_swapchain(
@@ -86,21 +93,19 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .pImmutableSamplers = VK_NULL_HANDLE,
         },
-        // {
-        //     .binding = 1,
-        //     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        //     .descriptorCount = 1,
-        //     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        //     .pImmutableSamplers = VK_NULL_HANDLE,
-        // },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
     };
     ui_pipeline = api.create_graphics_pipeline("ui", ui_sets_bindings, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass);
     ui_sets = api.create_descriptor_sets(ui_pipeline.descriptor_set_layout, swapchain.image_count);
 
     ImGui::CreateContext();
     auto io = ImGui::GetIO();
-
-    ImGui::StyleColorsDark();
 
     uint8_t* pixels = nullptr;
     int atlas_width, atlas_height;
@@ -111,10 +116,43 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         .height = (uint32_t)atlas_height,
         .depth = 1,
     };
-    ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    auto staging_buffer = api.create_buffer(atlas_width * atlas_height * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    std::memcpy(staging_buffer.alloc_info.pMappedData, pixels, atlas_width * atlas_height * sizeof(uint32_t));
+
+    ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
     io.Fonts->SetTexID((void*)&ui_texture);
-    
-    // std::memcpy(ui_texture.alloc_info.pMappedData, pixels, atlas_width * atlas_height * sizeof(uint8_t));
+
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
+
+    auto cmd_buf = command_buffers[frame_index];
+    api.start_record(cmd_buf);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
+
+    VkImageSubresourceLayers image_subresource_layers   = {};
+    image_subresource_layers.aspectMask                 = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_subresource_layers.mipLevel                   = 0;
+    image_subresource_layers.baseArrayLayer             = 0;
+    image_subresource_layers.layerCount                 = 1;
+
+    VkBufferImageCopy buffer_to_image_copy  = {};
+    buffer_to_image_copy.bufferOffset       = 0;
+    buffer_to_image_copy.bufferRowLength    = 0;
+    buffer_to_image_copy.bufferImageHeight  = 0;
+    buffer_to_image_copy.imageSubresource   = image_subresource_layers;
+    buffer_to_image_copy.imageOffset        = { 0, 0, 0 };
+    buffer_to_image_copy.imageExtent        = atlas_size;
+
+    vkCmdCopyBufferToImage(cmd_buf, staging_buffer.handle, ui_texture.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, ui_texture);
+
+    api.end_record(cmd_buf);
+
+    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[frame_index]);
+
+    frame_index++;
 
     VkSamplerCreateInfo sampler_create_info     = {};
     sampler_create_info.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -138,9 +176,9 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     VkSampler sampler;
     VKRESULT(vkCreateSampler(api.context.device, &sampler_create_info, VK_NULL_HANDLE, &sampler))
 
-    // for (size_t index = 0; index < swapchain.image_count; index++) {
-    //     api.update_descriptor_set_image(ui_sets[index], ui_sets_bindings[1], ui_texture.view, sampler);
-    // }
+    for (size_t index = 0; index < swapchain.image_count; index++) {
+        api.update_descriptor_set_image(ui_sets[index], ui_sets_bindings[1], ui_texture.view, sampler);
+    }
 
     ui_vertex_buffers.resize(swapchain.image_count);
     ui_index_buffers.resize(swapchain.image_count);
@@ -201,23 +239,33 @@ void vkrenderer::begin_frame() {
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
 
-    std::vector<Buffer> temp_vertex_buffers {};
-    std::vector<Buffer> temp_index_buffers {};
+    if (ui_vertex_buffers[frame_index].size() == 0) {
+        std::vector<Buffer> temp_vertex_buffers {};
+        std::vector<Buffer> temp_index_buffers {};
 
-    // Update descriptor with only the part of the buffer we are interested in
-    for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
-        ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
-        auto vbuf = draw_list->VtxBuffer;
-        auto ibuf = draw_list->IdxBuffer;
+        // Update descriptor with only the part of the buffer we are interested in
+        for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
+            ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
+            auto vbuf = draw_list->VtxBuffer;
+            auto ibuf = draw_list->IdxBuffer;
 
-        auto vk_vtx_buf = api.create_buffer(vbuf.Size * sizeof(vbuf.Data[0]), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        std::memcpy(vk_vtx_buf.alloc_info.pMappedData, vbuf.Data, vbuf.Size * sizeof(vbuf.Data[0]));
+            std::vector<VkVertex> vertices;
 
-        auto vk_idx_buf = api.create_buffer(ibuf.Size * sizeof(ibuf.Data[0]), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        std::memcpy(vk_idx_buf.alloc_info.pMappedData, ibuf.Data, ibuf.Size * sizeof(ibuf.Data[0]));
+            for (auto& imVertex: vbuf) {
+                vertices.push_back(*((VkVertex*)&imVertex));
+            }
 
-        temp_vertex_buffers.push_back(vk_vtx_buf);
-        temp_index_buffers.push_back(vk_idx_buf);
+            auto vk_vtx_buf = api.create_buffer(vertices.size() * sizeof(VkVertex), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            std::memcpy(vk_vtx_buf.alloc_info.pMappedData, vertices.data(), vertices.size() * sizeof(VkVertex));
+
+            auto vk_idx_buf = api.create_buffer(ibuf.Size * sizeof(ImDrawIdx), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            std::memcpy(vk_idx_buf.alloc_info.pMappedData, ibuf.Data, ibuf.Size * sizeof(ImDrawIdx));
+
+            ui_vertex_buffers[frame_index].push_back(vk_vtx_buf);
+            ui_index_buffers[frame_index].push_back(vk_idx_buf);
+            // temp_vertex_buffers.push_back(vk_vtx_buf);
+            // temp_index_buffers.push_back(vk_idx_buf);
+        }
     }
 
 
@@ -232,11 +280,11 @@ void vkrenderer::begin_frame() {
     //     api.destroy_buffer(index_buffer);
     // }
 
-    ui_vertex_buffers[frame_index].clear();
-    ui_index_buffers[frame_index].clear();
+    // ui_vertex_buffers[frame_index].clear();
+    // ui_index_buffers[frame_index].clear();
 
-    ui_vertex_buffers[frame_index] = std::move(temp_vertex_buffers);
-    ui_index_buffers[frame_index] = std::move(temp_index_buffers);
+    // ui_vertex_buffers[frame_index] = std::move(temp_vertex_buffers);
+    // ui_index_buffers[frame_index] = std::move(temp_index_buffers);
 
     swapchain_image_index = 0;
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &swapchain_image_index);
