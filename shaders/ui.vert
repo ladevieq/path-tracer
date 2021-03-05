@@ -1,7 +1,8 @@
 struct Vertex {
     vec2    pos;
     vec2    uv;
-    vec4    color;
+    uint    color;
+    uint    padding;
 };
 
 layout(set = 0, binding = 0) uniform Vertices {
@@ -20,7 +21,7 @@ layout(location = 0) out struct {
 void main() {
     Vertex v = vertices[gl_VertexIndex];
 
-    Out.color = v.color;
+    Out.color = unpackUnorm4x8(v.color);
     Out.uv = v.uv;
 
     gl_Position = vec4(v.pos, 0.0, 1.0);
