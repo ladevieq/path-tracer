@@ -2,6 +2,8 @@
 #include <cstring>
 #include <cassert>
 
+#include <functional>
+
 #include "imgui.h"
 #include "vk-renderer.hpp"
 #include "thirdparty/vk_mem_alloc.h"
@@ -355,7 +357,7 @@ void vkrenderer::recreate_swapchain() {
         platform_surface,
         min_swapchain_image_count,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        std::optional<std::reference_wrapper<Swapchain>> { swapchain }
+        std::optional<std::reference_wrapper<Swapchain>> { std::ref(swapchain) }
     );
 
     api.destroy_images(accumulation_images);

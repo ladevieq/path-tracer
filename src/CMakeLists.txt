@@ -7,6 +7,8 @@ if(UNIX)
     include_directories(${X11_xcb_INCLUDE_PATH})
 endif()
 
+set(LIBRARIES imgui::imgui)
+
 add_executable(
     path-tracer
     main.cpp
@@ -22,10 +24,8 @@ add_executable(
     window.cpp
 )
 
-target_link_libraries(path-tracer PRIVATE imgui::imgui)
-
 if(UNIX)
-    target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xcb_LIB})
-    target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xkbcommon_LIB})
-    target_link_libraries(path-tracer ${CMAKE_DL_LIBS} ${X11_xkbcommon_X11_LIB})
+    list(APPEND LIBRARIES ${CMAKE_DL_LIBS} ${X11_xcb_LIB} ${X11_xkbcommon_LIB} ${X11_xkbcommon_X11_LIB})
 endif()
+
+target_link_libraries(path-tracer PRIVATE ${LIBRARIES})
