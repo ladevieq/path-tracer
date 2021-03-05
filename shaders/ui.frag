@@ -5,8 +5,8 @@ layout(location = 0) in struct {
     vec4 color;
 } In;
 
-// layout(set = 0, binding = 1) uniform sampler2D atlas;
+layout(set = 0, binding = 1) uniform sampler2D atlas;
 
 void main() {
-    o_Color = In.color; // * texture(atlas, In.uv.xy);
+    o_Color = In.color * texture(atlas, In.uv.xy);
 }
