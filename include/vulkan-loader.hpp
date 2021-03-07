@@ -82,6 +82,8 @@
     X(vkCmdBindVertexBuffers)         \
     X(vkCmdBindIndexBuffer)           \
     X(vkCmdBindDescriptorSets)        \
+    X(vkCmdSetViewport)               \
+    X(vkCmdSetScissor)                \
     X(vkCmdCopyBuffer)                \
     X(vkCmdCopyImage)                 \
     X(vkCmdBlitImage)                 \

@@ -11,6 +11,7 @@ struct Buffer {
     VmaAllocation       alloc;
     VmaAllocationInfo   alloc_info;
     VkBuffer            handle;
+    size_t              size;
 };
 
 struct Pipeline {
@@ -82,7 +83,7 @@ class vkapi {
 
 
         Pipeline create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings);
-        Pipeline create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass);
+        Pipeline create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states);
         void destroy_pipeline(Pipeline &pipeline);
 
 

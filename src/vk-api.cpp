@@ -65,14 +65,16 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = mem_usage;
     alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-     
+
     VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, &buffer.alloc_info))
+
+    buffer.size = data_size;
 
     return std::move(buffer);
 }
 
 void vkapi::destroy_buffer(Buffer& buffer) {
-    vmaUnmapMemory(context.allocator, buffer.alloc);
+    // vmaUnmapMemory(context.allocator, buffer.alloc);
     vmaDestroyBuffer(context.allocator, buffer.handle, buffer.alloc);
 }
 
@@ -407,7 +409,7 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
     return std::move(pipeline);
 }
 
-Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass) {
+Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states) {
     Pipeline pipeline;
 
     std::vector<VkPipelineShaderStageCreateInfo> stages_create_info = {};
@@ -478,32 +480,36 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     input_assembly_state_create_info.flags                                  = 0;
     input_assembly_state_create_info.topology                               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {};
-    viewport.x          = 0.f;
-    viewport.y          = 0.f;
-    viewport.width      = 384.f;
-    viewport.height     = 186.f;
-    viewport.minDepth   = 0.f;
-    viewport.maxDepth   = 1.f;
+    // VkViewport viewport = {};
+    // viewport.x          = 0.f;
+    // viewport.y          = 0.f;
+    // viewport.width      = 384.f;
+    // viewport.height     = 186.f;
+    // viewport.minDepth   = 0.f;
+    // viewport.maxDepth   = 1.f;
 
-    VkRect2D scissor    = {};
-    scissor.offset      = {
-        0,
-        0,
-    };
-    scissor.extent      = {
-        384,
-        186,
-    };
+    // VkRect2D scissor    = {};
+    // scissor.offset      = {
+    //     0,
+    //     0,
+    // };
+    // scissor.extent      = {
+    //     384,
+    //     186,
+    // };
 
     VkPipelineViewportStateCreateInfo viewport_state_create_info            = {};
     viewport_state_create_info.sType                                        = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state_create_info.pNext                                        = nullptr;
     viewport_state_create_info.flags                                        = 0;
     viewport_state_create_info.viewportCount                                = 1;
-    viewport_state_create_info.pViewports                                   = &viewport;
+    viewport_state_create_info.pViewports                                   = VK_NULL_HANDLE;
     viewport_state_create_info.scissorCount                                 = 1;
-    viewport_state_create_info.pScissors                                    = &scissor;
+    viewport_state_create_info.pScissors                                    = VK_NULL_HANDLE;
+    // viewport_state_create_info.viewportCount                                = 1;
+    // viewport_state_create_info.pViewports                                   = &viewport;
+    // viewport_state_create_info.scissorCount                                 = 1;
+    // viewport_state_create_info.pScissors                                    = &scissor;
 
     VkPipelineRasterizationStateCreateInfo rasterization_state_create_info  = {};
     rasterization_state_create_info.sType                                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -543,6 +549,12 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     color_blend_state_create_info.attachmentCount                           = 1;
     color_blend_state_create_info.pAttachments                              = &color_attachment_state;
 
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info              = {};
+    dynamic_state_create_info.sType                                         = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_create_info.pNext                                         = VK_NULL_HANDLE;
+    dynamic_state_create_info.flags                                         = 0;
+    dynamic_state_create_info.dynamicStateCount                             = dynamic_states.size();
+    dynamic_state_create_info.pDynamicStates                                = dynamic_states.data();
 
     VkGraphicsPipelineCreateInfo pipeline_create_info                       = {};
     pipeline_create_info.sType                                              = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -556,6 +568,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     pipeline_create_info.pRasterizationState                                = &rasterization_state_create_info;
     pipeline_create_info.pMultisampleState                                  = &multisample_state_create_info;
     pipeline_create_info.pColorBlendState                                   = &color_blend_state_create_info;
+    pipeline_create_info.pDynamicState                                      = &dynamic_state_create_info;
     pipeline_create_info.layout                                             = pipeline.layout;
     pipeline_create_info.renderPass                                         = render_pass;
     pipeline_create_info.subpass                                            = 0;

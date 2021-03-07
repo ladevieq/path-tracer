@@ -47,8 +47,9 @@ class vkrenderer {
         Pipeline                        compute_pipeline;
 
         std::vector<VkDescriptorSetLayoutBinding> ui_sets_bindings;
-        std::vector<std::vector<Buffer>>ui_vertex_buffers;
-        std::vector<std::vector<Buffer>>ui_index_buffers;
+        std::vector<Buffer>             ui_transforms_buffers;
+        std::vector<Buffer>             ui_vertex_buffers;
+        std::vector<Buffer>             ui_index_buffers;
         std::vector<VkDescriptorSet>    ui_sets;
         Pipeline                        ui_pipeline;
         VkRenderPass                    render_pass;

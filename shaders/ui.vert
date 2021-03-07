@@ -8,6 +8,11 @@ layout(set = 0, binding = 0) uniform Vertices {
     Vertex vertices[158];
 };
 
+layout(set = 0, binding = 1) uniform UiTransforms {
+    vec2 scale;
+    vec2 translate;
+};
+
 out gl_PerVertex {
     vec4 gl_Position;
 };
@@ -17,8 +22,6 @@ layout(location = 0) out struct {
     vec4 color;
 } Out;
 
-const vec2 scale = vec2(2.0 / 384.0, 2.0 / 186.0);
-const vec2 translate = vec2(-1.0, -1.0);
 
 void main() {
     Vertex v = vertices[gl_VertexIndex];
