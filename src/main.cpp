@@ -5,6 +5,7 @@
 #include <cassert>
 
 #include "thirdparty/renderdoc.h"
+#include "imgui.h"
 
 #include "vk-renderer.hpp"
 #include "window.hpp"
@@ -65,6 +66,8 @@ int main() {
 
         start = std::chrono::high_resolution_clock::now();
 
+        ImGuiIO& io = ImGui::GetIO();
+
         wnd.poll_events();
 
         for (auto event: wnd.events) {
@@ -72,8 +75,12 @@ int main() {
                 case EVENT_TYPES::RESIZE: {
                     width = event.width;
                     height = event.height;
+
                     ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->width = width;
                     ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->height = height;
+
+                    io.DisplaySize.x = (float)width;
+                    io.DisplaySize.y = (float)height;
 
                     if (event.width == 0 && event.height == 0) {
                         canRender = false;
@@ -128,6 +135,14 @@ int main() {
         }
 
         wnd.events.clear();
+
+
+        ImGui::NewFrame();
+
+        ImGui::ShowDemoWindow();
+
+        ImGui::EndFrame();
+
 
         // To start a frame capture, call StartFrameCapture.
         // You can specify NULL, NULL for the device to capture on if you have only one device and
