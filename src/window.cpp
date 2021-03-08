@@ -335,7 +335,7 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
             events.push_back({ 
                 .x = GET_X_LPARAM(lparam),
                 .y = GET_Y_LPARAM(lparam),
-                .type = EVENT_TYPES::MOVE,
+                .type = EVENT_TYPES::MOUSE_MOVE,
             });
             break;
         }

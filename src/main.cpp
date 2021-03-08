@@ -67,6 +67,7 @@ int main() {
         start = std::chrono::high_resolution_clock::now();
 
         ImGuiIO& io = ImGui::GetIO();
+        io.DeltaTime = delta_time;
 
         wnd.poll_events();
 
@@ -127,6 +128,31 @@ int main() {
                         ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
                     }
 
+                    break;
+                }
+                case EVENT_TYPES::BUTTON_PRESS: {
+                    if (event.button == BUTTONS::LEFT) {
+                        io.MouseDown[0] = true;
+                    }
+                    if (event.button == BUTTONS::RIGHT) {
+                        io.MouseDown[1] = true;
+                    }
+                    break;
+                }
+                case EVENT_TYPES::BUTTON_RELEASE: {
+                    if (event.button == BUTTONS::LEFT) {
+                        io.MouseDown[0] = false;
+                    }
+                    if (event.button == BUTTONS::RIGHT) {
+                        io.MouseDown[1] = false;
+                    }
+                    break;
+                }
+                case EVENT_TYPES::MOUSE_MOVE: {
+                    io.MousePos = ImVec2 {
+                        (float)event.x,
+                        (float)event.y
+                    };
                     break;
                 }
                 default:

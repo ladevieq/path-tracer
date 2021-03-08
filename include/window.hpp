@@ -120,7 +120,7 @@ enum EVENT_TYPES: int32_t {
     KEY_RELEASE,
     BUTTON_PRESS,
     BUTTON_RELEASE,
-    MOVE
+    MOUSE_MOVE
 };
 
 struct event {

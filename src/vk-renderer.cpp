@@ -139,7 +139,6 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
     io.Fonts->SetTexID((void*)&ui_texture);
 
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
     auto cmd_buf = command_buffers[frame_index];
@@ -167,12 +166,12 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 
     api.end_record(cmd_buf);
 
+
     api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[frame_index]);
 
-    // VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
-    // VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
 
-    // api.destroy_buffer(staging_buffer);
+    api.destroy_buffer(staging_buffer);
 
     frame_index++;
 
@@ -195,11 +194,10 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     sampler_create_info.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
     sampler_create_info.unnormalizedCoordinates = VK_FALSE;
 
-    VkSampler sampler;
-    VKRESULT(vkCreateSampler(api.context.device, &sampler_create_info, VK_NULL_HANDLE, &sampler))
+    VKRESULT(vkCreateSampler(api.context.device, &sampler_create_info, VK_NULL_HANDLE, &ui_texture_sampler))
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
-        api.update_descriptor_set_image(ui_sets[index], ui_sets_bindings[2], ui_texture.view, sampler);
+        api.update_descriptor_set_image(ui_sets[index], ui_sets_bindings[2], ui_texture.view, ui_texture_sampler);
     }
 
     ui_vertex_buffers.resize(swapchain.image_count);
@@ -223,6 +221,8 @@ vkrenderer::~vkrenderer() {
     api.destroy_images(accumulation_images);
 
     api.destroy_render_pass(render_pass);
+
+    vkDestroySampler(api.context.device, ui_texture_sampler, VK_NULL_HANDLE);
 
     api.destroy_image(ui_texture);
 
@@ -254,6 +254,14 @@ void vkrenderer::begin_frame() {
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
 
+    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->scale_x = 2.f / draw_data->DisplaySize.x;
+    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->scale_y = 2.f / draw_data->DisplaySize.y;
+    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->translate_x = -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x);
+    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->translate_y = -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y);
+
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
+
     // Update descriptor with only the part of the buffer we are interested in
     if (ui_vertex_buffers[frame_index].size < draw_data->TotalVtxCount * sizeof(VkVertex)) {
         api.destroy_buffer(ui_vertex_buffers[frame_index]);
@@ -266,11 +274,6 @@ void vkrenderer::begin_frame() {
 
         ui_index_buffers[frame_index] = api.create_buffer(draw_data->TotalIdxCount * sizeof(ImDrawIdx), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
-
-    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->scale_x = 2.f / draw_data->DisplaySize.x;
-    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->scale_y = 2.f / draw_data->DisplaySize.y;
-    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->translate_x = -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x);
-    ((UiTransforms*)ui_transforms_buffers[frame_index].alloc_info.pMappedData)->translate_y = -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y);
 
     off_t vertex_buffer_offset = 0;
     off_t index_buffer_offset = 0;
@@ -289,10 +292,6 @@ void vkrenderer::begin_frame() {
         vertex_buffer_offset += vertex_buffer.Size;
         index_buffer_offset += index_buffer.Size;
     }
-
-
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
-    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
     swapchain_image_index = 0;
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[frame_index], VK_NULL_HANDLE, &swapchain_image_index);
