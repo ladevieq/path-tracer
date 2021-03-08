@@ -175,26 +175,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 
     frame_index++;
 
-    VkSamplerCreateInfo sampler_create_info     = {};
-    sampler_create_info.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_create_info.pNext                   = VK_NULL_HANDLE;
-    sampler_create_info.flags                   = 0;
-    sampler_create_info.magFilter               = VK_FILTER_LINEAR;
-    sampler_create_info.minFilter               = VK_FILTER_LINEAR;
-    sampler_create_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    sampler_create_info.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_create_info.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_create_info.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_create_info.mipLodBias              = 0.f;
-    sampler_create_info.anisotropyEnable        = VK_FALSE;
-    sampler_create_info.compareEnable           = VK_FALSE;
-    sampler_create_info.compareOp               = VK_COMPARE_OP_ALWAYS;
-    sampler_create_info.minLod                  = 0.f;
-    sampler_create_info.maxLod                  = 0.f;
-    sampler_create_info.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-    sampler_create_info.unnormalizedCoordinates = VK_FALSE;
-
-    VKRESULT(vkCreateSampler(api.context.device, &sampler_create_info, VK_NULL_HANDLE, &ui_texture_sampler))
+    ui_texture_sampler = api.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
         api.update_descriptor_set_image(ui_sets[index], ui_sets_bindings[2], ui_texture.view, ui_texture_sampler);
@@ -222,7 +203,7 @@ vkrenderer::~vkrenderer() {
 
     api.destroy_render_pass(render_pass);
 
-    vkDestroySampler(api.context.device, ui_texture_sampler, VK_NULL_HANDLE);
+    api.destroy_sampler(ui_texture_sampler);
 
     api.destroy_image(ui_texture);
 
@@ -262,7 +243,6 @@ void vkrenderer::begin_frame() {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[frame_index]))
 
-    // Update descriptor with only the part of the buffer we are interested in
     if (ui_vertex_buffers[frame_index].size < draw_data->TotalVtxCount * sizeof(VkVertex)) {
         api.destroy_buffer(ui_vertex_buffers[frame_index]);
 
@@ -314,34 +294,7 @@ void vkrenderer::ui() {
 
     auto cmd_buf = command_buffers[frame_index];
 
-    VkRect2D render_area = {
-        {
-            0,
-            0,
-        },
-        swapchain.extent
-    };
-    VkClearValue clear_value = { 0.f, 0.f, 0.f, 1.f };
-    VkRenderPassBeginInfo render_pass_begin_info    = {};
-    render_pass_begin_info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_begin_info.pNext                    = VK_NULL_HANDLE;
-    render_pass_begin_info.renderPass               = render_pass;
-    render_pass_begin_info.framebuffer              = framebuffers[swapchain_image_index];
-    render_pass_begin_info.renderArea               = render_area;
-    render_pass_begin_info.clearValueCount          = 1;
-    render_pass_begin_info.pClearValues             = &clear_value;
-
-
-    VkMemoryBarrier memory_barrier  = {};
-    memory_barrier.sType            = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    memory_barrier.pNext            = VK_NULL_HANDLE;
-    memory_barrier.srcAccessMask    = VK_ACCESS_MEMORY_WRITE_BIT;
-    memory_barrier.dstAccessMask    = VK_ACCESS_INDEX_READ_BIT;
-
-
-    vkCmdBeginRenderPass(cmd_buf, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline.handle);
+    api.begin_render_pass(cmd_buf, render_pass, framebuffers[swapchain_image_index], swapchain.extent, ui_pipeline);
 
     VkViewport viewport = {};
     viewport.x          = draw_data->DisplayPos.x;
@@ -358,9 +311,6 @@ void vkrenderer::ui() {
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
         ImDrawList* draw_list = draw_data->CmdLists[cmd_index];
 
-        vkCmdBindIndexBuffer(cmd_buf, ui_index_buffers[frame_index].handle, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_pipeline.layout, 0, 1, &ui_sets[frame_index], 0, VK_NULL_HANDLE);
-
         for (auto& draw_cmd: draw_list->CmdBuffer) {
             VkRect2D rect   = {};
             rect.offset     = {
@@ -373,14 +323,14 @@ void vkrenderer::ui() {
             };
             vkCmdSetScissor(cmd_buf, 0, 1, &rect);
 
-            vkCmdDrawIndexed(cmd_buf, draw_cmd.ElemCount, 1, index_buffer_offset + draw_cmd.IdxOffset, vertex_buffer_offset + draw_cmd.VtxOffset, 0);
+            api.draw(cmd_buf, ui_pipeline, ui_sets[frame_index], ui_index_buffers[frame_index], draw_cmd.ElemCount, index_buffer_offset + draw_cmd.IdxOffset, vertex_buffer_offset + draw_cmd.VtxOffset);
         }
 
         vertex_buffer_offset += draw_list->VtxBuffer.Size;
         index_buffer_offset += draw_list->IdxBuffer.Size;
     }
 
-    vkCmdEndRenderPass(cmd_buf);
+    api.end_render_pass(cmd_buf);
 }
 
 void vkrenderer::compute(uint32_t width, uint32_t height, bool clear) {

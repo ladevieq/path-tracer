@@ -219,6 +219,37 @@ void vkapi::destroy_semaphores(std::vector<VkSemaphore> &semaphores) {
 }
 
 
+VkSampler vkapi::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode) {
+    VkSamplerCreateInfo sampler_create_info     = {};
+    sampler_create_info.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_create_info.pNext                   = VK_NULL_HANDLE;
+    sampler_create_info.flags                   = 0;
+    sampler_create_info.magFilter               = filter;
+    sampler_create_info.minFilter               = filter;
+    sampler_create_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    sampler_create_info.addressModeU            = address_mode;
+    sampler_create_info.addressModeV            = address_mode;
+    sampler_create_info.addressModeW            = address_mode;
+    sampler_create_info.mipLodBias              = 0.f;
+    sampler_create_info.anisotropyEnable        = VK_FALSE;
+    sampler_create_info.compareEnable           = VK_FALSE;
+    sampler_create_info.compareOp               = VK_COMPARE_OP_ALWAYS;
+    sampler_create_info.minLod                  = 0.f;
+    sampler_create_info.maxLod                  = 0.f;
+    sampler_create_info.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    sampler_create_info.unnormalizedCoordinates = VK_FALSE;
+
+    VkSampler sampler;
+    VKRESULT(vkCreateSampler(context.device, &sampler_create_info, VK_NULL_HANDLE, &sampler))
+
+    return sampler;
+}
+
+void vkapi::destroy_sampler(VkSampler sampler) {
+    vkDestroySampler(context.device, sampler, VK_NULL_HANDLE);
+}
+
+
 std::vector<VkCommandBuffer> vkapi::create_command_buffers(size_t command_buffers_count) {
     VkCommandBufferAllocateInfo cmd_buf_allocate_info   = {};
     cmd_buf_allocate_info.sType                         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -845,12 +876,55 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layo
     );
 }
 
+
+void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, Pipeline pipeline) {
+    VkRect2D render_area = {
+        {
+            0,
+            0,
+        },
+        size
+    };
+
+    VkClearValue clear_value = { 0.f, 0.f, 0.f, 1.f };
+    VkRenderPassBeginInfo render_pass_begin_info    = {};
+    render_pass_begin_info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_begin_info.pNext                    = VK_NULL_HANDLE;
+    render_pass_begin_info.renderPass               = render_pass;
+    render_pass_begin_info.framebuffer              = framebuffer;
+    render_pass_begin_info.renderArea               = render_area;
+    render_pass_begin_info.clearValueCount          = 1;
+    render_pass_begin_info.pClearValues             = &clear_value;
+
+    vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+}
+
+void vkapi::end_render_pass(VkCommandBuffer command_buffer) {
+    vkCmdEndRenderPass(command_buffer);
+}
+
+
 void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.layout, 0, 1, &set, 0, nullptr);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle);
 
     vkCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
+}
+
+void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, uint32_t vertex_count, uint32_t vertex_offset) {
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &set, 0, nullptr);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+
+    vkCmdDraw(command_buffer, vertex_count, 1, vertex_offset, 0);
+}
+
+void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, Buffer index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
+    vkCmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &set, 0, nullptr);
+
+    vkCmdDrawIndexed(command_buffer, index_count, 1, index_offset, vertex_offset, 0);
 }
 
 void vkapi::blit_full(VkCommandBuffer command_buffer, Image src_image, Image dst_image) {
