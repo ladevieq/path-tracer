@@ -68,13 +68,18 @@ class vkapi {
         std::vector<VkSemaphore> create_semaphores(size_t semaphores_count);
         void destroy_semaphores(std::vector<VkSemaphore> &semaphores);
 
+        VkSampler create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
+        void destroy_sampler(VkSampler sampler);
+
 
         std::vector<VkCommandBuffer> create_command_buffers(size_t command_buffers_count);
         void destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers);
 
+
         VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format);
         VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format, VkFormat depth_attachement_format);
         void destroy_render_pass(VkRenderPass render_pass);
+
 
         VkFramebuffer create_framebuffer(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size);
         std::vector<VkFramebuffer> create_framebuffers(VkRenderPass render_pass, std::vector<Image>& images, VkExtent2D size, uint32_t framebuffer_count);
@@ -107,7 +112,13 @@ class vkapi {
 
         void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, Image image);
 
+        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, Pipeline pipeline);
+        void end_render_pass(VkCommandBuffer command_buffer);
+
         void run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+
+        void draw(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, uint32_t vertex_count, uint32_t vertex_offset);
+        void draw(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, Buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
 
         void blit_full(VkCommandBuffer command_buffer, Image src_image, Image dst_image);
 
