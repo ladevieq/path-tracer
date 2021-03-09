@@ -47,7 +47,7 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 25;
+    const uint32_t samples_per_pixel = 100;
 
     window wnd { width , height };
 
