@@ -19,7 +19,7 @@ class vkrenderer {
 
         void ui();
 
-        void compute(uint32_t width, uint32_t height, bool clear);
+        void compute(uint32_t width, uint32_t height, bool clear, bool render_sample);
 
         void finish_frame();
 
