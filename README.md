@@ -12,5 +12,6 @@ Rewritten using Vulkan API compute shaders to make it lighting fast.
 * [x] Support Windows
 * [x] Realtime progressive rendering (accumalate samples)
 * [x] Camera controller
+* [x] GUI interface
 * [ ] Add material types
 * [ ] Triangulated meshes rendering (Vulkan raytracing pipeline)
