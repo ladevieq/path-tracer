@@ -229,5 +229,5 @@ void main() {
 
     float spp_scale = (1.0 / samples_per_pixel);
     vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));
-    imageStore(output_image, ivec2(x, y), mix(out_color, acc_color, spp_scale));
+    imageStore(output_image, ivec2(x, y), acc_color + out_color * spp_scale);
 }
