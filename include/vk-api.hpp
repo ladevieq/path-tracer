@@ -19,6 +19,7 @@ struct Pipeline {
     VkDescriptorSetLayout       descriptor_set_layout;
     VkPipelineLayout            layout;
     VkPipeline                  handle;
+    VkPipelineBindPoint         bind_point;
 };
 
 struct Image {
@@ -76,7 +77,7 @@ class vkapi {
         void destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers);
 
 
-        VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format);
+        VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format, VkImageLayout initial_layout, VkImageLayout final_layout);
         VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format, VkFormat depth_attachement_format);
         void destroy_render_pass(VkRenderPass render_pass);
 

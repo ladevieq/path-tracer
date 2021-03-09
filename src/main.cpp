@@ -178,14 +178,17 @@ int main() {
 
         if (canRender) {
             renderer.begin_frame();
+
+            if (((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index < samples_per_pixel) {
+                bool clear = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index == 0;
+                renderer.compute(width, height, clear, true);
+
+                ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
+            } else {
+                renderer.compute(width, height, false, false);
+            }
+
             renderer.ui();
-
-            // if (((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index < samples_per_pixel) {
-            //     bool clear = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index == 0;
-            //     renderer.compute(width, height, clear);
-
-            //     ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
-            // }
 
             renderer.finish_frame();
         }

@@ -270,7 +270,7 @@ void vkapi::destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffer
 
 
 // TODO: attachment structure
-VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_format) {
+VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_format, VkImageLayout initial_layout, VkImageLayout final_layout) {
     std::vector<VkAttachmentDescription> attachments_description        = {};
     std::vector<VkAttachmentReference> attachments_reference            = {};
 
@@ -280,12 +280,12 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
         attachment_description.flags                                    = 0;
         attachment_description.format                                   = format;
         attachment_description.samples                                  = VK_SAMPLE_COUNT_1_BIT;
-        attachment_description.loadOp                                   = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment_description.loadOp                                   = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachment_description.storeOp                                  = VK_ATTACHMENT_STORE_OP_STORE;
         attachment_description.stencilLoadOp                            = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment_description.stencilStoreOp                           = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment_description.initialLayout                            = VK_IMAGE_LAYOUT_UNDEFINED; // TODO: Change this
-        attachment_description.finalLayout                              = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        attachment_description.initialLayout                            = initial_layout;
+        attachment_description.finalLayout                              = final_layout;
 
         attachments_description.push_back(attachment_description);
 
@@ -371,7 +371,9 @@ void vkapi::destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers) {
 
 
 Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings) {
-    Pipeline pipeline;
+    Pipeline pipeline {
+        .bind_point = VK_PIPELINE_BIND_POINT_COMPUTE
+    };
 
     char shader_path[256] = {};
     sprintf(shader_path, "%s%s%s", "./shaders/", shader_name, ".comp.spv");
@@ -441,7 +443,9 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
 }
 
 Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states) {
-    Pipeline pipeline;
+    Pipeline pipeline {
+        .bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS
+    };
 
     std::vector<VkPipelineShaderStageCreateInfo> stages_create_info = {};
 
@@ -897,7 +901,7 @@ void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass rende
     render_pass_begin_info.pClearValues             = &clear_value;
 
     vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+    vkCmdBindPipeline(command_buffer, pipeline.bind_point, pipeline.handle);
 }
 
 void vkapi::end_render_pass(VkCommandBuffer command_buffer) {
