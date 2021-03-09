@@ -10,8 +10,7 @@ Rewritten using Vulkan API compute shaders to make it lighting fast.
 * [x] Vulkan compute shader implementation
 * [x] Viewer window
 * [x] Support Windows
-* [ ] Realtime progressive rendering
-* [ ] Camera controller
+* [x] Realtime progressive rendering (accumalate samples)
+* [x] Camera controller
 * [ ] Add material types
-* [ ] Support GLTF format
 * [ ] Triangulated meshes rendering (Vulkan raytracing pipeline)
