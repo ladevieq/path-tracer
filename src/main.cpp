@@ -47,11 +47,12 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 25;
+    const uint32_t samples_per_pixel = 100;
 
     window wnd { width , height };
 
     float delta_time = 0.f;
+    uint64_t frame_count = 0;
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
     auto inputs = create_inputs(width, height, samples_per_pixel);
@@ -181,7 +182,7 @@ int main() {
 
             renderer.compute(width, height);
 
-            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
+            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = frame_count % 1000;
 
             renderer.ui();
 
@@ -190,6 +191,8 @@ int main() {
 
         // stop the capture
         // if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+
+        frame_count++;
     }
 
     //-------------------------
