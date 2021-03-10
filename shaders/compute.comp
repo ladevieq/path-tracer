@@ -225,7 +225,7 @@ void main() {
     vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
     vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
 
-    ray r = ray(cam.position.xyz, proj_plane_pos.xyz - cam.position.xyz);
+    ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
 
     vec4 out_color = ray_color(r, sample_index);
 
