@@ -47,7 +47,7 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 100;
+    const uint32_t samples_per_pixel = 25;
 
     window wnd { width , height };
 
@@ -179,14 +179,9 @@ int main() {
         if (canRender) {
             renderer.begin_frame();
 
-            if (((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index < samples_per_pixel) {
-                bool clear = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index == 0;
-                renderer.compute(width, height, clear, true);
+            renderer.compute(width, height);
 
-                ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
-            } else {
-                renderer.compute(width, height, false, false);
-            }
+            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
 
             renderer.ui();
 
