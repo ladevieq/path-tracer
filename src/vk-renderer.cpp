@@ -32,7 +32,8 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         platform_surface,
         min_swapchain_image_count,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        VK_IMAGE_USAGE_STORAGE_BIT,
         std::nullopt
     );
 
@@ -62,6 +63,25 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     compute_pipeline = api.create_compute_pipeline("compute", compute_sets_bindings);
     compute_shader_sets = api.create_descriptor_sets(compute_pipeline.descriptor_set_layout, swapchain.image_count);
 
+    tonemapping_sets_bindings = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        }
+    };
+    tonemapping_pipeline = api.create_compute_pipeline("tonemapping", tonemapping_sets_bindings);
+    tonemapping_shader_sets = api.create_descriptor_sets(tonemapping_pipeline.descriptor_set_layout, swapchain.image_count);
+
     command_buffers = api.create_command_buffers(swapchain.image_count);
 
     VkExtent3D image_size = {
@@ -83,7 +103,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     }
 
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
-    render_pass = api.create_render_pass(attachments_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    render_pass = api.create_render_pass(attachments_format, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     for (auto& image : swapchain.images) {
         std::vector<Image> attachments { image };
@@ -145,8 +165,8 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     auto cmd_buf = command_buffers[frame_index];
     api.start_record(cmd_buf);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[0]);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[1]);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[0]);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[1]);
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
 
@@ -202,7 +222,6 @@ vkrenderer::~vkrenderer() {
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);
 
-    api.destroy_descriptor_sets(compute_shader_sets);
     api.destroy_images(accumulation_images);
 
     api.destroy_render_pass(render_pass);
@@ -228,8 +247,14 @@ vkrenderer::~vkrenderer() {
     }
 
     api.destroy_command_buffers(command_buffers);
+
     api.destroy_pipeline(compute_pipeline);
+    api.destroy_pipeline(tonemapping_pipeline);
     api.destroy_pipeline(ui_pipeline);
+
+    api.destroy_descriptor_sets(compute_shader_sets);
+    api.destroy_descriptor_sets(tonemapping_shader_sets);
+    api.destroy_descriptor_sets(ui_sets);
 
     api.destroy_swapchain(swapchain);
     api.destroy_surface(platform_surface);
@@ -289,6 +314,9 @@ void vkrenderer::begin_frame() {
     api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[1], output_image.view, VK_NULL_HANDLE);
     api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[2], accumulation_image.view, VK_NULL_HANDLE);
 
+    api.update_descriptor_set_image(tonemapping_shader_sets[swapchain_image_index], tonemapping_sets_bindings[0], swapchain.images[swapchain_image_index].view, VK_NULL_HANDLE);
+    api.update_descriptor_set_image(tonemapping_shader_sets[swapchain_image_index], tonemapping_sets_bindings[1], output_image.view, VK_NULL_HANDLE);
+
     api.start_record(cmd_buf);
 
 }
@@ -340,18 +368,12 @@ void vkrenderer::ui() {
 void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto cmd_buf = command_buffers[frame_index];
 
-    auto output_image = accumulation_images[0];
-    auto accumulation_image = accumulation_images[1];
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, accumulation_image);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, VK_ACCESS_SHADER_WRITE_BIT, output_image);
-
     api.run_compute_pipeline(cmd_buf, compute_pipeline, compute_shader_sets[swapchain_image_index], width / 8, height / 8, 1);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, output_image);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, swapchain.images[swapchain_image_index]);
 
-    api.blit_full(cmd_buf, output_image, swapchain.images[swapchain_image_index]);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, swapchain.images[swapchain_image_index]);
+
+    api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, tonemapping_shader_sets[swapchain_image_index], width / 8, height / 8, 1);
 }
 
 void vkrenderer::finish_frame() {
@@ -375,7 +397,7 @@ void vkrenderer::recreate_swapchain() {
     swapchain = api.create_swapchain(
         platform_surface,
         min_swapchain_image_count,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
         std::optional<std::reference_wrapper<Swapchain>> { std::ref(swapchain) }
     );
 
@@ -390,8 +412,8 @@ void vkrenderer::recreate_swapchain() {
     auto cmd_buf = command_buffers[frame_index];
     api.start_record(cmd_buf);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[0]);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[1]);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[0]);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[1]);
 
     api.end_record(cmd_buf);
 

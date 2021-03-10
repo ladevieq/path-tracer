@@ -47,6 +47,10 @@ class vkrenderer {
         std::vector<VkDescriptorSet>    compute_shader_sets;
         Pipeline                        compute_pipeline;
 
+        std::vector<VkDescriptorSetLayoutBinding> tonemapping_sets_bindings;
+        std::vector<VkDescriptorSet>    tonemapping_shader_sets;
+        Pipeline                        tonemapping_pipeline;
+
         std::vector<VkDescriptorSetLayoutBinding> ui_sets_bindings;
         std::vector<Buffer>             ui_transforms_buffers;
         std::vector<Buffer>             ui_vertex_buffers;
