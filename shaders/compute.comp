@@ -69,8 +69,8 @@ layout(set = 0, binding = 0) buffer Inputs {
     uint[3] padding;
 };
 
-layout(set = 0, binding = 1, rgba8) uniform writeonly image2D output_image;
-layout(set = 0, binding = 2, rgba8) uniform readonly image2D accumulation_image;
+layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D output_image;
+layout(set = 0, binding = 2, rgba32f) uniform readonly image2D accumulation_image;
 
 vec3 at(ray r, float t) {
     return r.origin + r.direction * t;
@@ -231,5 +231,5 @@ void main() {
 
     float spp_scale = (1.0 / samples_per_pixel);
     vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));
-    imageStore(output_image, ivec2(x, y), mix(acc_color, out_color, spp_scale));
+    imageStore(output_image, ivec2(x, y), vec4(mix(acc_color, out_color, spp_scale)));
 }

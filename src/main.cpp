@@ -47,7 +47,7 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 100;
+    const uint32_t samples_per_pixel = 500;
 
     window wnd { width , height };
 
@@ -56,11 +56,13 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
     auto inputs = create_inputs(width, height, samples_per_pixel);
-    auto canRender = true;
+    auto can_render = true;
     vkrenderer renderer { wnd, inputs };
 
 
     while(wnd.isOpen) {
+        auto reset_accumulation = false;
+
         end = std::chrono::high_resolution_clock::now();
 
         delta_time = std::chrono::duration<float, std::milli>(end - start).count();
@@ -85,13 +87,16 @@ int main() {
                     io.DisplaySize.y = (float)height;
 
                     if (event.width == 0 && event.height == 0) {
-                        canRender = false;
+                        can_render = false;
                     } else {
-                        canRender = true;
+                        can_render = true;
                         renderer.recreate_swapchain();
                         ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.set_aspect_ratio((float)event.width / (float)event.height);
                         ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
                     }
+
+                    reset_accumulation = true;
+
                     break;
                 }
                 case EVENT_TYPES::KEY_PRESS: {
@@ -126,7 +131,7 @@ int main() {
                     ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.move(move_vec);
 
                     if (!move_vec.near_zero()) {
-                        ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
+                        reset_accumulation = true;
                     }
 
                     break;
@@ -177,8 +182,12 @@ int main() {
         // See the documentation below for a longer explanation
         // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-        if (canRender) {
+        if (can_render) {
             renderer.begin_frame();
+
+            if (reset_accumulation) {
+                renderer.reset_accumulation();
+            }
 
             renderer.compute(width, height);
 
