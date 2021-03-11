@@ -17,6 +17,8 @@ class vkrenderer {
 
         void begin_frame();
 
+        void reset_accumulation();
+
         void ui();
 
         void compute(uint32_t width, uint32_t height);

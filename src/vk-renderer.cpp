@@ -321,6 +321,18 @@ void vkrenderer::begin_frame() {
 
 }
 
+void vkrenderer::reset_accumulation() {
+    auto cmd_buf = command_buffers[frame_index];
+    auto accumulation_image = accumulation_images[1];
+    VkClearColorValue clear_color = { 0.f, 0.f, 0.f, 1.f };
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, accumulation_image);
+
+    vkCmdClearColorImage(cmd_buf, accumulation_image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &accumulation_image.subresource_range);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, accumulation_image);
+}
+
 void vkrenderer::ui() {
     ImDrawData* draw_data = ImGui::GetDrawData();
 
@@ -407,7 +419,7 @@ void vkrenderer::recreate_swapchain() {
         .height = swapchain.extent.height,
         .depth = 1,
     };
-    accumulation_images = api.create_images(image_size, swapchain.surface_format.format, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
+    accumulation_images = api.create_images(image_size, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
 
     auto cmd_buf = command_buffers[frame_index];
     api.start_record(cmd_buf);
