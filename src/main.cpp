@@ -19,6 +19,23 @@
 #include <Windows.h>
 #endif
 
+void gui(input_data* mapped_input_data, bool &reset_accumulation) {
+    ImGui::NewFrame();
+
+    ImGui::SetNextWindowPos({ 0.f, 0.f });
+    ImGui::SetNextWindowSize({ 0.f, 0.f });
+    ImGui::Begin("Debug", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
+
+    if (ImGui::SliderInt("samples per pixel", (int32_t*)&mapped_input_data->samples_per_pixel, 1, 1000)) {
+        reset_accumulation = true;
+    }
+
+    ImGui::SliderInt("bounces", (int32_t*)&mapped_input_data->max_bounce, 2, 250);
+
+    ImGui::End();
+
+    ImGui::EndFrame();
+}
 
 int main() {
     RENDERDOC_API_1_1_2 *rdoc_api = NULL;
@@ -168,13 +185,7 @@ int main() {
 
         wnd.events.clear();
 
-
-        ImGui::NewFrame();
-
-        ImGui::ShowDemoWindow();
-
-        ImGui::EndFrame();
-
+        gui((input_data*)renderer.compute_shader_buffer.alloc_info.pMappedData, reset_accumulation);
 
         // To start a frame capture, call StartFrameCapture.
         // You can specify NULL, NULL for the device to capture on if you have only one device and
