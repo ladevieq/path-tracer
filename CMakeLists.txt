@@ -15,7 +15,7 @@ project(path-tracer VERSION 1.0 LANGUAGES CXX)
 find_package(imgui CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 
-if(UNIX)
+if(${CMAKE_SYSTEM_NAME} EQUAL "Linux")
     find_package(X11 REQUIRED)
 endif()
 

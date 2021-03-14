@@ -666,6 +666,14 @@ VkSurfaceKHR vkapi::create_surface(window& wnd) {
     create_info.hwnd                        = wnd.win_handle;
 
     VKRESULT(vkCreateWin32SurfaceKHR(context.instance, &create_info, nullptr, &surface))
+#elif defined(MACOS)
+    VkMetalSurfaceCreateInfoEXT create_info = {};
+    create_info.sType                       = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+    create_info.pNext                       = nullptr;
+    create_info.flags                       = 0;
+    // create_info.pLayer                   =   GetModuleHandle(NULL);
+
+    VKRESULT(vkCreateMetalSurfaceEXT(context.instance, &create_info, nullptr, &surface))
 #endif
 
     return surface;
@@ -676,7 +684,7 @@ void vkapi::destroy_surface(VkSurfaceKHR surface) {
 }
 
 
-Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, std::optional<std::reference_wrapper<Swapchain>> old_swapchain) {
+Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain) {
     Swapchain swapchain;
     VkBool32 queue_support_presentation = VK_FALSE;
     VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.queue_index, surface, &queue_support_presentation))
@@ -713,7 +721,6 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, surface, &supported_present_modes_count, supported_present_modes.data()))
 
     swapchain.surface_format = supported_formats[0];
-    VkSwapchainKHR old_swapchain_handle = (old_swapchain != std::nullopt) ? old_swapchain.value().get().handle : VK_NULL_HANDLE;
 
     VkSwapchainCreateInfoKHR create_info    = {};
     create_info.sType                       = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -731,13 +738,9 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
     create_info.clipped                     = VK_TRUE;
-    create_info.oldSwapchain                = old_swapchain_handle;
+    create_info.oldSwapchain                = old_swapchain;
 
     VKRESULT(vkCreateSwapchainKHR(context.device, &create_info, nullptr, &swapchain.handle))
-
-    if (old_swapchain != std::nullopt) {
-        destroy_swapchain(old_swapchain.value());
-    }
 
     uint32_t image_count = 0;
     VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, &image_count, VK_NULL_HANDLE))

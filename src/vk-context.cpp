@@ -54,6 +54,8 @@ void vkcontext::create_instance() {
         "VK_KHR_xcb_surface"
 #elif defined(WINDOWS)
         "VK_KHR_win32_surface"
+#elif defined(MACOS)
+        "VK_EXT_metal_surface"
 #endif
     };
 

@@ -2,8 +2,6 @@
 #include <cstring>
 #include <cassert>
 
-#include <functional>
-
 #include "imgui.h"
 #include "vk-renderer.hpp"
 #include "thirdparty/vk_mem_alloc.h"
@@ -34,7 +32,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_TRANSFER_DST_BIT |
         VK_IMAGE_USAGE_STORAGE_BIT,
-        std::nullopt
+        VK_NULL_HANDLE
     );
 
     compute_sets_bindings = {
@@ -406,12 +404,15 @@ void vkrenderer::finish_frame() {
 void vkrenderer::recreate_swapchain() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
+    Swapchain old_swapchain = swapchain;
     swapchain = api.create_swapchain(
         platform_surface,
         min_swapchain_image_count,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-        std::optional<std::reference_wrapper<Swapchain>> { std::ref(swapchain) }
+        old_swapchain.handle
     );
+
+    api.destroy_swapchain(old_swapchain);
 
     api.destroy_images(accumulation_images);
     VkExtent3D image_size = {

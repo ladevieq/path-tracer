@@ -7,6 +7,8 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #elif defined(LINUX)
 #define VK_USE_PLATFORM_XCB_KHR
+#elif defined(MACOS)
+#define VK_USE_PLATFORM_METAL_EXT
 #endif
 
 #define VK_NO_PROTOTYPES
@@ -28,6 +30,8 @@
 #define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateWin32SurfaceKHR)
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
 #define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateXcbSurfaceKHR)
+#elif defined(VK_USE_PLATFORM_METAL_EXT)
+#define PLATFORM_VULKAN_INSTANCE_FUNCTIONS X(vkCreateMetalSurfaceEXT)
 #else
 #define PLATFORM_VULKAN_INSTANCE_FUNCTIONS
 #endif
