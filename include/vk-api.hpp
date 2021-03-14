@@ -2,7 +2,6 @@
 #define __VK_API_HPP_
 
 #include <vector>
-#include <optional>
 #include <string>
 
 #include "vk-context.hpp"
@@ -101,7 +100,7 @@ class vkapi {
         void destroy_surface(VkSurfaceKHR surface);
 
 
-        Swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, std::optional<std::reference_wrapper<Swapchain>> old_swapchain);
+        Swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain);
         void destroy_swapchain(Swapchain& swapchain);
 
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer);

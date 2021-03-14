@@ -11,7 +11,7 @@ HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 
 #define LoadProcAddress GetProcAddress
 
-#elif defined(LINUX)
+#elif defined(LINUX) || defined(MACOS)
 #include <dlfcn.h>
 
 void *vulkanLibrary = dlopen( "libvulkan.so.1", RTLD_NOW );

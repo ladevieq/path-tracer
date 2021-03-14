@@ -345,4 +345,11 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
     }
     return 0;
 }
+#elif defined(MACOS)
+window::window(uint32_t width, uint32_t height) {
+}
+
+window::~window() {};
+
+void window::poll_events() {}
 #endif
