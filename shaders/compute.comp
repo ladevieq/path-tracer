@@ -34,6 +34,11 @@ struct sphere {
     float[3] padding;
 };
 
+struct aabb {
+    vec4 min;
+    vec4 max;
+};
+
 struct camera {
     vec4 position;
 
@@ -86,6 +91,29 @@ vec3 to_hemisphere_vec(vec3 unit_vec, vec3 normal) {
 
 float rand(vec2 co) {
     return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+bool hit_aabb(aabb b, ray r, float min_t, float max_t) {
+    for (int axis_index = 0; axis_index < 3; axis_index++) {
+        float inv_dir = 1.f / r.direction[axis_index];
+        float t0 = (b.min[axis_index] - r.origin[axis_index]) * inv_dir;
+        float t1 = (b.max[axis_index] - r.origin[axis_index]) * inv_dir;
+
+        if (inv_dir < 0.f) {
+            float temp = t0;
+            t0 = t1;
+            t1 = t0;
+        }
+
+        min_t = max(t0, min_t);
+        max_t = min(t1, max_t);
+
+        if (max_t < min_t) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
