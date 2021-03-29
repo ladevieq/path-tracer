@@ -174,6 +174,7 @@ int main() {
         ImGui::SetNextWindowSize({ 0.f, 0.f });
         ImGui::Begin("Debug", NULL, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
 
+        ImGui::Text("frame per second %u\n", static_cast<uint32_t>(1000.f / delta_time));
         ImGui::Text("frame time %f ms\n", delta_time);
 
         if (ImGui::SliderInt("samples per pixel", (int32_t*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->samples_per_pixel, 1, 1000)) {
