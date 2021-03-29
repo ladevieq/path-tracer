@@ -8,6 +8,7 @@
 #include "vec3.hpp"
 #include "sphere.hpp"
 #include "camera.hpp"
+#include "bvh-node.hpp"
 
 struct input_data {
     color sky_color;
@@ -20,6 +21,7 @@ struct input_data {
     vec3 random_in_sphere[1000];
 
     sphere spheres[512];
+    bvh_node nodes[1024];
 
     uint32_t max_bounce;
     uint32_t samples_per_pixel;
@@ -49,6 +51,11 @@ inline float randd() {
 inline float randd(float min, float max) {
     return min + randd() * (max - min);
 }
+
+inline int32_t randi(int32_t min, int32_t max) {
+    return static_cast<int32_t>(randd(min, max + 1));
+}
+
 inline float clamp(float x, float min, float max) {
     if (x < min) return min;
     if (x > max) return max;

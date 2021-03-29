@@ -14,7 +14,6 @@ add_executable(
     main.cpp
     vec3.cpp
     color.cpp
-    sphere.cpp
     camera.cpp
     vulkan-loader.cpp
     utils.cpp

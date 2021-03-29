@@ -7,6 +7,7 @@ class vec3 {
     public:
     vec3();
 
+    vec3(float x);
     vec3(float x, float y, float z);
 
     vec3 operator-() const;
