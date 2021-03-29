@@ -7,9 +7,10 @@
 #include "material.hpp"
 
 std::vector<uint8_t> get_shader_code(const char* path) {
-    FILE* f = fopen(path, "rb");
+    FILE* f = nullptr;
+    errno_t err = fopen_s(&f, path, "rb");
 
-    if (f == nullptr) {
+    if (err != 0) {
         std::cerr << "Cannot open compute shader file !" << std::endl;
         return {};
     }
@@ -39,7 +40,8 @@ std::vector<uint8_t> get_shader_code(std::string& path) {
 color ground_color { 1.0, 1.0, 1.0 };
 color sky_color { 0.5, 0.7, 1.0 };
 
-void random_scene(sphere *world) {
+// Return the number of instantiated spheres
+uint32_t random_scene(sphere *world) {
     material ground_material = { { 0.5, 0.5, 0.5 } };
     ground_material.type = MATERIAL_TYPE::LAMBERTIAN;
     world[0] = sphere{ { 0,-1000,0 }, ground_material, 1000 };
@@ -91,6 +93,8 @@ void random_scene(sphere *world) {
     material3.fuzz = 0.0;
     material3.type = MATERIAL_TYPE::METAL;
     world[world_sphere_index + 2] = { { 4, 1, 0 }, material3, 1.0 };
+
+    return world_sphere_index + 2;
 }
 
 struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t samples_per_pixel) {
@@ -112,6 +116,7 @@ struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t sample
         .cam = camera,
 
         .spheres = {},
+        .nodes = {},
 
         .max_bounce = max_depth,
         .samples_per_pixel = samples_per_pixel,
@@ -138,7 +143,9 @@ struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t sample
     }
 
     // World hittable objects
-    random_scene(inputs.spheres);
+    uint32_t spheres_count = random_scene(inputs.spheres);
+
+    inputs.nodes[0] = { inputs.spheres, 0, spheres_count, inputs.nodes, 1 };
 
     return inputs;
 }

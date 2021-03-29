@@ -27,16 +27,17 @@ struct hit_info {
     bool front_face;
 };
 
-struct sphere {
-    vec4 position;
-    material mat;
-    float radius;
-    float[3] padding;
-};
-
 struct aabb {
     vec4 min;
     vec4 max;
+};
+
+struct sphere {
+    vec4 position;
+    material mat;
+    aabb bb;
+    float radius;
+    float[3] padding;
 };
 
 struct camera {
@@ -54,6 +55,14 @@ struct camera {
     float[3] padding;
 };
 
+struct bvh_node {
+    aabb bb;
+    int left;
+    int right;
+    int sphere_id;
+    uint padding;
+};
+
 layout(set = 0, binding = 0) buffer Inputs {
     vec4 sky_color;
     vec4 ground_color;
@@ -64,6 +73,7 @@ layout(set = 0, binding = 0) buffer Inputs {
     vec4[1000] random_in_sphere;
 
     sphere[512] spheres;
+    bvh_node[1024] nodes;
 
     uint max_bounce;
     uint samples_per_pixel;
@@ -114,6 +124,45 @@ bool hit_aabb(aabb b, ray r, float min_t, float max_t) {
     }
 
     return true;
+}
+
+bool hit_node(bvh_node node, ray r, float min_t, float max_t, out hit_info info) {
+    if (!hit_aabb(node.bb, r, min_t, max_t)) {
+        return false;
+    }
+
+    int stack_id = -1;
+    int stack[64];
+    bvh_node current_node = node;
+
+    while(true) {
+        bool hit_left = hit_aabb(nodes[current_node.left - 1].bb, r, min_t, max_t);
+        bool hit_right = hit_aabb(nodes[current_node.right - 1].bb, r, min_t, max_t);
+
+        if (hit_left && hit_right) {
+            stack_id++;
+            stack[stack_id] = current_node.left - 1;
+
+            current_node = nodes[current_node.right - 1];
+        } else if (hit_left) {
+            current_node = nodes[current_node.left - 1];
+        } else if (hit_right) {
+            current_node = nodes[current_node.right - 1];
+        } else {
+            if (stack_id >= 0) {
+                current_node = nodes[stack[stack_id]];
+                stack_id--;
+            } else {
+                return false;
+            }
+        }
+
+        // Reached a leaf
+        if (current_node.left == -1 && current_node.right == -1) {
+            return true;
+        }
+    }
+
 }
 
 bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {

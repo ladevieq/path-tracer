@@ -5,6 +5,7 @@
 
 vec3::vec3(): x(0.0), y(0.0), z(0.0) {}
 
+vec3::vec3(float x): x(x), y(x), z(x) {}
 vec3::vec3(float x, float y, float z): x(x), y(y), z(z) {}
 
 vec3 vec3::operator-() const {
