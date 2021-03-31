@@ -5,6 +5,7 @@ struct ray {
     vec3 direction;
 };
 
+const float PI = 3.141592653589793;
 const uint LAMBERTIAN_MATERIAL  = 0;
 const uint METAL_MATERIAL       = 1;
 const uint DIELECTRIC_MATERIAL  = 2;
@@ -68,9 +69,7 @@ layout(set = 0, binding = 0) buffer Inputs {
     vec4 ground_color;
     camera cam;
 
-    vec2[1000] random_offset;
     vec2[1000] random_disk;
-    vec4[1000] random_in_sphere;
 
     sphere[512] spheres;
     bvh_node[1024] nodes;
@@ -91,16 +90,30 @@ vec3 at(ray r, float t) {
     return r.origin + r.direction * t;
 }
 
-vec3 to_hemisphere_vec(vec3 unit_vec, vec3 normal) {
-    if (dot(unit_vec, normal) > 0.0) {
-        return unit_vec;
-    } else {
-        return -unit_vec;
-    }
+
+uint wang_hash(inout uint seed)
+{
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
 }
 
-float rand(vec2 co) {
-    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+float rand(inout uint seed)
+{
+    float r = wang_hash(seed) * (1.0 / 4294967296.0);
+    // seed += 10;
+    return r;
+}
+
+vec3 unit_vec(inout uint seed) {
+    float z  = rand(seed) * 2.0 - 1.0;
+    float a = 2.0 * PI * rand(seed);
+    float r = sqrt(1.0 - z * z);
+
+    return vec3(cos(a) * r, sin(a) * r, z);
 }
 
 bool hit_aabb(aabb b, ray r, float min_t, float max_t) {
@@ -213,21 +226,18 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     return hit;
 }
 
-bool lambertian_scattering(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
-    vec3 unit_hemisphere_vec = to_hemisphere_vec(random_in_sphere[uint(rand(seed) * 999.0)].xyz, info.normal);
-
+bool lambertian_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
     attenuation = mat.albedo;
-    scattered = ray(info.point, info.normal + unit_hemisphere_vec);
+    scattered = ray(info.point, normalize(info.normal + unit_vec(seed)));
 
     return true;
 }
 
-bool metal_scattering(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
+bool metal_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
     vec3 reflected = reflect(normalize(incident.direction), info.normal);
-    vec3 unit_sphere_vec = random_in_sphere[uint(rand(seed) * 999.0)].xyz;
 
     attenuation = mat.albedo;
-    scattered = ray(info.point, reflected + mat.fuzz * unit_sphere_vec); 
+    scattered = ray(info.point, reflected + mat.fuzz * unit_vec(seed)); 
 
     return (dot(scattered.direction, info.normal) > 0.0);
 }
@@ -239,7 +249,7 @@ float reflectance(float cosine, float eta) {
     return r0 + (1 - r0) * pow((1 - cosine), 5);
 }
 
-bool dielectric_scattering(material mat, ray incident, vec2 seed, hit_info info, out vec4 attenuation, out ray scattered) {
+bool dielectric_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
     attenuation = vec4(1.0);
 
     vec3 unit_dir = normalize(incident.direction);
@@ -260,14 +270,13 @@ bool dielectric_scattering(material mat, ray incident, vec2 seed, hit_info info,
     return true;
 }
 
-vec4 ray_color(ray r, uint sample_index) {
+vec4 ray_color(ray r, uint seed) {
     hit_info info;
     uint bounces = 0;
 
     vec4 final_color = vec4(1.0);
     ray current_ray = r;
-    while (hit_spheres(current_ray, 0.0001, 1e15, info) && bounces < max_bounce) {
-        vec2 seed = vec2(info.point.x * sample_index, info.point.y * bounces) * gl_GlobalInvocationID.xy;
+    while (hit_spheres(current_ray, 0.001, 1e15, info) && bounces < max_bounce) {
         ray scattered;
         vec4 attenuation;
         if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
@@ -295,8 +304,7 @@ void main() {
 
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
 
-    sample_index %= 1000;
-
+    uint seed = (y * width + x) * 100 + sample_index;
     vec2 jittered_uvs = uv + vec2(random_disk[sample_index].x / (width - 1), random_disk[sample_index].y / (height - 1));
     vec2 lens_disk = random_disk[sample_index] * cam.lens_radius;
     vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
@@ -304,7 +312,7 @@ void main() {
 
     ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
 
-    vec4 out_color = ray_color(r, sample_index);
+    vec4 out_color = ray_color(r, seed);
 
     float spp_scale = (1.0 / samples_per_pixel);
     vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));

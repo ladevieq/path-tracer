@@ -49,34 +49,34 @@ uint32_t random_scene(sphere *world) {
     uint32_t world_sphere_index = 1;
 
     int32_t spheres_count = 11;
-    for (int a = -spheres_count; a < spheres_count; a++) {
-        for (int b = -spheres_count; b < spheres_count; b++) {
-            auto choose_mat = randd();
-            point3 center(a + 0.9 * randd(), 0.2, b + 0.9 * randd());
+    // for (int a = -spheres_count; a < spheres_count; a++) {
+    //     for (int b = -spheres_count; b < spheres_count; b++) {
+    //         auto choose_mat = randd();
+    //         point3 center(a + 0.9 * randd(), 0.2, b + 0.9 * randd());
 
-            if ((center - point3{ 4, 0.2, 0 }).length() > 0.9) {
-                material sphere_material = {};
+    //         if ((center - point3{ 4, 0.2, 0 }).length() > 0.9) {
+    //             material sphere_material = {};
 
-                if (choose_mat < 0.8) {
-                    // diffuse
-                    sphere_material.albedo = color::random() * color::random();
-                    sphere_material.type = MATERIAL_TYPE::LAMBERTIAN;
-                } else if (choose_mat < 0.95) {
-                    // metal
-                    sphere_material.albedo = color::random(0.5, 1);
-                    sphere_material.fuzz = randd(0, 0.5);
-                    sphere_material.type = MATERIAL_TYPE::METAL;
-                } else {
-                    // glass
-                    sphere_material.ior = 1.5;
-                    sphere_material.type = MATERIAL_TYPE::DIELECTRIC;
-                }
+    //             if (choose_mat < 0.8) {
+    //                 // diffuse
+    //                 sphere_material.albedo = color::random() * color::random();
+    //                 sphere_material.type = MATERIAL_TYPE::LAMBERTIAN;
+    //             } else if (choose_mat < 0.95) {
+    //                 // metal
+    //                 sphere_material.albedo = color::random(0.5, 1);
+    //                 sphere_material.fuzz = randd(0, 0.5);
+    //                 sphere_material.type = MATERIAL_TYPE::METAL;
+    //             } else {
+    //                 // glass
+    //                 sphere_material.ior = 1.5;
+    //                 sphere_material.type = MATERIAL_TYPE::DIELECTRIC;
+    //             }
 
-                world[world_sphere_index] = { center, sphere_material, 0.2 };
-                world_sphere_index++;
-            }
-        }
-    }
+    //             world[world_sphere_index] = { center, sphere_material, 0.2 };
+    //             world_sphere_index++;
+    //         }
+    //     }
+    // }
 
     material material1 = {};
     material1.ior = 1.5;
@@ -126,20 +126,10 @@ struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t sample
         .sample_index = 0,
     };
 
-    // Random numbers pools
-    for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index += 2) {
-        inputs.random_offset[rand_number_index] = randd();
-        inputs.random_offset[rand_number_index + 1] = randd();
-    }
-
     for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index += 2) {
         vec3 random_unit_disk = random_in_unit_disk();
         inputs.random_disk[rand_number_index] = random_unit_disk.x;
         inputs.random_disk[rand_number_index + 1] = random_unit_disk.y;
-    }
-
-    for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index++) {
-        inputs.random_in_sphere[rand_number_index] = random_in_unit_sphere();
     }
 
     // World hittable objects

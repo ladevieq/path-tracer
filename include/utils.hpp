@@ -16,9 +16,7 @@ struct input_data {
 
     camera cam;
 
-    float random_offset[2000];
     float random_disk[2000];
-    vec3 random_in_sphere[1000];
 
     sphere spheres[512];
     bvh_node nodes[1024];
