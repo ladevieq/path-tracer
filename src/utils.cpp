@@ -4,16 +4,26 @@
 #include <cstring>
 #include <iostream>
 
+#include "defines.hpp"
 #include "material.hpp"
 
 std::vector<uint8_t> get_shader_code(const char* path) {
+#if defined(WINDOWS)
     FILE* f = nullptr;
     errno_t err = fopen_s(&f, path, "rb");
 
     if (err != 0) {
-        std::cerr << "Cannot open compute shader file !" << std::endl;
+        std::cerr << "Cannot open shader file !" << std::endl;
         return {};
     }
+#elif defined(LINUX)
+    FILE* f = fopen(path, "rb");
+
+    if (!f) {
+        std::cerr << "Cannot open shader file !" << std::endl;
+        return {};
+    }
+#endif
 
     if (fseek(f, 0, SEEK_END) != 0) {
         return {};
