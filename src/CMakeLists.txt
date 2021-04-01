@@ -3,7 +3,7 @@ add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
-if(${CMAKE_SYSTEM_NAME} EQUAL "Linux")
+if(UNIX AND NOT APPLE)
     include_directories(${X11_xcb_INCLUDE_PATH})
 endif()
 
@@ -23,7 +23,7 @@ add_executable(
     window.cpp
 )
 
-if(${CMAKE_SYSTEM_NAME} EQUAL "Linux")
+if(UNIX AND NOT APPLE)
     list(APPEND LIBRARIES ${CMAKE_DL_LIBS} ${X11_xcb_LIB} ${X11_xkbcommon_LIB} ${X11_xkbcommon_X11_LIB})
 endif()
 

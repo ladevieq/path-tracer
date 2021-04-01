@@ -2,6 +2,7 @@
 #define __AABB_HPP_
 
 #include "vec3.hpp"
+#include <cmath>
 
 class aabb {
     public:

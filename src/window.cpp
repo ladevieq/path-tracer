@@ -149,7 +149,7 @@ void window::poll_events() {
                 events.push_back({
                     .x      = motion_event->event_x,
                     .y      = motion_event->event_y,
-                    .type   = EVENT_TYPES::MOVE,
+                    .type   = EVENT_TYPES::MOUSE_MOVE,
                 });
                 break;
             }
