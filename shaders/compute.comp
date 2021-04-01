@@ -69,8 +69,6 @@ layout(set = 0, binding = 0) buffer Inputs {
     vec4 ground_color;
     camera cam;
 
-    vec2[1000] random_disk;
-
     sphere[512] spheres;
     bvh_node[1024] nodes;
 
@@ -114,6 +112,14 @@ vec3 unit_vec(inout uint seed) {
     float r = sqrt(1.0 - z * z);
 
     return vec3(cos(a) * r, sin(a) * r, z);
+}
+
+vec2 disk_vec(inout uint seed) {
+    float z  = rand(seed) * 2.0 - 1.0;
+    float a = 2.0 * PI * rand(seed);
+    float r = sqrt(1.0 - z * z);
+
+    return vec2(cos(a) * r, sin(a) * r);
 }
 
 bool hit_aabb(aabb b, ray r, float min_t, float max_t) {
@@ -305,8 +311,9 @@ void main() {
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
 
     uint seed = (y * width + x) * 100 + sample_index;
-    vec2 jittered_uvs = uv + vec2(random_disk[sample_index].x / (width - 1), random_disk[sample_index].y / (height - 1));
-    vec2 lens_disk = random_disk[sample_index] * cam.lens_radius;
+    vec2 rand_disk = disk_vec(seed);
+    vec2 jittered_uvs = uv + vec2(rand_disk.x / (width - 1), rand_disk.y / (height - 1));
+    vec2 lens_disk = rand_disk * cam.lens_radius;
     vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
     vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
 

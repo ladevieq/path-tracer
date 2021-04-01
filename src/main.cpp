@@ -58,6 +58,9 @@ int main() {
     auto can_render = true;
     vkrenderer renderer { wnd, inputs };
 
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize.x = (float)width;
+    io.DisplaySize.y = (float)height;
 
     while(wnd.isOpen) {
         auto reset_accumulation = false;

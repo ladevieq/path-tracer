@@ -136,12 +136,6 @@ struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t sample
         .sample_index = 0,
     };
 
-    for (size_t rand_number_index = 0; rand_number_index < 1000; rand_number_index += 2) {
-        vec3 random_unit_disk = random_in_unit_disk();
-        inputs.random_disk[rand_number_index] = random_unit_disk.x;
-        inputs.random_disk[rand_number_index + 1] = random_unit_disk.y;
-    }
-
     // World hittable objects
     uint32_t spheres_count = random_scene(inputs.spheres);
 
