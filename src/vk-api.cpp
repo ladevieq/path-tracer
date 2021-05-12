@@ -736,7 +736,8 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     create_info.imageSharingMode            = VK_SHARING_MODE_EXCLUSIVE;
     create_info.preTransform                = caps.currentTransform;
     create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
+    // create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
+    create_info.presentMode                 = VK_PRESENT_MODE_MAILBOX_KHR;
     create_info.clipped                     = VK_TRUE;
     create_info.oldSwapchain                = old_swapchain;
 

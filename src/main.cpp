@@ -54,7 +54,7 @@ int main() {
     uint64_t frame_count = 0;
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
-    auto inputs = create_inputs(width, height, samples_per_pixel);
+    auto inputs = create_inputs(width, height);
     auto can_render = true;
     vkrenderer renderer { wnd, inputs };
 
@@ -179,10 +179,7 @@ int main() {
 
         ImGui::Text("frame per second %u\n", static_cast<uint32_t>(1000.f / delta_time));
         ImGui::Text("frame time %f ms\n", delta_time);
-
-        if (ImGui::SliderInt("samples per pixel", (int32_t*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->samples_per_pixel, 1, 1000)) {
-            reset_accumulation = true;
-        }
+        ImGui::Text("frame count %u\n", ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index);
 
         ImGui::SliderInt("bounces", (int32_t*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->max_bounce, 2, 250);
 
@@ -200,12 +197,13 @@ int main() {
             renderer.begin_frame();
 
             if (reset_accumulation) {
+                ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
                 renderer.reset_accumulation();
             }
 
             renderer.compute(width, height);
 
-            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = frame_count % 1000;
+            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
 
             renderer.ui();
 
