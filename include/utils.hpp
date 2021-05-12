@@ -20,19 +20,21 @@ struct input_data {
     bvh_node nodes[1024];
 
     uint32_t max_bounce;
-    uint32_t samples_per_pixel;
 
     // Output image resolution
     uint32_t width;
     uint32_t height;
 
     uint32_t sample_index;
+
+    uint32_t spheres_count;
+    uint32_t padding[3];
 };
 
 std::vector<uint8_t> get_shader_code(const char* path);
 std::vector<uint8_t> get_shader_code(std::string& path);
 
-struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t samples_per_pixel);
+struct input_data create_inputs(uint32_t width, uint32_t height);
 
 #define PI 3.14159265359
 

@@ -104,10 +104,17 @@ uint32_t random_scene(sphere *world) {
     material3.type = MATERIAL_TYPE::METAL;
     world[world_sphere_index + 2] = { { 4, 1, 0 }, material3, 1.0 };
 
-    return world_sphere_index + 2;
+    material material4 = {};
+    material4.albedo = color{ 0.0, 0.0, 0.0 };
+    material4.emissive = color{ 1.0, 1.0, 1.0 } * 100.0;
+    material4.fuzz = 0.0;
+    material4.type = MATERIAL_TYPE::EMISSIVE;
+    world[world_sphere_index + 3] = { { 2, 1.5, 2 }, material4, 0.5 };
+
+    return world_sphere_index + 3;
 }
 
-struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t samples_per_pixel) {
+struct input_data create_inputs(uint32_t width, uint32_t height) {
     // Image dimensions
     const float aspect_ratio = (float)width / (float) height;
 
@@ -129,7 +136,7 @@ struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t sample
         .nodes = {},
 
         .max_bounce = max_depth,
-        .samples_per_pixel = samples_per_pixel,
+
         .width = width,
         .height = height,
 
@@ -138,6 +145,8 @@ struct input_data create_inputs(uint32_t width, uint32_t height, uint32_t sample
 
     // World hittable objects
     uint32_t spheres_count = random_scene(inputs.spheres);
+
+    inputs.spheres_count = spheres_count;
 
     inputs.nodes[0] = { inputs.spheres, 0, spheres_count, inputs.nodes, 1 };
 

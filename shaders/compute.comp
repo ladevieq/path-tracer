@@ -9,11 +9,13 @@ const float PI = 3.141592653589793;
 const uint LAMBERTIAN_MATERIAL  = 0;
 const uint METAL_MATERIAL       = 1;
 const uint DIELECTRIC_MATERIAL  = 2;
+const uint EMISSIVE_MATERIAL    = 3;
 
 const vec3 light_position = vec3(10, -25, 0);
 
 struct material {
     vec4 albedo;
+    vec4 emissive;
     float fuzz;
     float ior;
     uint type;
@@ -73,11 +75,11 @@ layout(set = 0, binding = 0) buffer Inputs {
     bvh_node[1024] nodes;
 
     uint max_bounce;
-    uint samples_per_pixel;
     uint width;
     uint height;
-
     uint sample_index;
+
+    uint spheres_count;
     uint[3] padding;
 };
 
@@ -221,7 +223,7 @@ bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
     bool hit = false;
-    for (uint sphere_index = 0; sphere_index < 512; sphere_index++) {
+    for (uint sphere_index = 0; sphere_index <= spheres_count; sphere_index++) {
         if (spheres[sphere_index].radius > 0.0 && hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
             info = temp_info;
             closest_t = temp_info.t;
@@ -280,28 +282,37 @@ vec4 ray_color(ray r, uint seed) {
     hit_info info;
     uint bounces = 0;
 
-    vec4 final_color = vec4(1.0);
+    vec4 final_color = vec4(0.0);
+    vec4 throughput = vec4(1.0);
     ray current_ray = r;
     while (hit_spheres(current_ray, 0.001, 1e15, info) && bounces < max_bounce) {
         ray scattered;
-        vec4 attenuation;
+        vec4 attenuation = vec4(0.0);
         if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
         (info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        (info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered))) {
-            final_color *= attenuation;
+        (info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
+        info.mat.type == EMISSIVE_MATERIAL) {
+            final_color += info.mat.emissive * throughput;
+            throughput *= attenuation;
             current_ray = scattered;
-        } else {
-            return vec4(0.0);
-        }
 
+            // Russian Roulette
+            // As the throughput gets smaller, the ray is more likely to get terminated early.
+            // Survivors have their value boosted to make up for fewer samples being in the average.
+            {
+                float p = max(throughput.r, max(throughput.g, throughput.b));
+                if (rand(seed) > p) {
+                    break;
+                }
+
+                // Add the energy we 'lose' by randomly terminating paths
+                throughput *= 1.0 / p;
+            }
+        }
         bounces++;
     }
 
-    if (bounces == max_bounce) {
-        return vec4(0.0);
-    }
-
-    return final_color * mix(ground_color, sky_color, (normalize(r.direction).y + 1.0) * 0.5);
+    return final_color;
 }
 
 void main() {
@@ -310,7 +321,7 @@ void main() {
 
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
 
-    uint seed = (y * width + x) * 100 + sample_index;
+    uint seed = uint(x * uint(1973) + y * uint(9277) + sample_index * uint(26699)) | uint(1);
     vec2 rand_disk = disk_vec(seed);
     vec2 jittered_uvs = uv + vec2(rand_disk.x / (width - 1), rand_disk.y / (height - 1));
     vec2 lens_disk = rand_disk * cam.lens_radius;
@@ -321,7 +332,7 @@ void main() {
 
     vec4 out_color = ray_color(r, seed);
 
-    float spp_scale = (1.0 / samples_per_pixel);
+    float spp_scale = (1.0 / sample_index);
     vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));
     imageStore(output_image, ivec2(x, y), vec4(mix(acc_color, out_color, spp_scale)));
 }
