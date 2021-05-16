@@ -106,12 +106,12 @@ uint32_t random_scene(sphere *world) {
 
     material material4 = {};
     material4.albedo = color{ 0.0, 0.0, 0.0 };
-    material4.emissive = color{ 1.0, 1.0, 1.0 } * 100.0;
+    material4.emissive = color{ 1.0, 1.0, 1.0 } * 100000.0;
     material4.fuzz = 0.0;
     material4.type = MATERIAL_TYPE::EMISSIVE;
     world[world_sphere_index + 3] = { { 2, 1.5, 2 }, material4, 0.5 };
 
-    return world_sphere_index + 3;
+    return world_sphere_index + 4;
 }
 
 struct input_data create_inputs(uint32_t width, uint32_t height) {
@@ -141,6 +141,7 @@ struct input_data create_inputs(uint32_t width, uint32_t height) {
         .height = height,
 
         .sample_index = 0,
+        .debug_bvh = false,
     };
 
     // World hittable objects
@@ -148,7 +149,13 @@ struct input_data create_inputs(uint32_t width, uint32_t height) {
 
     inputs.spheres_count = spheres_count;
 
-    inputs.nodes[0] = { inputs.spheres, 0, spheres_count, inputs.nodes, 1 };
+    bvh builder;
+    builder.build(inputs.spheres, spheres_count);
+    builder.exporter();
+
+    for (uint32_t idx = 0; idx < builder.nodes.size(); idx++) {
+        inputs.nodes[idx] = builder.nodes[idx];
+    }
 
     return inputs;
 }
