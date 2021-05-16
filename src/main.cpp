@@ -103,8 +103,8 @@ int main() {
                 }
                 case EVENT_TYPES::KEY_PRESS: {
                     auto move_speed = 0.01f * delta_time;
-                    if (wnd.keyboard[KEYS::LSHIFT] || wnd.keyboard[KEYS::RSHIFT]) {
-                        move_speed *= 2.f;
+                    if (wnd.keyboard[KEYS::LSHIFT] || wnd.keyboard[KEYS::RSHIFT] || wnd.keyboard[KEYS::SHIFT]) {
+                        move_speed *= 10.f;
                     }
 
                     vec3 move_vec {};
@@ -124,6 +124,14 @@ int main() {
                         }
                         case KEYS::A: {
                             move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.right.unit() * move_speed;
+                            break;
+                        }
+                        case KEYS::SPACE: {
+                            move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.up.unit() * move_speed;
+                            break;
+                        }
+                        case KEYS::CTRL: {
+                            move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.up.unit() * move_speed;
                             break;
                         }
                         default:
@@ -183,6 +191,10 @@ int main() {
 
         ImGui::SliderInt("bounces", (int32_t*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->max_bounce, 2, 250);
 
+        if (ImGui::Checkbox("debug bvh", (bool*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->debug_bvh)) {
+            reset_accumulation = true;
+        }
+
         ImGui::End();
 
         ImGui::EndFrame();
@@ -225,6 +237,7 @@ int main() {
     // for (size_t index = 0; index < height * width; index++) {
     //     write_color(std::cout, output_image[index]);
     // }
+
 
     std::cerr << "Done !" << std::endl;
 

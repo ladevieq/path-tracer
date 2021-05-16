@@ -38,6 +38,7 @@ enum KEYS: uint32_t {
     SHIFT = 0x10,
     CTRL,
     ALT,
+    SPACE = 0x20,
     A = 0x41,
     B,
     C,
