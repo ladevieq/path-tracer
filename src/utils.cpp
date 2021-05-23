@@ -141,6 +141,7 @@ struct input_data create_inputs(uint32_t width, uint32_t height) {
         .height = height,
 
         .sample_index = 0,
+        .enable_dof = true,
         .debug_bvh = false,
     };
 
@@ -151,7 +152,7 @@ struct input_data create_inputs(uint32_t width, uint32_t height) {
 
     bvh builder;
     builder.build(inputs.spheres, spheres_count);
-    builder.exporter();
+    // builder.exporter();
 
     for (uint32_t idx = 0; idx < builder.nodes.size(); idx++) {
         inputs.nodes[idx] = builder.nodes[idx];

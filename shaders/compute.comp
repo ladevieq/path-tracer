@@ -79,8 +79,9 @@ layout(set = 0, binding = 0) buffer Inputs {
     uint sample_index;
 
     uint spheres_count;
+    bool enable_dof;
     bool debug_bvh;
-    uint[2] padding;
+    uint padding;
 };
 
 layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D output_image;
@@ -158,46 +159,6 @@ uint hit_aabbs(ray r, float min_t, float max_t) {
     return hit_count;
 }
 
-// bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
-//     if (!hit_aabb(nodes[0].bb, r, min_t, max_t)) {
-//         return false;
-//     }
-//     return true;
-// 
-//     int stack_id = -1;
-//     int stack[64];
-//     bvh_node current_node = nodes[0];
-// 
-//     while(true) {
-//         bool hit_left = hit_aabb(nodes[current_node.left - 1].bb, r, min_t, max_t);
-//         bool hit_right = hit_aabb(nodes[current_node.right - 1].bb, r, min_t, max_t);
-// 
-//         if (hit_left && hit_right) {
-//             stack_id++;
-//             stack[stack_id] = current_node.left - 1;
-// 
-//             current_node = nodes[current_node.right - 1];
-//         } else if (hit_left) {
-//             current_node = nodes[current_node.left - 1];
-//         } else if (hit_right) {
-//             current_node = nodes[current_node.right - 1];
-//         } else {
-//             if (stack_id >= 0) {
-//                 current_node = nodes[stack[stack_id]];
-//                 stack_id--;
-//             } else {
-//                 return false;
-//             }
-//         }
-// 
-//         // Reached a leaf
-//         if (current_node.left == -1 && current_node.right == -1) {
-//             return true;
-//         }
-//     }
-// 
-// }
-
 bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     vec3 origin_center = r.origin - s.position.xyz;
 
@@ -231,19 +192,66 @@ bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     return true;
 }
 
+bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
+    hit_info temp_info;
+    float closest_t = max_t;
+
+    if (!hit_aabb(nodes[0].bb, r, min_t, max_t)) {
+        return false;
+    }
+
+    int stack_id = -1;
+    int stack[64];
+    bvh_node current_node = nodes[0];
+
+    while(true) {
+        // Reached a leaf
+        if (current_node.sphere_id != -1) {
+            hit_sphere(spheres[current_node.sphere_id], r, min_t, closest_t, temp_info);
+            info = temp_info;
+            closest_t = temp_info.t;
+            continue;
+        }
+
+        bool hit_left = hit_aabb(nodes[current_node.left].bb, r, min_t, max_t);
+        bool hit_right = hit_aabb(nodes[current_node.left + 1].bb, r, min_t, max_t);
+
+        if (hit_left && hit_right) {
+            stack_id++;
+            stack[stack_id] = current_node.left;
+
+            current_node = nodes[current_node.left + 1];
+        } else if (hit_left) {
+            current_node = nodes[current_node.left];
+        } else if (hit_right) {
+            current_node = nodes[current_node.left + 1];
+        } else {
+            if (stack_id >= 0) {
+                current_node = nodes[stack[stack_id]];
+                stack_id--;
+            } else {
+                return false;
+            }
+        }
+    }
+
+}
+
 bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
     bool hit = false;
-    for (uint sphere_index = 0; sphere_index <= spheres_count; sphere_index++) {
-        if (spheres[sphere_index].radius > 0.0 && hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
-            info = temp_info;
-            closest_t = temp_info.t;
-            hit = true;
-        }
-    }
+    // for (uint sphere_index = 0; sphere_index <= spheres_count; sphere_index++) {
+    //     if (spheres[sphere_index].radius > 0.0 && hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
+    //         info = temp_info;
+    //         closest_t = temp_info.t;
+    //         hit = true;
+    //     }
+    // }
+    // 
+    // return hit;
 
-    return hit;
+    return hit_node(r, min_t, max_t, info);
 }
 
 bool lambertian_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
@@ -334,12 +342,14 @@ void main() {
     vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
 
     uint seed = uint(x * uint(1973) + y * uint(9277) + sample_index * uint(26699)) | uint(1);
-    // vec2 rand_disk = disk_vec(seed);
-    // vec2 jittered_uvs = uv + vec2(rand(seed) / (width - 1), rand(seed) / (height - 1));
-    vec2 jittered_uvs = uv;
-    // vec2 lens_disk = rand_disk * cam.lens_radius;
-    // vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
-    vec3 offset = vec3(0.0);
+    vec2 rand_disk = disk_vec(seed);
+    vec2 jittered_uvs = uv + vec2(rand(seed) / (width - 1), rand(seed) / (height - 1));
+    vec2 lens_disk = vec2(0.0);
+    if (enable_dof) {
+        lens_disk = rand_disk * cam.lens_radius;
+    }
+
+    vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
     vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
 
     ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
