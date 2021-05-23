@@ -126,6 +126,16 @@ int main() {
                             move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.right.unit() * move_speed;
                             break;
                         }
+                        case KEYS::E: {
+                            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.rotate_y(0.001f * delta_time);
+                            reset_accumulation = true;
+                            break;
+                        }
+                        case KEYS::Q: {
+                            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.rotate_y(-0.001f * delta_time);
+                            reset_accumulation = true;
+                            break;
+                        }
                         case KEYS::SPACE: {
                             move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.up.unit() * move_speed;
                             break;
