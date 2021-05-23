@@ -199,6 +199,10 @@ int main() {
         ImGui::Text("frame time %f ms\n", delta_time);
         ImGui::Text("frame count %u\n", ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index);
 
+        if (ImGui::Checkbox("depth of field", (bool*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->enable_dof)) {
+            reset_accumulation = true;
+        }
+
         ImGui::SliderInt("bounces", (int32_t*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->max_bounce, 2, 250);
 
         if (ImGui::Checkbox("debug bvh", (bool*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->debug_bvh)) {

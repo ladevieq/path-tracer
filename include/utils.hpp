@@ -28,8 +28,9 @@ struct input_data {
     uint32_t sample_index;
 
     uint32_t spheres_count;
+    uint32_t enable_dof;
     uint32_t debug_bvh;
-    uint32_t padding[2];
+    uint32_t padding;
 };
 
 std::vector<uint8_t> get_shader_code(const char* path);
