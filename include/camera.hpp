@@ -18,6 +18,8 @@ class camera {
 
         void move(vec3 v);
 
+        void rotate_y(float theta);
+
 
         point3 position;
 
@@ -33,7 +35,7 @@ class camera {
         float lens_radius;
         float fov;
         float focus_distance;
-        float padding;
+        float aspect_ratio;
 };
 
 #endif // !__CAMERA_HPP_
