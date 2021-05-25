@@ -91,20 +91,17 @@ vec3 at(ray r, float t) {
     return r.origin + r.direction * t;
 }
 
-
-uint wang_hash(inout uint seed)
+uint pcg_hash(inout uint seed)
 {
-    seed = (seed ^ 61) ^ (seed >> 16);
-    seed *= 9;
-    seed = seed ^ (seed >> 4);
-    seed *= 0x27d4eb2d;
-    seed = seed ^ (seed >> 15);
-    return seed;
+    uint state = seed;
+    seed *= 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
 }
 
 float rand(inout uint seed)
 {
-    return float(wang_hash(seed)) / 4294967296.0;
+    return float(pcg_hash(seed)) / 4294967296.0;
 }
 
 vec3 unit_vec(inout uint seed) {
@@ -203,14 +200,24 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
     int stack_id = -1;
     int stack[64];
     bvh_node current_node = nodes[0];
+    bool hit = false;
 
     while(true) {
         // Reached a leaf
         if (current_node.sphere_id != -1) {
-            hit_sphere(spheres[current_node.sphere_id], r, min_t, closest_t, temp_info);
-            info = temp_info;
-            closest_t = temp_info.t;
-            continue;
+            if (hit_sphere(spheres[current_node.sphere_id], r, min_t, closest_t, temp_info)) {
+                info = temp_info;
+                closest_t = temp_info.t;
+                hit = true;
+            }
+
+            if (stack_id >= 0) {
+                current_node = nodes[stack[stack_id]];
+                stack_id--;
+                continue;
+            }
+
+            return hit;
         }
 
         bool hit_left = hit_aabb(nodes[current_node.left].bb, r, min_t, max_t);
@@ -240,7 +247,7 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
 bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
     float closest_t = max_t;
     hit_info temp_info;
-    bool hit = false;
+    // bool hit = false;
     // for (uint sphere_index = 0; sphere_index <= spheres_count; sphere_index++) {
     //     if (spheres[sphere_index].radius > 0.0 && hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
     //         info = temp_info;
