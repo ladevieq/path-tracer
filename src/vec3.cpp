@@ -1,4 +1,5 @@
 #include <cmath>
+#include <limits.h>
 
 #include "vec3.hpp"
 #include "utils.hpp"
@@ -38,6 +39,19 @@ vec3& vec3::operator/=(float numerator) {
     z /= numerator;
 
     return *this;
+}
+
+float vec3::operator[](int axis) {
+    switch (axis) {
+        case 0:
+            return x;
+        case 1:
+            return y;
+        case 2:
+            return z;
+        default:
+           return std::numeric_limits<float>::infinity();
+    }
 }
 
 float vec3::length() const {

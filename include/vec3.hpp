@@ -18,6 +18,8 @@ class vec3 {
 
     vec3& operator/=(float numerator);
 
+    float operator[](int axis);
+
     float length() const;
 
     float length_sq() const;
