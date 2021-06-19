@@ -198,7 +198,7 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
     }
 
     int stack_id = -1;
-    int stack[64];
+    int stack[512];
     bvh_node current_node = nodes[0];
     bool hit = false;
 
@@ -237,7 +237,7 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
                 current_node = nodes[stack[stack_id]];
                 stack_id--;
             } else {
-                return false;
+                return hit;
             }
         }
     }
@@ -245,19 +245,6 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
 }
 
 bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
-    float closest_t = max_t;
-    hit_info temp_info;
-    // bool hit = false;
-    // for (uint sphere_index = 0; sphere_index <= spheres_count; sphere_index++) {
-    //     if (spheres[sphere_index].radius > 0.0 && hit_sphere(spheres[sphere_index], r, min_t, closest_t, temp_info)) {
-    //         info = temp_info;
-    //         closest_t = temp_info.t;
-    //         hit = true;
-    //     }
-    // }
-    // 
-    // return hit;
-
     return hit_node(r, min_t, max_t, info);
 }
 

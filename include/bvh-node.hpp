@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <algorithm>
-#include <fstream>
 
 #include "aabb.hpp"
 #include "sphere.hpp"
@@ -24,10 +23,12 @@ class bvh {
 public: 
     void build(sphere* spheres, uint32_t spheres_count) {
         nodes = std::vector<bvh_node>(2 * spheres_count - 1);
-        boxes = std::vector<aabb>(spheres_count);
+        leafs = std::vector<bvh_node>(spheres_count);
+        this->spheres = spheres;
 
-        for (uint32_t sphere_id = 0; sphere_id < spheres_count; sphere_id++) {
-            boxes[sphere_id] = spheres[sphere_id].bounding_box;
+        for (uint32_t id = 0; id < spheres_count; id++) {
+            leafs[id].bounding_box = spheres[id].bounding_box;
+            leafs[id].sphere_id = id;
         }
 
         nodes[0] = bvh_node();
@@ -43,11 +44,9 @@ public:
         std::cout << "digraph bvh {" << std::endl;
 
         std::cout << "\t 0";
-        // preorder(nodes[0].left_id, nodes[0].sphere_id);
         traverse(nodes[0].left_id);
 
         std::cout << "\t 0";
-        // preorder(nodes[0].left_id + 1, nodes[0].sphere_id);
         traverse(nodes[0].left_id + 1);
 
         std::cout << "}" << std::endl;
@@ -74,50 +73,71 @@ private:
         aabb global_box = aabb();
 
         for (uint32_t box_id = begin; box_id < end; box_id++) {
-            global_box = aabb::surrounding_box(global_box, boxes[box_id]);
+            auto leaf = leafs[box_id];
+            global_box = aabb::surrounding_box(global_box, spheres[leaf.sphere_id].bounding_box);
         }
 
         return global_box;
     }
 
     void subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
-        if ((end - begin) == 2) {
-            auto left_id = ++next_node_id;
-            auto right_id = ++next_node_id;
+        size_t count = end - begin;
+         if (count == 1) {
+            nodes[parent_id] = leafs[begin];
+            return;
+        }
 
-            nodes[parent_id].left_id = left_id;
+        auto left_id = ++next_node_id;
+        auto right_id = ++next_node_id;
 
-            nodes[left_id] = bvh_node();
-            nodes[right_id] = bvh_node();
+        nodes[parent_id].left_id = left_id;
 
-            nodes[left_id].bounding_box = boxes[begin];
-            nodes[right_id].bounding_box = boxes[begin + 1];
-
-            nodes[left_id].sphere_id = begin;
-            nodes[right_id].sphere_id = begin + 1;
-        } else if ((end - begin) == 1) {
-            nodes[parent_id].bounding_box = boxes[begin];
-            nodes[parent_id].sphere_id = begin;
+        if (count == 2) {
+            nodes[left_id] = leafs[begin];
+            nodes[right_id] = leafs[begin + 1];
         } else {
-            auto left_id = ++next_node_id;
-            auto right_id = ++next_node_id;
+            auto bound = nodes[parent_id].bounding_box;
+            int split_axis = 0;
+            float size = 0;
 
-            nodes[parent_id].left_id = left_id;
+            // Find largest axis
+            for (size_t id = 0; id < 3; id++) {
+                auto current_size = bound.maximum[id] - bound.minimum[id];
+                if (current_size > size) {
+                    size = current_size;
+                    split_axis = id;
+                }
+            }
 
-            nodes[left_id] = bvh_node();
-            nodes[right_id] = bvh_node();
+            std::sort(leafs.begin() + begin, leafs.begin() + end,
+                [&](const bvh_node& a, const bvh_node& b) {
+                    return spheres[a.sphere_id].center[split_axis] < spheres[b.sphere_id].center[split_axis];
+                }
+            );
 
-            nodes[left_id].bounding_box = compute_bounds(begin, begin + ((end - begin) / 2) + 1);
-            nodes[right_id].bounding_box = compute_bounds(begin + ((end - begin) / 2) + 1, end);
+            float split_axis_pos = (bound.maximum.x + bound.minimum.x) * 0.5f;
+            int mid = end - 1;
 
-            subdivide(left_id, begin, begin + ((end - begin) / 2) + 1);
-            subdivide(right_id, begin + ((end - begin) / 2) + 1, end);
+            for (size_t i = begin + 1; i < end; i++) {
+                auto leaf = leafs[i];
+                if (spheres[leaf.sphere_id].center[split_axis] >= split_axis_pos) {
+                    mid = i;
+                    break;
+                }
+            }
+
+            nodes[left_id].bounding_box = compute_bounds(begin, mid);
+            nodes[right_id].bounding_box = compute_bounds(mid, end);
+
+            subdivide(left_id, begin, mid);
+            subdivide(right_id, mid, end);
         }
     }
 
 public:
     std::vector<bvh_node> nodes;
-    std::vector<aabb> boxes;
+    std::vector<bvh_node> leafs;
+    sphere* spheres;
     uint32_t next_node_id = 0;
 };
 

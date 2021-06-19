@@ -3,6 +3,7 @@
 
 #include "vec3.hpp"
 #include <cmath>
+#include <limits.h>
 
 class aabb {
     public:
@@ -22,8 +23,8 @@ class aabb {
             return aabb(min_point, max_point);
         }
 
-        vec3 minimum;
-        vec3 maximum;
+        vec3 minimum = vec3(std::numeric_limits<float>::max());
+        vec3 maximum = vec3(std::numeric_limits<float>::min());
 };
 
 #endif // !__AABB_HPP_
