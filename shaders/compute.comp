@@ -60,7 +60,7 @@ struct camera {
 
 struct bvh_node {
     aabb bb;
-    int left;
+    int next_id;
     int sphere_id;
     uint[2] padding;
 };
@@ -121,26 +121,17 @@ vec2 disk_vec(inout uint seed) {
 }
 
 bool hit_aabb(aabb b, ray r, float min_t, float max_t) {
-    for (int axis_index = 0; axis_index < 3; axis_index++) {
-        float inv_dir = 1.f / r.direction[axis_index];
-        float t0 = (b.min[axis_index] - r.origin[axis_index]) * inv_dir;
-        float t1 = (b.max[axis_index] - r.origin[axis_index]) * inv_dir;
+    const vec3 invdir = 1.0 / r.direction;
+    const vec3 f = (b.max.xyz - r.origin.xyz) * invdir;
+    const vec3 n = (b.min.xyz - r.origin.xyz) * invdir;
 
-        if (inv_dir < 0.f) {
-            float temp = t0;
-            t0 = t1;
-            t1 = temp;
-        }
+    const vec3 tmax = max(f, n);
+    const vec3 tmin = min(f, n);
 
-        min_t = t0 > min_t ? t0 : min_t;
-        max_t = t1 < max_t ? t1 : max_t;
+    const float t1 = min(tmax.x, min(tmax.y, tmax.z));
+    const float t0 = max(max(tmin.x, max(tmin.y, tmin.z)), 0.0f);
 
-        if (max_t <= min_t) {
-            return false;
-        }
-    }
-
-    return true;
+    return t1 >= t0;
 }
 
 uint hit_aabbs(ray r, float min_t, float max_t) {
@@ -192,56 +183,28 @@ bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
 bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
     hit_info temp_info;
     float closest_t = max_t;
-
-    if (!hit_aabb(nodes[0].bb, r, min_t, max_t)) {
-        return false;
-    }
-
-    int stack_id = -1;
-    int stack[512];
-    bvh_node current_node = nodes[0];
     bool hit = false;
+    int id = 0;
 
-    while(true) {
-        // Reached a leaf
-        if (current_node.sphere_id != -1) {
-            if (hit_sphere(spheres[current_node.sphere_id], r, min_t, closest_t, temp_info)) {
+    while(id != -1) {
+        // Leafs
+        if (nodes[id].sphere_id != -1) {
+            if (hit_sphere(spheres[nodes[id].sphere_id], r, min_t, closest_t, temp_info)) {
                 info = temp_info;
                 closest_t = temp_info.t;
                 hit = true;
             }
-
-            if (stack_id >= 0) {
-                current_node = nodes[stack[stack_id]];
-                stack_id--;
-                continue;
-            }
-
-            return hit;
-        }
-
-        bool hit_left = hit_aabb(nodes[current_node.left].bb, r, min_t, max_t);
-        bool hit_right = hit_aabb(nodes[current_node.left + 1].bb, r, min_t, max_t);
-
-        if (hit_left && hit_right) {
-            stack_id++;
-            stack[stack_id] = current_node.left;
-
-            current_node = nodes[current_node.left + 1];
-        } else if (hit_left) {
-            current_node = nodes[current_node.left];
-        } else if (hit_right) {
-            current_node = nodes[current_node.left + 1];
-        } else {
-            if (stack_id >= 0) {
-                current_node = nodes[stack[stack_id]];
-                stack_id--;
+            id = nodes[id].next_id;
+        } else { // Internal nodes
+            if (hit_aabb(nodes[id].bb, r, min_t, closest_t)) {
+                id++;
             } else {
-                return hit;
+                id = nodes[id].next_id;
             }
         }
     }
 
+    return hit;
 }
 
 bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
@@ -351,7 +314,7 @@ void main() {
     vec4 out_color = ray_color(r, seed);
 
     if (debug_bvh) {
-        out_color -= hit_aabbs(r, 0.001, 1e15) * vec4(0.0, 0.05, 0.05, 0.0);
+        out_color -= hit_aabbs(r, 0.001, 1e15) * vec4(0.0, 0.025, 0.025, 0.0);
     }
 
     float spp_scale = (1.0 / sample_index);

@@ -54,7 +54,7 @@ color sky_color { 0.5, 0.7, 1.0 };
 uint32_t random_scene(sphere *world) {
     material ground_material = { { 0.5, 0.5, 0.5 } };
     ground_material.type = MATERIAL_TYPE::LAMBERTIAN;
-    world[0] = sphere{ { 0,-1000,0 }, ground_material, 1000 };
+    world[0] = sphere{ { 0, -1000, 0 }, ground_material, 1000 };
 
     uint32_t world_sphere_index = 1;
 
