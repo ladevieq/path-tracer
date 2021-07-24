@@ -6,12 +6,12 @@
 #include "vk-api.hpp"
 #include "vulkan-loader.hpp"
 
-class input_data;
+class scene;
 class window;
 
 class vkrenderer {
     public:
-        vkrenderer(window& wnd, const input_data& inputs);
+        vkrenderer(window& wnd, size_t scene_buffer_size);
 
         ~vkrenderer();
 
@@ -27,7 +27,9 @@ class vkrenderer {
 
         void recreate_swapchain();
 
-        Buffer                      compute_shader_buffer;
+        inline void* scene_buffer_ptr() {
+            return scene_buffer.alloc_info.pMappedData;
+        }
 
     private:
 
@@ -48,6 +50,9 @@ class vkrenderer {
         std::vector<VkDescriptorSetLayoutBinding> compute_sets_bindings;
         std::vector<VkDescriptorSet>    compute_shader_sets;
         Pipeline                        compute_pipeline;
+
+        Buffer                          scene_buffer;
+
 
         std::vector<VkDescriptorSetLayoutBinding> tonemapping_sets_bindings;
         std::vector<VkDescriptorSet>    tonemapping_shader_sets;

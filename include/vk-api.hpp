@@ -2,7 +2,6 @@
 #define __VK_API_HPP_
 
 #include <vector>
-#include <string>
 
 #include "vk-context.hpp"
 

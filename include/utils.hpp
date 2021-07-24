@@ -1,42 +1,11 @@
 #ifndef __UTILS_HPP_
 #define __UTILS_HPP_
 
-#include <cstdint>
-#include <cstdlib>
+#include <string>
 #include <vector>
 
-#include "vec3.hpp"
-#include "sphere.hpp"
-#include "camera.hpp"
-#include "bvh-node.hpp"
-
-struct input_data {
-    color sky_color;
-    color ground_color;
-
-    camera cam;
-
-    sphere spheres[512];
-    bvh_node nodes[1024];
-
-    uint32_t max_bounce;
-
-    // Output image resolution
-    uint32_t width;
-    uint32_t height;
-
-    uint32_t sample_index;
-
-    uint32_t spheres_count;
-    uint32_t enable_dof;
-    uint32_t debug_bvh;
-    uint32_t padding;
-};
-
-std::vector<uint8_t> get_shader_code(const char* path);
-std::vector<uint8_t> get_shader_code(std::string& path);
-
-struct input_data create_inputs(uint32_t width, uint32_t height);
+std::vector<uint8_t> read_file(const char* path);
+std::vector<uint8_t> read_file(std::string& path);
 
 #define PI 3.14159265359
 
