@@ -21,6 +21,7 @@ add_executable(
     vk-context.cpp
     vk-api.cpp
     window.cpp
+    scene.cpp
 )
 
 if(UNIX AND NOT APPLE)

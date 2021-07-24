@@ -9,7 +9,7 @@
 
 #include "vk-renderer.hpp"
 #include "window.hpp"
-#include "utils.hpp"
+#include "scene.hpp"
 #include "defines.hpp"
 
 #if defined(LINUX)
@@ -54,9 +54,12 @@ int main() {
     uint64_t frame_count = 0;
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
-    auto inputs = create_inputs(width, height);
+    auto main_scene = scene(width, height);
     auto can_render = true;
-    vkrenderer renderer { wnd, inputs };
+    vkrenderer renderer { wnd, sizeof(main_scene) };
+
+    // Upload scene
+    std::memcpy(renderer.scene_buffer_ptr(), &main_scene, sizeof(main_scene));
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize.x = (float)width;
@@ -82,8 +85,8 @@ int main() {
                     width = event.width;
                     height = event.height;
 
-                    ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->width = width;
-                    ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->height = height;
+                    ((scene*) renderer.scene_buffer_ptr())->width = width;
+                    ((scene*) renderer.scene_buffer_ptr())->height = height;
 
                     io.DisplaySize.x = (float)width;
                     io.DisplaySize.y = (float)height;
@@ -93,8 +96,8 @@ int main() {
                     } else {
                         can_render = true;
                         renderer.recreate_swapchain();
-                        ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.set_aspect_ratio((float)event.width / (float)event.height);
-                        ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
+                        ((scene*) renderer.scene_buffer_ptr())->cam.set_aspect_ratio((float)event.width / (float)event.height);
+                        ((scene*) renderer.scene_buffer_ptr())->sample_index = 0;
                     }
 
                     reset_accumulation = true;
@@ -111,44 +114,44 @@ int main() {
 
                     switch (event.key) {
                         case KEYS::W: {
-                            move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.forward.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::S: {
-                            move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.forward.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::D: {
-                            move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.right.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->cam.right.unit() * move_speed;
                             break;
                         }
                         case KEYS::A: {
-                            move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.right.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->cam.right.unit() * move_speed;
                             break;
                         }
                         case KEYS::E: {
-                            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.rotate_y(0.001f * delta_time);
+                            ((scene*) renderer.scene_buffer_ptr())->cam.rotate_y(0.001f * delta_time);
                             reset_accumulation = true;
                             break;
                         }
                         case KEYS::Q: {
-                            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.rotate_y(-0.001f * delta_time);
+                            ((scene*) renderer.scene_buffer_ptr())->cam.rotate_y(-0.001f * delta_time);
                             reset_accumulation = true;
                             break;
                         }
                         case KEYS::SPACE: {
-                            move_vec = ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.up.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->cam.up.unit() * move_speed;
                             break;
                         }
                         case KEYS::CTRL: {
-                            move_vec = -((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.up.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->cam.up.unit() * move_speed;
                             break;
                         }
                         default:
                             break;
                     }
 
-                    ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->cam.move(move_vec);
+                    ((scene*) renderer.scene_buffer_ptr())->cam.move(move_vec);
 
                     if (!move_vec.near_zero()) {
                         reset_accumulation = true;
@@ -197,15 +200,15 @@ int main() {
 
         ImGui::Text("frame per second %u\n", static_cast<uint32_t>(1000.f / delta_time));
         ImGui::Text("frame time %f ms\n", delta_time);
-        ImGui::Text("frame count %u\n", ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index);
+        ImGui::Text("frame count %u\n", ((scene*) renderer.scene_buffer_ptr())->sample_index);
 
-        if (ImGui::Checkbox("depth of field", (bool*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->enable_dof)) {
+        if (ImGui::Checkbox("depth of field", (bool*)&((scene*) renderer.scene_buffer_ptr())->enable_dof)) {
             reset_accumulation = true;
         }
 
-        ImGui::SliderInt("bounces", (int32_t*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->max_bounce, 2, 250);
+        ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->max_bounce, 2, 250);
 
-        if (ImGui::Checkbox("debug bvh", (bool*)&((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->debug_bvh)) {
+        if (ImGui::Checkbox("debug bvh", (bool*)&((scene*) renderer.scene_buffer_ptr())->debug_bvh)) {
             reset_accumulation = true;
         }
 
@@ -223,13 +226,13 @@ int main() {
             renderer.begin_frame();
 
             if (reset_accumulation) {
-                ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index = 0;
+                ((scene*) renderer.scene_buffer_ptr())->sample_index = 0;
                 renderer.reset_accumulation();
             }
 
             renderer.compute(width, height);
 
-            ((input_data*) renderer.compute_shader_buffer.alloc_info.pMappedData)->sample_index++;
+            ((scene*) renderer.scene_buffer_ptr())->sample_index++;
 
             renderer.ui();
 

@@ -7,7 +7,7 @@
 #include "thirdparty/vk_mem_alloc.h"
 
 #include "defines.hpp"
-#include "utils.hpp"
+#include "scene.hpp"
 #include "window.hpp"
 
 #define VKRESULT(result) assert(result == VK_SUCCESS);
@@ -24,7 +24,7 @@ struct UiTransforms {
     float translate_x, translate_y;
 };
 
-vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
+vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size) {
     platform_surface = api.create_surface(wnd);
     swapchain = api.create_swapchain(
         platform_surface,
@@ -93,11 +93,10 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
     execution_semaphores = api.create_semaphores(swapchain.image_count);
     acquire_semaphores = api.create_semaphores(swapchain.image_count);
 
-    compute_shader_buffer = api.create_buffer(sizeof(inputs), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    std::memcpy(compute_shader_buffer.alloc_info.pMappedData, &inputs, sizeof(inputs));
+    scene_buffer = api.create_buffer(scene_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
-        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], compute_shader_buffer);
+        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], scene_buffer);
     }
 
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
@@ -215,7 +214,7 @@ vkrenderer::vkrenderer(window& wnd, const input_data& inputs) {
 vkrenderer::~vkrenderer() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
-    api.destroy_buffer(compute_shader_buffer);
+    api.destroy_buffer(scene_buffer);
     api.destroy_fences(submission_fences);
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);

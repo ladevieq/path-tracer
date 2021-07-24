@@ -1,5 +1,6 @@
 #include <cassert>
 #include <memory>
+#include <iostream>
 
 #include "vk-api.hpp"
 #include "window.hpp"
@@ -377,7 +378,7 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
 
     char shader_path[256] = {};
     sprintf(shader_path, "%s%s%s", "./shaders/", shader_name, ".comp.spv");
-    std::vector<uint8_t> shader_code = get_shader_code(shader_path);
+    std::vector<uint8_t> shader_code = read_file(shader_path);
     if (shader_code.size() == 0) {
         exit(1);
     }
@@ -455,7 +456,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
 
             char shader_path[256] = {};
             sprintf(shader_path, "%s%s%s%s", "./shaders/", shader_name, shader_stage_extension(stage_flag), ".spv");
-            std::vector<uint8_t> shader_code = get_shader_code(shader_path);
+            std::vector<uint8_t> shader_code = read_file(shader_path);
             if (shader_code.size() == 0) {
                 exit(1);
             }
