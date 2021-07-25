@@ -55,7 +55,7 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
 
-    point3 position = { 13.0, 2.0, 3.0 };
+    point3 position = { 13.0, 2.0, -3.0 };
     point3 target = { 0.0, 0.0, 0.0 };
     auto v_fov = 20;
     auto aperture = 0.1;
@@ -63,12 +63,13 @@ int main() {
     auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);
     auto main_scene = scene(cam, width, height);
     auto can_render = true;
-    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[0]) * main_scene.triangles.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
-    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
+    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[1]) * main_scene.triangles.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
+    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
 
     // Upload scene content
     std::memcpy(renderer.scene_buffer_ptr(), &main_scene.meta, sizeof(main_scene.meta));
-    std::memcpy(renderer.geometry_buffer_ptr(), main_scene.spheres.data(), sizeof(main_scene.spheres[0]) * main_scene.spheres.size());
+    // std::memcpy(renderer.geometry_buffer_ptr(), main_scene.spheres.data(), sizeof(main_scene.spheres[0]) * main_scene.spheres.size());
+    std::memcpy(renderer.geometry_buffer_ptr(), main_scene.triangles.data(), sizeof(main_scene.triangles[0]) * main_scene.triangles.size());
     std::memcpy(renderer.bvh_buffer_ptr(), main_scene.nodes.data(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size());
 
     ImGuiIO& io = ImGui::GetIO();
@@ -216,7 +217,7 @@ int main() {
             reset_accumulation = true;
         }
 
-        ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.max_bounce, 2, 250);
+        ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.max_bounce, 1, 250);
 
         if (ImGui::Checkbox("debug bvh", (bool*)&((scene*) renderer.scene_buffer_ptr())->meta.debug_bvh)) {
             reset_accumulation = true;

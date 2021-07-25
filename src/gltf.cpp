@@ -78,11 +78,14 @@ void gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std::vec
         auto positions_length = positions_view["byteLength"].get<size_t>();
 
         auto positions_buffer = buffers_content[positions_buffer_index];
-        void* positions_start = positions_buffer.data() + positions_offset;
+        float* positions_start = (float*)(positions_buffer.data() + positions_offset);
 
         mesh_part.positions.resize(positions_length / (sizeof(float) * 3));
 
-        std::memcpy(mesh_part.positions.data(), positions_start, positions_length);
+        for (size_t i = 0; i < positions_length / (sizeof(float) * 3); i++) {
+            mesh_part.positions[i] = vec3(positions_start[i * 3], positions_start[i * 3 + 1], positions_start[i * 3 + 2]);
+        }
+        // std::memcpy(mesh_part.positions.data(), positions_start, positions_length);
     }
 
     {
