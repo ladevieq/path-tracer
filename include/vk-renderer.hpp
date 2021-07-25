@@ -45,7 +45,7 @@ class vkrenderer {
 
         vkapi                           api;
 
-        uint64_t                        frame_index = 0;
+        uint32_t                        virtual_frame_index = 0;
         uint32_t                        swapchain_image_index = 0;
 
         std::vector<Image>              accumulation_images;
@@ -85,6 +85,7 @@ class vkrenderer {
         Swapchain                       swapchain;
 
         const uint32_t                  min_swapchain_image_count = 3;
+        const uint32_t                  virtual_frames_count = 2;
 };
 
 #endif // !__VK_RENDERER_HPP_
