@@ -1,14 +1,15 @@
 #include "scene.hpp"
 
+#include <filesystem>
+
 #include "utils.hpp"
+#include "gltf.hpp"
 
 // Return the number of instantiated spheres
-uint32_t scene::random_scene(sphere *world) {
+void scene::random_scene() {
     material ground_material = { { 0.5, 0.5, 0.5 } };
     ground_material.type = MATERIAL_TYPE::LAMBERTIAN;
-    world[0] = sphere{ { 0, -1000, 0 }, ground_material, 1000 };
-
-    uint32_t world_sphere_index = 1;
+    spheres.emplace_back(vec3 { 0, -1000, 0 }, ground_material, 1000);
 
     int32_t spheres_count = 11;
     for (int a = -spheres_count; a < spheres_count; a++) {
@@ -34,8 +35,7 @@ uint32_t scene::random_scene(sphere *world) {
                     sphere_material.type = MATERIAL_TYPE::DIELECTRIC;
                 }
 
-                world[world_sphere_index] = { center, sphere_material, 0.2 };
-                world_sphere_index++;
+                spheres.emplace_back(center, sphere_material, 0.2);
             }
         }
     }
@@ -43,34 +43,55 @@ uint32_t scene::random_scene(sphere *world) {
     material material1 = {};
     material1.ior = 1.5;
     material1.type = MATERIAL_TYPE::DIELECTRIC;
-    world[world_sphere_index] = { { 0, 1, 0 }, material1, 1.0 };
+    spheres.emplace_back(vec3 { 0, 1, 0 }, material1, 1.0);
 
     material material2 = {};
     material2.albedo = color{ 0.4, 0.2, 0.1 };
     material2.type = MATERIAL_TYPE::LAMBERTIAN;
-    world[world_sphere_index + 1] = { { -4, 1, 0 }, material2, 1.0 };
+    spheres.emplace_back(vec3 { -4, 1, 0 }, material2, 1.0);
 
     material material3 = {};
     material3.albedo = color{ 0.7, 0.6, 0.5 };
     material3.fuzz = 0.0;
     material3.type = MATERIAL_TYPE::METAL;
-    world[world_sphere_index + 2] = { { 4, 1, 0 }, material3, 1.0 };
+    spheres.emplace_back(vec3 { 4, 1, 0 }, material3, 1.0);
 
     material material4 = {};
     material4.albedo = color{ 0.0, 0.0, 0.0 };
     material4.emissive = color{ 1.0, 1.0, 1.0 } * 1000.0;
     material4.fuzz = 0.0;
     material4.type = MATERIAL_TYPE::EMISSIVE;
-    world[world_sphere_index + 3] = { { 2, 1.5, 2 }, material4, 0.5 };
+    spheres.emplace_back(vec3 { 2, 1.5, 2 }, material4, 0.5);
 
-    return world_sphere_index + 4;
+    spheres_count = spheres.size();
 }
 
-scene::scene(uint32_t width, uint32_t height)
-    :width(width), height(height), spheres_count(random_scene(spheres)), 
-        cam({ 13.0, 2.0, 3.0 }, { 0.0, 0.0, 0.0 }, 20.0, (float)width / (float)height, 0.1, 10) {
-    bvh builder;
-    builder.build(spheres, spheres_count);
+scene::scene(camera cam, uint32_t width, uint32_t height)
+    :meta(cam, width, height){
+
+    // auto sponza_path = std::filesystem::path("../models/sponza");
+    // auto sponza_filename = std::string("Sponza.gltf");
+    // auto mesh = gltf::load(sponza_path, sponza_filename);
+
+    // auto node = mesh.nodes[0];
+    // for (auto& mesh_part: node) {
+    //     for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
+    //         auto i1 = mesh_part.indices[i];
+    //         auto i2 = mesh_part.indices[i + 1];
+    //         auto i3 = mesh_part.indices[i + 2];
+
+    //         auto v1 = vertex { .position = mesh_part.positions[i1], .normal = mesh_part.normals[i1] };
+    //         auto v2 = vertex { .position = mesh_part.positions[i2], .normal = mesh_part.normals[i2] };
+    //         auto v3 = vertex { .position = mesh_part.positions[i3], .normal = mesh_part.normals[i3] };
+
+    //         triangles.emplace_back(v1, v2, v3);
+    //     }
+    // }
+
+    random_scene();
+
+    // bvh builder(triangles, nodes);
+    bvh builder(spheres, nodes);
     // builder.exporter();
 
     for (uint32_t idx = 0; idx < builder.nodes.size(); idx++) {

@@ -1,3 +1,5 @@
+find_package(nlohmann_json CONFIG REQUIRED)
+
 add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -22,6 +24,7 @@ add_executable(
     vk-api.cpp
     window.cpp
     scene.cpp
+    gltf.cpp
 )
 
 if(UNIX AND NOT APPLE)
@@ -29,3 +32,4 @@ if(UNIX AND NOT APPLE)
 endif()
 
 target_link_libraries(path-tracer PRIVATE ${LIBRARIES})
+target_link_libraries(path-tracer PRIVATE nlohmann_json nlohmann_json::nlohmann_json)

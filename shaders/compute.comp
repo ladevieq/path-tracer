@@ -43,6 +43,17 @@ struct sphere {
     float[3] padding;
 };
 
+struct vertex {
+    vec4 position;
+    vec4 normal;
+};
+struct triangle {
+    vertex v1;
+    vertex v2;
+    vertex v3;
+    aabb bb;
+};
+
 struct camera {
     vec4 position;
 
@@ -61,17 +72,14 @@ struct camera {
 struct bvh_node {
     aabb bb;
     int next_id;
-    int sphere_id;
+    int primitive_id;
     uint[2] padding;
 };
 
-layout(set = 0, binding = 0) buffer Inputs {
+layout(set = 0, binding = 0) buffer scene_metadata {
     vec4 sky_color;
     vec4 ground_color;
     camera cam;
-
-    sphere[512] spheres;
-    bvh_node[1024] nodes;
 
     uint max_bounce;
     uint width;
@@ -79,13 +87,23 @@ layout(set = 0, binding = 0) buffer Inputs {
     uint sample_index;
 
     uint spheres_count;
+    // uint triangles_count;
     bool enable_dof;
     bool debug_bvh;
     uint padding;
 };
 
-layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D output_image;
-layout(set = 0, binding = 2, rgba32f) uniform readonly image2D accumulation_image;
+layout(set = 0, binding = 1) buffer geometry {
+    sphere[] spheres;
+    // triangle[] triangles;
+};
+
+layout(set = 0, binding = 2) buffer bvh {
+    bvh_node[] nodes;
+};
+
+layout(set = 0, binding = 3, rgba32f) uniform writeonly image2D output_image;
+layout(set = 0, binding = 4, rgba32f) uniform readonly image2D accumulation_image;
 
 vec3 at(ray r, float t) {
     return r.origin + r.direction * t;
@@ -110,6 +128,14 @@ vec3 unit_vec(inout uint seed) {
     float r = sqrt(1.0 - z * z);
 
     return vec3(cos(a) * r, sin(a) * r, z);
+}
+
+vec3 diffuse_reflection_cosine_weighted(inout uint seed) {
+    float r = rand(seed);
+    float radius  = sqrt(r);
+    float theta = 2.0 * PI * rand(seed);
+
+    return vec3(cos(theta) * radius, sin(theta) * radius, sqrt(1 - r));
 }
 
 vec2 disk_vec(inout uint seed) {
@@ -137,10 +163,12 @@ bool hit_aabb(aabb b, ray r, float min_t, float max_t) {
 uint hit_aabbs(ray r, float min_t, float max_t) {
     uint hit_count = 0;
     for (uint idx = 0; idx <= spheres_count * 2; idx++) {
+    // for (uint idx = 0; idx <= triangles_count * 2; idx++) {
         hit_count += uint(hit_aabb(nodes[idx].bb, r, min_t, max_t));
 
-        if (nodes[idx].sphere_id >= 0) {
-            hit_count += uint(hit_aabb(spheres[nodes[idx].sphere_id].bb, r, min_t, max_t));
+        if (nodes[idx].primitive_id >= 0) {
+            hit_count += uint(hit_aabb(spheres[nodes[idx].primitive_id].bb, r, min_t, max_t));
+            // hit_count += uint(hit_aabb(triangles[nodes[idx].primitive_id].bb, r, min_t, max_t));
         }
     }
 
@@ -180,6 +208,33 @@ bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     return true;
 }
 
+bool hit_triangle(triangle tri, ray r, float min_t, float max_t, out hit_info info) {
+    vec3 v2v1 = tri.v2.position.xyz - tri.v1.position.xyz;
+    vec3 v3v1 = tri.v3.position.xyz - tri.v1.position.xyz;
+
+    vec3 originv1 = r.origin - tri.v1.position.xyz;
+    vec3 normal = cross(v2v1, v3v1);
+    vec3 q = cross(originv1, r.direction);
+    float d = 1 / dot(r.direction, normal);
+    float u = d * dot(-q, v3v1);
+    float v = d * dot(q, v2v1);
+    float t = d * dot(-normal, originv1);
+
+    if (u < 0 || u > 1 || v < 0|| u + v > 1) {
+        return false;
+    }
+
+    info.t = t;
+    info.point = at(r, info.t);
+
+    vec3 outward_normal = normal;
+    info.front_face = dot(outward_normal, r.direction) < 0.0;
+    info.normal = info.front_face ? outward_normal : -outward_normal;
+    info.mat = material(vec4(1.0), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
+
+    return true;
+}
+
 bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
     hit_info temp_info;
     float closest_t = max_t;
@@ -188,12 +243,17 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
 
     while(id != -1) {
         // Leafs
-        if (nodes[id].sphere_id != -1) {
-            if (hit_sphere(spheres[nodes[id].sphere_id], r, min_t, closest_t, temp_info)) {
+        if (nodes[id].primitive_id != -1) {
+            if (hit_sphere(spheres[nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
                 info = temp_info;
                 closest_t = temp_info.t;
                 hit = true;
             }
+            // if (hit_triangle(triangles[nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
+            //     info = temp_info;
+            //     closest_t = temp_info.t;
+            //     hit = true;
+            // }
             id = nodes[id].next_id;
         } else { // Internal nodes
             if (hit_aabb(nodes[id].bb, r, min_t, closest_t)) {
@@ -208,6 +268,10 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
 }
 
 bool hit_spheres(ray r, float min_t, float max_t, out hit_info info) {
+    return hit_node(r, min_t, max_t, info);
+}
+
+bool hit_triangles(ray r, float min_t, float max_t, out hit_info info) {
     return hit_node(r, min_t, max_t, info);
 }
 
@@ -263,14 +327,21 @@ vec4 ray_color(ray r, uint seed) {
     vec4 throughput = vec4(1.0);
     ray current_ray = r;
     while (hit_spheres(current_ray, 0.001, 1e15, info) && bounces < max_bounce) {
+    // while (hit_triangles(current_ray, 0.001, 1e15, info) && bounces < max_bounce) {
         ray scattered;
         vec4 attenuation = vec4(0.0);
-        if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        (info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        (info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        info.mat.type == EMISSIVE_MATERIAL) {
+        // if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
+        //     (info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
+        //     (info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
+        //     info.mat.type == EMISSIVE_MATERIAL) {
+            lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered);
             final_color += info.mat.emissive * throughput;
             throughput *= attenuation;
+
+            // float NdotR = dot(info.normal, scattered.direction);
+            // float PDF = NdotR / PI;
+            // vec4 BRDF = attenuation / PI;
+            // throughput = (throughput * NdotR / PDF) * BRDF;
             current_ray = scattered;
 
             // Russian Roulette
@@ -285,11 +356,12 @@ vec4 ray_color(ray r, uint seed) {
             //     // Add the energy we 'lose' by randomly terminating paths
             //     throughput *= 1.0 / p;
             // }
-        }
+        // }
         bounces++;
     }
 
     return throughput;
+    // return final_color;
 }
 
 void main() {

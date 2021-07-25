@@ -10,6 +10,15 @@ class aabb {
         aabb() = default;
         aabb(vec3 min_point, vec3 max_point): minimum(min_point), maximum(max_point) {}
         aabb(vec3 position, float radius): minimum(position - vec3(radius)), maximum(position + vec3(radius)) {}
+        aabb(point3 v1, point3 v2, point3 v3) {
+            minimum.x = fmin(fmin(v1.x, v2.x), v3.x);
+            minimum.y = fmin(fmin(v1.y, v2.y), v3.y);
+            minimum.z = fmin(fmin(v1.z, v2.z), v3.z);
+
+            maximum.x = fmax(fmax(v1.x, v2.x), v3.x);
+            maximum.y = fmax(fmax(v1.y, v2.y), v3.y);
+            maximum.z = fmax(fmax(v1.z, v2.z), v3.z);
+        }
 
         static aabb surrounding_box(aabb box0, aabb box1) {
             point3 min_point(fmin(box0.minimum.x, box1.minimum.x),
