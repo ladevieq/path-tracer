@@ -27,54 +27,21 @@ struct temp_node : public bvh_node {
 
 class bvh {
 public: 
-    bvh(std::vector<sphere>& spheres, std::vector<bvh_node>& nodes)
-        :spheres(spheres), nodes(nodes) {
-        nodes = std::vector<bvh_node>(2 * spheres.size() - 1);
-        temp_nodes = std::vector<temp_node>(2 * spheres.size() - 1);
-        leafs = std::vector<temp_node>(spheres.size());
+    // bvh(std::vector<sphere>& spheres, std::vector<bvh_node>& nodes)
+    //     :spheres(spheres), nodes(nodes) {
+    //     nodes = std::vector<bvh_node>(2 * spheres.size() - 1);
+    //     temp_nodes = std::vector<temp_node>(2 * spheres.size() - 1);
+    //     leafs = std::vector<temp_node>(spheres.size());
 
-        for (uint32_t id = 0; id < spheres.size(); id++) {
-            leafs[id].bounding_box = spheres[id].bounding_box;
-            leafs[id].primitive_id = id;
-        }
-
-        temp_nodes[0] = temp_node();
-
-        temp_nodes[0].bounding_box = compute_bounds(0, spheres.size());
-        subdivide(0, 0, spheres.size());
-
-        set_depth_first_order();
-
-        for (uint32_t id = 0; id < temp_nodes.size(); id++) {
-            auto old_node = temp_nodes[id];
-            auto &node = nodes[old_node.df_id];
-
-            node.primitive_id = old_node.primitive_id;
-            node.bounding_box = old_node.bounding_box;
-
-            if (old_node.next_id != -1) {
-                node.next_id = temp_nodes[old_node.next_id].df_id;
-            }
-        }
-
-        // exporter();
-    }
-
-    // bvh(std::vector<triangle>& triangles, std::vector<bvh_node>& nodes)
-    //     :triangles(triangles), nodes(nodes) {
-    //     nodes.resize(2 * triangles.size() - 1);
-    //     temp_nodes = std::vector<temp_node>(2 * triangles.size() - 1);
-    //     leafs = std::vector<temp_node>(triangles.size());
-
-    //     for (uint32_t id = 0; id < triangles.size(); id++) {
-    //         leafs[id].bounding_box = triangles[id].bounding_box;
+    //     for (uint32_t id = 0; id < spheres.size(); id++) {
+    //         leafs[id].bounding_box = spheres[id].bounding_box;
     //         leafs[id].primitive_id = id;
     //     }
 
     //     temp_nodes[0] = temp_node();
 
-    //     temp_nodes[0].bounding_box = compute_bounds(0, triangles.size());
-    //     subdivide(0, 0, triangles.size());
+    //     temp_nodes[0].bounding_box = compute_bounds(0, spheres.size());
+    //     subdivide(0, 0, spheres.size());
 
     //     set_depth_first_order();
 
@@ -92,6 +59,39 @@ public:
 
     //     // exporter();
     // }
+
+    bvh(std::vector<triangle>& triangles, std::vector<bvh_node>& nodes)
+        :triangles(triangles), nodes(nodes) {
+        nodes.resize(2 * triangles.size() - 1);
+        temp_nodes = std::vector<temp_node>(2 * triangles.size() - 1);
+        leafs = std::vector<temp_node>(triangles.size());
+
+        for (uint32_t id = 0; id < triangles.size(); id++) {
+            leafs[id].bounding_box = triangles[id].bounding_box;
+            leafs[id].primitive_id = id;
+        }
+
+        temp_nodes[0] = temp_node();
+
+        temp_nodes[0].bounding_box = compute_bounds(0, triangles.size());
+        subdivide(0, 0, triangles.size());
+
+        set_depth_first_order();
+
+        for (uint32_t id = 0; id < temp_nodes.size(); id++) {
+            auto old_node = temp_nodes[id];
+            auto &node = nodes[old_node.df_id];
+
+            node.primitive_id = old_node.primitive_id;
+            node.bounding_box = old_node.bounding_box;
+
+            if (old_node.next_id != -1) {
+                node.next_id = temp_nodes[old_node.next_id].df_id;
+            }
+        }
+
+        // exporter();
+    }
 
     //-------------------------
     // BVH exporter for graphviz
@@ -153,8 +153,8 @@ private:
 
         for (uint32_t box_id = begin; box_id < end; box_id++) {
             auto leaf = leafs[box_id];
-            global_box = aabb::surrounding_box(global_box, spheres[leaf.primitive_id].bounding_box);
-            // global_box = aabb::surrounding_box(global_box, triangles[leaf.primitive_id].bounding_box);
+            // global_box = aabb::surrounding_box(global_box, spheres[leaf.primitive_id].bounding_box);
+            global_box = aabb::surrounding_box(global_box, triangles[leaf.primitive_id].bounding_box);
         }
 
         return global_box;
@@ -195,8 +195,11 @@ private:
             int32_t split_axis = find_split_axis(temp_nodes[parent_id].bounding_box);
 
             std::sort(leafs.begin() + begin, leafs.begin() + end,
+            //     [&](const bvh_node& a, const bvh_node& b) {
+            //         return spheres[a.primitive_id].center[split_axis] < spheres[b.primitive_id].center[split_axis];
+            //     }
                 [&](const bvh_node& a, const bvh_node& b) {
-                    return spheres[a.primitive_id].center[split_axis] < spheres[b.primitive_id].center[split_axis];
+                    return triangles[a.primitive_id].center()[split_axis] < triangles[b.primitive_id].center()[split_axis];
                 }
             );
 
@@ -230,8 +233,8 @@ public:
     std::vector<temp_node> temp_nodes;
     std::vector<temp_node> leafs;
 
-    std::vector<sphere>& spheres;
-    // std::vector<triangle>& triangles;
+    // std::vector<sphere>& spheres;
+    std::vector<triangle>& triangles;
 
     uint32_t next_node_id = 0;
 };
