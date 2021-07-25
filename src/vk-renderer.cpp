@@ -24,7 +24,7 @@ struct UiTransforms {
     float translate_x, translate_y;
 };
 
-vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size) {
+vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_buffer_size, size_t bvh_buffer_size) {
     platform_surface = api.create_surface(wnd);
     swapchain = api.create_swapchain(
         platform_surface,
@@ -45,13 +45,27 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size) {
         },
         {
             .binding = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
             .pImmutableSamplers = VK_NULL_HANDLE,
         },
         {
             .binding = 2,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
+        {
+            .binding = 3,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            .pImmutableSamplers = VK_NULL_HANDLE,
+        },
+        {
+            .binding = 4,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -94,9 +108,13 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size) {
     acquire_semaphores = api.create_semaphores(swapchain.image_count);
 
     scene_buffer = api.create_buffer(scene_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    geometry_buffer = api.create_buffer(geometry_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    bvh_buffer = api.create_buffer(bvh_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     for (size_t index = 0; index < swapchain.image_count; index++) {
         api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], scene_buffer);
+        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[1], geometry_buffer);
+        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[2], bvh_buffer);
     }
 
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
@@ -215,6 +233,8 @@ vkrenderer::~vkrenderer() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
     api.destroy_buffer(scene_buffer);
+    api.destroy_buffer(geometry_buffer);
+    api.destroy_buffer(bvh_buffer);
     api.destroy_fences(submission_fences);
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);
@@ -308,8 +328,8 @@ void vkrenderer::begin_frame() {
     auto output_image = accumulation_images[0];
     auto accumulation_image = accumulation_images[1];
 
-    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[1], output_image.view, VK_NULL_HANDLE);
-    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[2], accumulation_image.view, VK_NULL_HANDLE);
+    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[3], output_image.view, VK_NULL_HANDLE);
+    api.update_descriptor_set_image(compute_shader_sets[swapchain_image_index], compute_sets_bindings[4], accumulation_image.view, VK_NULL_HANDLE);
 
     api.update_descriptor_set_image(tonemapping_shader_sets[swapchain_image_index], tonemapping_sets_bindings[0], swapchain.images[swapchain_image_index].view, VK_NULL_HANDLE);
     api.update_descriptor_set_image(tonemapping_shader_sets[swapchain_image_index], tonemapping_sets_bindings[1], output_image.view, VK_NULL_HANDLE);

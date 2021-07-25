@@ -11,7 +11,7 @@ class window;
 
 class vkrenderer {
     public:
-        vkrenderer(window& wnd, size_t scene_buffer_size);
+        vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_buffer_size, size_t bvh_buffer_size);
 
         ~vkrenderer();
 
@@ -29,6 +29,14 @@ class vkrenderer {
 
         inline void* scene_buffer_ptr() {
             return scene_buffer.alloc_info.pMappedData;
+        }
+
+        inline void* geometry_buffer_ptr() {
+            return geometry_buffer.alloc_info.pMappedData;
+        }
+
+        inline void* bvh_buffer_ptr() {
+            return bvh_buffer.alloc_info.pMappedData;
         }
 
     private:
@@ -52,6 +60,8 @@ class vkrenderer {
         Pipeline                        compute_pipeline;
 
         Buffer                          scene_buffer;
+        Buffer                          geometry_buffer;
+        Buffer                          bvh_buffer;
 
 
         std::vector<VkDescriptorSetLayoutBinding> tonemapping_sets_bindings;

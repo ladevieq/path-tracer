@@ -54,12 +54,22 @@ int main() {
     uint64_t frame_count = 0;
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
-    auto main_scene = scene(width, height);
-    auto can_render = true;
-    vkrenderer renderer { wnd, sizeof(main_scene) };
 
-    // Upload scene
-    std::memcpy(renderer.scene_buffer_ptr(), &main_scene, sizeof(main_scene));
+    point3 position = { 13.0, 2.0, 3.0 };
+    point3 target = { 0.0, 0.0, 0.0 };
+    auto v_fov = 20;
+    auto aperture = 0.1;
+    auto focus_distance = 10;
+    auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);
+    auto main_scene = scene(cam, width, height);
+    auto can_render = true;
+    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[0]) * main_scene.triangles.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
+    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
+
+    // Upload scene content
+    std::memcpy(renderer.scene_buffer_ptr(), &main_scene.meta, sizeof(main_scene.meta));
+    std::memcpy(renderer.geometry_buffer_ptr(), main_scene.spheres.data(), sizeof(main_scene.spheres[0]) * main_scene.spheres.size());
+    std::memcpy(renderer.bvh_buffer_ptr(), main_scene.nodes.data(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size());
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize.x = (float)width;
@@ -85,8 +95,8 @@ int main() {
                     width = event.width;
                     height = event.height;
 
-                    ((scene*) renderer.scene_buffer_ptr())->width = width;
-                    ((scene*) renderer.scene_buffer_ptr())->height = height;
+                    ((scene*) renderer.scene_buffer_ptr())->meta.width = width;
+                    ((scene*) renderer.scene_buffer_ptr())->meta.height = height;
 
                     io.DisplaySize.x = (float)width;
                     io.DisplaySize.y = (float)height;
@@ -96,8 +106,8 @@ int main() {
                     } else {
                         can_render = true;
                         renderer.recreate_swapchain();
-                        ((scene*) renderer.scene_buffer_ptr())->cam.set_aspect_ratio((float)event.width / (float)event.height);
-                        ((scene*) renderer.scene_buffer_ptr())->sample_index = 0;
+                        ((scene*) renderer.scene_buffer_ptr())->meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
+                        ((scene*) renderer.scene_buffer_ptr())->meta.sample_index = 0;
                     }
 
                     reset_accumulation = true;
@@ -114,44 +124,44 @@ int main() {
 
                     switch (event.key) {
                         case KEYS::W: {
-                            move_vec = ((scene*) renderer.scene_buffer_ptr())->cam.forward.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::S: {
-                            move_vec = -((scene*) renderer.scene_buffer_ptr())->cam.forward.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.forward.unit() * move_speed;
                             break;
                         }
                         case KEYS::D: {
-                            move_vec = ((scene*) renderer.scene_buffer_ptr())->cam.right.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.right.unit() * move_speed;
                             break;
                         }
                         case KEYS::A: {
-                            move_vec = -((scene*) renderer.scene_buffer_ptr())->cam.right.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.right.unit() * move_speed;
                             break;
                         }
                         case KEYS::E: {
-                            ((scene*) renderer.scene_buffer_ptr())->cam.rotate_y(0.001f * delta_time);
+                            ((scene*) renderer.scene_buffer_ptr())->meta.cam.rotate_y(0.001f * delta_time);
                             reset_accumulation = true;
                             break;
                         }
                         case KEYS::Q: {
-                            ((scene*) renderer.scene_buffer_ptr())->cam.rotate_y(-0.001f * delta_time);
+                            ((scene*) renderer.scene_buffer_ptr())->meta.cam.rotate_y(-0.001f * delta_time);
                             reset_accumulation = true;
                             break;
                         }
                         case KEYS::SPACE: {
-                            move_vec = ((scene*) renderer.scene_buffer_ptr())->cam.up.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.up.unit() * move_speed;
                             break;
                         }
                         case KEYS::CTRL: {
-                            move_vec = -((scene*) renderer.scene_buffer_ptr())->cam.up.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.up.unit() * move_speed;
                             break;
                         }
                         default:
                             break;
                     }
 
-                    ((scene*) renderer.scene_buffer_ptr())->cam.move(move_vec);
+                    ((scene*) renderer.scene_buffer_ptr())->meta.cam.move(move_vec);
 
                     if (!move_vec.near_zero()) {
                         reset_accumulation = true;
@@ -200,15 +210,15 @@ int main() {
 
         ImGui::Text("frame per second %u\n", static_cast<uint32_t>(1000.f / delta_time));
         ImGui::Text("frame time %f ms\n", delta_time);
-        ImGui::Text("frame count %u\n", ((scene*) renderer.scene_buffer_ptr())->sample_index);
+        ImGui::Text("frame count %u\n", ((scene*) renderer.scene_buffer_ptr())->meta.sample_index);
 
-        if (ImGui::Checkbox("depth of field", (bool*)&((scene*) renderer.scene_buffer_ptr())->enable_dof)) {
+        if (ImGui::Checkbox("depth of field", (bool*)&((scene*) renderer.scene_buffer_ptr())->meta.enable_dof)) {
             reset_accumulation = true;
         }
 
-        ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->max_bounce, 2, 250);
+        ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.max_bounce, 2, 250);
 
-        if (ImGui::Checkbox("debug bvh", (bool*)&((scene*) renderer.scene_buffer_ptr())->debug_bvh)) {
+        if (ImGui::Checkbox("debug bvh", (bool*)&((scene*) renderer.scene_buffer_ptr())->meta.debug_bvh)) {
             reset_accumulation = true;
         }
 
@@ -226,13 +236,13 @@ int main() {
             renderer.begin_frame();
 
             if (reset_accumulation) {
-                ((scene*) renderer.scene_buffer_ptr())->sample_index = 0;
+                ((scene*) renderer.scene_buffer_ptr())->meta.sample_index = 0;
                 renderer.reset_accumulation();
             }
 
             renderer.compute(width, height);
 
-            ((scene*) renderer.scene_buffer_ptr())->sample_index++;
+            ((scene*) renderer.scene_buffer_ptr())->meta.sample_index++;
 
             renderer.ui();
 
