@@ -57,7 +57,7 @@ int main() {
 
     point3 position = { 13.0, 2.0, -3.0 };
     point3 target = { 0.0, 0.0, 0.0 };
-    auto v_fov = 20;
+    auto v_fov = 90;
     auto aperture = 0.1;
     auto focus_distance = 10;
     auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);

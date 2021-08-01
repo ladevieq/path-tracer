@@ -10,7 +10,7 @@ class aabb {
         aabb() = default;
         aabb(vec3 min_point, vec3 max_point): minimum(min_point), maximum(max_point) {}
         aabb(vec3 position, float radius): minimum(position - vec3(radius)), maximum(position + vec3(radius)) {}
-        aabb(point3 v1, point3 v2, point3 v3) {
+        aabb(point3 &v1, point3 &v2, point3 &v3) {
             minimum.x = fmin(fmin(v1.x, v2.x), v3.x);
             minimum.y = fmin(fmin(v1.y, v2.y), v3.y);
             minimum.z = fmin(fmin(v1.z, v2.z), v3.z);
@@ -20,20 +20,53 @@ class aabb {
             maximum.z = fmax(fmax(v1.z, v2.z), v3.z);
         }
 
-        static aabb surrounding_box(aabb box0, aabb box1) {
-            point3 min_point(fmin(box0.minimum.x, box1.minimum.x),
-                         fmin(box0.minimum.y, box1.minimum.y),
-                         fmin(box0.minimum.z, box1.minimum.z));
+        void union_with(const aabb &box) {
+            minimum.x = fmin(minimum.x, box.minimum.x);
+            minimum.y = fmin(minimum.y, box.minimum.y);
+            minimum.z = fmin(minimum.z, box.minimum.z);
 
-            point3 max_point(fmax(box0.maximum.x, box1.maximum.x),
-                       fmax(box0.maximum.y, box1.maximum.y),
-                       fmax(box0.maximum.z, box1.maximum.z));
+            maximum.x = fmax(maximum.x, box.maximum.x);
+            maximum.y = fmax(maximum.y, box.maximum.y);
+            maximum.z = fmax(maximum.z, box.maximum.z);
+        }
 
-            return aabb(min_point, max_point);
+        void union_with(const point3 &point) {
+            minimum.x = fmin(minimum.x, point.x);
+            minimum.y = fmin(minimum.y, point.y);
+            minimum.z = fmin(minimum.z, point.z);
+
+            maximum.x = fmax(maximum.x, point.x);
+            maximum.y = fmax(maximum.y, point.y);
+            maximum.z = fmax(maximum.z, point.z);
+        }
+
+        int32_t maximum_axis() {
+            vec3 diag = diagonal();
+
+            if (diag.x > diag.y && diag.x > diag.z) {
+                return 0;
+            } else if (diag.y > diag.z) {
+                return 1;
+            } else {
+                return 2;
+            }
+        }
+
+        vec3 diagonal() {
+            return maximum - minimum;
+        }
+
+        vec3 center() {
+            return diagonal() / 2.f;
+        }
+
+        float surface_area() {
+            auto diag = diagonal();
+            return 2.f * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
         }
 
         vec3 minimum = vec3(std::numeric_limits<float>::max());
-        vec3 maximum = vec3(std::numeric_limits<float>::min());
+        vec3 maximum = vec3(std::numeric_limits<float>::lowest());
 };
 
 #endif // !__AABB_HPP_

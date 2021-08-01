@@ -5,6 +5,8 @@
 
 #include "utils.hpp"
 
+const vec3 scale (0.00800000037997961);
+
 mesh gltf::load(std::filesystem::path &path, std::string &filename) {
     std::fstream f(path / filename);
     json gltf_json;
@@ -61,7 +63,7 @@ void gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std::vec
         auto indices_length = indices_view["byteLength"].get<size_t>();
 
         auto indices_buffer = buffers_content[indices_buffer_index];
-        void* indices_start = indices_buffer.data() + indices_offset;
+        uint16_t* indices_start = (uint16_t*)(indices_buffer.data() + indices_offset);
 
         mesh_part.indices.resize(indices_length / sizeof(uint16_t));
 
@@ -83,25 +85,24 @@ void gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std::vec
         mesh_part.positions.resize(positions_length / (sizeof(float) * 3));
 
         for (size_t i = 0; i < positions_length / (sizeof(float) * 3); i++) {
-            mesh_part.positions[i] = vec3(positions_start[i * 3], positions_start[i * 3 + 1], positions_start[i * 3 + 2]);
+            mesh_part.positions[i] = vec3(positions_start[i * 3], positions_start[i * 3 + 1], positions_start[i * 3 + 2]) * scale;
         }
-        // std::memcpy(mesh_part.positions.data(), positions_start, positions_length);
     }
 
-    {
-        auto normals_accessor_index = primitive["attributes"]["NORMAL"].get<uint32_t>();
-        auto normals_view_index = accessors[normals_accessor_index]["bufferView"].get<uint32_t>();
-        auto normals_view = gltf_json["bufferViews"][normals_view_index];
+    // {
+    //     auto normals_accessor_index = primitive["attributes"]["NORMAL"].get<uint32_t>();
+    //     auto normals_view_index = accessors[normals_accessor_index]["bufferView"].get<uint32_t>();
+    //     auto normals_view = gltf_json["bufferViews"][normals_view_index];
 
-        auto normals_buffer_index = normals_view["buffer"].get<uint32_t>();
-        auto normals_offset = normals_view["byteOffset"].get<size_t>();
-        auto normals_length = normals_view["byteLength"].get<size_t>();
+    //     auto normals_buffer_index = normals_view["buffer"].get<uint32_t>();
+    //     auto normals_offset = normals_view["byteOffset"].get<size_t>();
+    //     auto normals_length = normals_view["byteLength"].get<size_t>();
 
-        auto normals_buffer = buffers_content[normals_buffer_index];
-        void* normals_start = normals_buffer.data() + normals_offset;
+    //     auto normals_buffer = buffers_content[normals_buffer_index];
+    //     void* normals_start = normals_buffer.data() + normals_offset;
 
-        mesh_part.normals.resize(normals_length / (sizeof(float) * 3));
+    //     mesh_part.normals.resize(normals_length / (sizeof(float) * 3));
 
-        std::memcpy(mesh_part.normals.data(), normals_start, normals_length);
-    }
+    //     std::memcpy(mesh_part.normals.data(), normals_start, normals_length);
+    // }
 }
