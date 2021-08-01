@@ -90,9 +90,7 @@ scene::scene(camera cam, uint32_t width, uint32_t height)
 
     // random_scene();
 
-    bvh builder(triangles, nodes);
+    bvh builder(triangles, packed_nodes);
     // bvh builder(spheres, nodes);
     // builder.exporter();
-
-    std::memcpy(nodes.data(), builder.nodes.data(), sizeof(nodes[0]) * nodes.size());
 }

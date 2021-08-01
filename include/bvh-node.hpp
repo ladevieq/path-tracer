@@ -20,6 +20,13 @@ class bvh_node {
         uint32_t padding[2];
 };
 
+struct packed_bvh_node {
+    float min[3];
+    int32_t next_id = -1;
+    float max[3];
+    int32_t primitive_id = -1;
+};
+
 struct temp_node : public bvh_node {
     int32_t left_id;
     int32_t df_id;
@@ -60,14 +67,14 @@ public:
     //     // exporter();
     // }
 
-    bvh(std::vector<triangle>& triangles, std::vector<bvh_node>& nodes)
-        :triangles(triangles), nodes(nodes) {
-        nodes.resize(2 * triangles.size() - 1);
+    bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_nodes)
+        :triangles(triangles) {
+        packed_nodes.resize(2 * triangles.size() - 1);
         temp_nodes = std::vector<temp_node>(2 * triangles.size() - 1);
         leafs = std::vector<temp_node>(triangles.size());
 
         for (uint32_t id = 0; id < triangles.size(); id++) {
-            leafs[id].bounding_box = triangles[id].bounding_box;
+            leafs[id].bounding_box = aabb(triangles[id]);
             leafs[id].primitive_id = id;
         }
 
@@ -80,17 +87,22 @@ public:
 
         for (uint32_t id = 0; id < temp_nodes.size(); id++) {
             auto old_node = temp_nodes[id];
-            auto &node = nodes[old_node.df_id];
+            auto &node = packed_nodes[old_node.df_id];
 
             node.primitive_id = old_node.primitive_id;
-            node.bounding_box = old_node.bounding_box;
+
+            node.min[0] = old_node.bounding_box.minimum.x;
+            node.min[1] = old_node.bounding_box.minimum.y;
+            node.min[2] = old_node.bounding_box.minimum.z;
+
+            node.max[0] = old_node.bounding_box.maximum.x;
+            node.max[1] = old_node.bounding_box.maximum.y;
+            node.max[2] = old_node.bounding_box.maximum.z;
 
             if (old_node.next_id != -1) {
                 node.next_id = temp_nodes[old_node.next_id].df_id;
             }
         }
-
-        // TODO: Pack nodes
 
         // exporter();
     }
@@ -148,7 +160,6 @@ public:
         return -1;
     }
 
-    std::vector<bvh_node>& nodes;
     std::vector<temp_node> temp_nodes;
     std::vector<temp_node> leafs;
 
@@ -164,10 +175,9 @@ private:
     aabb compute_bounds(uint32_t begin, uint32_t end) {
         aabb global_box = aabb();
 
-        for (uint32_t box_id = begin; box_id < end; box_id++) {
-            auto leaf = leafs[box_id];
-            // global_box = aabb::surrounding_box(global_box, spheres[leaf.primitive_id].bounding_box);
-            global_box.union_with(triangles[leaf.primitive_id].bounding_box);
+        for (uint32_t id = begin; id < end; id++) {
+            // global_box.union_with(spheres[leaf.primitive_id].bounding_box);
+            global_box.union_with(leafs[id].bounding_box);
         }
 
         return global_box;
@@ -235,7 +245,7 @@ private:
                     }
 
                     buckets[bucket_index].count++;
-                    buckets[bucket_index].bb.union_with(primitive.bounding_box);
+                    buckets[bucket_index].bb.union_with(leafs[i].bounding_box);
                 }
 
                 // Compute each potential split axis cost
