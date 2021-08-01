@@ -90,6 +90,8 @@ public:
             }
         }
 
+        // TODO: Pack nodes
+
         // exporter();
     }
 
@@ -146,7 +148,18 @@ public:
         return -1;
     }
 
+    std::vector<bvh_node>& nodes;
+    std::vector<temp_node> temp_nodes;
+    std::vector<temp_node> leafs;
+
+    // std::vector<sphere>& spheres;
+    std::vector<triangle>& triangles;
+
+    uint32_t next_node_id = 0;
+
 private:
+
+    static constexpr uint32_t buckets_count = 12;
 
     aabb compute_bounds(uint32_t begin, uint32_t end) {
         aabb global_box = aabb();
@@ -154,26 +167,10 @@ private:
         for (uint32_t box_id = begin; box_id < end; box_id++) {
             auto leaf = leafs[box_id];
             // global_box = aabb::surrounding_box(global_box, spheres[leaf.primitive_id].bounding_box);
-            global_box = aabb::surrounding_box(global_box, triangles[leaf.primitive_id].bounding_box);
+            global_box.union_with(triangles[leaf.primitive_id].bounding_box);
         }
 
         return global_box;
-    }
-
-    int32_t find_split_axis(aabb bounding_box) {
-        int32_t split_axis = 0;
-        float size = 0;
-
-        // Find largest axis
-        for (size_t id = 0; id < 3; id++) {
-            auto current_size = bounding_box.maximum[id] - bounding_box.minimum[id];
-            if (current_size > size) {
-                size = current_size;
-                split_axis = id;
-            }
-        }
-
-        return split_axis;
     }
 
     void subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
@@ -192,22 +189,96 @@ private:
             temp_nodes[left_id] = leafs[begin];
             temp_nodes[right_id] = leafs[begin + 1];
         } else {
-            int32_t split_axis = find_split_axis(temp_nodes[parent_id].bounding_box);
+            auto parent_bb = temp_nodes[parent_id].bounding_box;
+            int32_t split_axis = parent_bb.maximum_axis();
 
-            std::sort(leafs.begin() + begin, leafs.begin() + end,
-            //     [&](const bvh_node& a, const bvh_node& b) {
-            //         return spheres[a.primitive_id].center[split_axis] < spheres[b.primitive_id].center[split_axis];
-            //     }
-                [&](const bvh_node& a, const bvh_node& b) {
-                    return triangles[a.primitive_id].center()[split_axis] < triangles[b.primitive_id].center()[split_axis];
+            if (count <= 4) {
+                // Subdivide the node by splitting the set in two equal parts
+                std::sort(leafs.begin() + begin, leafs.begin() + end,
+                    // [&](const bvh_node& a, const bvh_node& b) {
+                    //     return spheres[a.primitive_id].center[split_axis] < spheres[b.primitive_id].center[split_axis];
+                    // }
+                    [&](const bvh_node& a, const bvh_node& b) {
+                        return triangles[a.primitive_id].center()[split_axis] < triangles[b.primitive_id].center()[split_axis];
+                    }
+                );
+
+                temp_nodes[left_id].bounding_box = compute_bounds(begin, begin + (count / 2));
+                temp_nodes[right_id].bounding_box = compute_bounds(begin + (count / 2), end);
+
+                subdivide(left_id, begin, begin + (count / 2));
+                subdivide(right_id, begin + (count / 2), end);
+            } else {
+                // Subdivide based on SAH
+                struct Bucket {
+                    uint32_t count = 0;
+                    aabb bb;
+                };
+                Bucket buckets[buckets_count];
+
+                // Split the set in N spatial buckets
+                // Simplify the optimal split axis search to just an axis between each bucket
+                aabb centroid_bounds;
+
+                for (size_t i = begin; i < end; i++) {
+                    auto primitive = triangles[leafs[i].primitive_id];
+                    centroid_bounds.union_with(primitive.center());
                 }
-            );
 
-            temp_nodes[left_id].bounding_box = compute_bounds(begin, begin + (count / 2));
-            temp_nodes[right_id].bounding_box = compute_bounds(begin + (count / 2), end);
+                float split_axis_size = centroid_bounds.maximum[split_axis] - centroid_bounds.minimum[split_axis];
+                for (size_t i = begin; i < end; i++) {
+                    auto primitive = triangles[leafs[i].primitive_id];
+                    auto normalized_offset = (primitive.center()[split_axis] - centroid_bounds.minimum[split_axis]) / split_axis_size;
+                    uint32_t bucket_index = normalized_offset * buckets_count;
+                    if (bucket_index == buckets_count) {
+                        bucket_index -= 1;
+                    }
 
-            subdivide(left_id, begin, begin + (count / 2));
-            subdivide(right_id, begin + (count / 2), end);
+                    buckets[bucket_index].count++;
+                    buckets[bucket_index].bb.union_with(primitive.bounding_box);
+                }
+
+                // Compute each potential split axis cost
+                float buckets_cost[buckets_count - 1] = { 0.f };
+                for (size_t bucket_index = 0; bucket_index < buckets_count - 1; bucket_index++) {
+                    aabb right_side_bb, left_side_bb;
+                    float right_side_count = 0, left_side_count = 0;
+
+                    for (size_t i = 0; i <= bucket_index; i++) {
+                        left_side_bb.union_with(buckets[i].bb);
+                        left_side_count += buckets[i].count;
+                    }
+
+                    for (size_t i = bucket_index + 1; i < buckets_count; i++) {
+                        right_side_bb.union_with(buckets[i].bb);
+                        right_side_count += buckets[i].count;
+                    }
+
+                    float left = left_side_count * left_side_bb.surface_area();
+                    float right = right_side_count * right_side_bb.surface_area();
+                    buckets_cost[bucket_index] = 0.125f + (left + right) / parent_bb.surface_area();
+                }
+
+                float min_cost = buckets_cost[0];
+                uint32_t min_cost_bucket = 0;
+                for (size_t bucket_index = 1; bucket_index < buckets_count - 1; bucket_index++) {
+                    if (buckets_cost[bucket_index] < min_cost) {
+                        min_cost = buckets_cost[bucket_index];
+                        min_cost_bucket = bucket_index;
+                    }
+                }
+
+                uint32_t middle_primitive_index = buckets[0].count;
+                for (size_t bucket_index = 1; bucket_index <= min_cost_bucket; bucket_index++) {
+                    middle_primitive_index += buckets[bucket_index].count;
+                }
+
+                temp_nodes[left_id].bounding_box = compute_bounds(begin, begin + middle_primitive_index);
+                temp_nodes[right_id].bounding_box = compute_bounds(begin + middle_primitive_index, end);
+
+                subdivide(left_id, begin, begin + middle_primitive_index);
+                subdivide(right_id, begin + middle_primitive_index, end);
+            }
         }
     }
 
@@ -227,16 +298,6 @@ private:
             depth_first_order(node.left_id + 1, next_id, new_id);
         }
     }
-
-public:
-    std::vector<bvh_node>& nodes;
-    std::vector<temp_node> temp_nodes;
-    std::vector<temp_node> leafs;
-
-    // std::vector<sphere>& spheres;
-    std::vector<triangle>& triangles;
-
-    uint32_t next_node_id = 0;
 };
 
 #endif // !__BVH_NODE_HPP_

@@ -6,7 +6,6 @@
 
 struct vertex {
     vec3 position;
-    vec3 normal;
 };
 
 struct triangle {
@@ -16,7 +15,7 @@ struct triangle {
     {}
 
     vec3 center() {
-        return (v2.position + v1.position + v3.position) / 3.f;
+        return (v1.position + v2.position + v3.position) / 3.f;
     }
 
     vertex v1;

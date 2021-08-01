@@ -80,9 +80,9 @@ scene::scene(camera cam, uint32_t width, uint32_t height)
             auto i2 = mesh_part.indices[i + 1];
             auto i3 = mesh_part.indices[i + 2];
 
-            auto v1 = vertex { .position = mesh_part.positions[i1], .normal = mesh_part.normals[i1] };
-            auto v2 = vertex { .position = mesh_part.positions[i2], .normal = mesh_part.normals[i2] };
-            auto v3 = vertex { .position = mesh_part.positions[i3], .normal = mesh_part.normals[i3] };
+            auto v1 = vertex { .position = mesh_part.positions[i1] };
+            auto v2 = vertex { .position = mesh_part.positions[i2] };
+            auto v3 = vertex { .position = mesh_part.positions[i3] };
 
             triangles.emplace_back(v1, v2, v3);
         }
@@ -94,7 +94,5 @@ scene::scene(camera cam, uint32_t width, uint32_t height)
     // bvh builder(spheres, nodes);
     // builder.exporter();
 
-    for (uint32_t idx = 0; idx < builder.nodes.size(); idx++) {
-        nodes[idx] = builder.nodes[idx];
-    }
+    std::memcpy(nodes.data(), builder.nodes.data(), sizeof(nodes[0]) * nodes.size());
 }

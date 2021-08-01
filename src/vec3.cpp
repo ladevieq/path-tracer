@@ -139,32 +139,3 @@ vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat) {
 std::ostream& operator<<(std::ostream& out, vec3 vec) {
     return out << vec.x << ' ' << vec.y << ' ' << vec.z << std::endl;
 }
-
-// TODO: Use something else to find random point onto a sphere
-vec3 random_in_unit_sphere() {
-    while (true) {
-        auto p = vec3::random(-1,1);
-        if (p.length_sq() >= 1) continue;
-        return p;
-    }
-}
-
-vec3 random_unit_vector() {
-    return random_in_unit_sphere().unit();
-}
-
-vec3 random_in_hemisphere(const vec3& normal) {
-    vec3 in_unit_sphere = random_in_unit_sphere();
-    if (in_unit_sphere.dot(normal) > 0.0) // In the same hemisphere as the normal
-        return in_unit_sphere;
-    else
-        return -in_unit_sphere;
-}
-
-vec3 random_in_unit_disk() {
-    while (true) {
-        auto p = vec3(randd(-1, 1), randd(-1, 1), 0);
-        if (p.length_sq() >= 1) continue;
-        return p;
-    }
-}

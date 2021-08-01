@@ -43,7 +43,6 @@ struct sphere {
 
 struct vertex {
     vec4 position;
-    vec4 normal;
 };
 struct triangle {
     vertex v1;
@@ -218,18 +217,17 @@ bool hit_triangle(triangle tri, ray r, float min_t, float max_t, out hit_info in
     float v = d * dot(q, v2v1);
     float t = d * dot(-normal, originv1);
 
-    if (u < 0.0 || u > 1.0 || v < 0.0 || u + v > 1.0) {
+    if (u < 0.0 || u > 1.0 || v < 0.0 || u + v > 1.0 || t < min_t || t > max_t) {
         return false;
     }
 
     info.t = t;
-    // info.point = at(r, info.t);
+    info.point = at(r, info.t);
 
     vec3 outward_normal = normal;
-    info.front_face = dot(outward_normal, r.direction) < 0.0;
-    // info.normal = info.front_face ? outward_normal : -outward_normal;
-    info.normal = vec3(u, v, 0.0);
-    // info.mat = material(vec4(u, v, 0.0, 0.0), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
+    // info.front_face = dot(outward_normal, r.direction) < 0.0;
+    info.normal = normal;
+    info.mat = material(vec4(u, v, 0.0, 0.0), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
 
     return true;
 }
@@ -328,10 +326,10 @@ vec4 ray_color(ray r, uint seed) {
             // final_color += info.mat.emissive * throughput;
             throughput *= attenuation;
 
-            // float NdotR = dot(info.normal, scattered.direction);
-            // float PDF = NdotR / PI;
-            // vec4 BRDF = attenuation / PI;
-            // throughput = (throughput * NdotR / PDF) * BRDF;
+            float NdotR = dot(info.normal, scattered.direction);
+            float PDF = NdotR / PI;
+            vec4 BRDF = attenuation / PI;
+            throughput = (throughput * NdotR / PDF) * BRDF;
             current_ray = scattered;
 
             // Russian Roulette
@@ -372,7 +370,6 @@ void main() {
     vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
 
     ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
-
     vec4 out_color = ray_color(r, seed);
 
     if (debug_bvh) {

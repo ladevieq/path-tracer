@@ -13,7 +13,7 @@ using json = nlohmann::json;
 struct mesh_part {
     std::vector<uint16_t> indices;
     std::vector<vec3> positions;
-    std::vector<vec3> normals;
+    // std::vector<vec3> normals;
 };
 
 struct mesh {
