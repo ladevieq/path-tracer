@@ -44,7 +44,7 @@ public:
     // Geometry & BVH
     // std::vector<sphere> spheres;
     std::vector<triangle> triangles;
-    std::vector<bvh_node> nodes;
+    std::vector<packed_bvh_node> packed_nodes;
 };
 
 #endif // !__SCENE_HPP_
