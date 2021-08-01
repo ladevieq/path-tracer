@@ -68,9 +68,8 @@ int main() {
 
     // Upload scene content
     std::memcpy(renderer.scene_buffer_ptr(), &main_scene.meta, sizeof(main_scene.meta));
-    // std::memcpy(renderer.geometry_buffer_ptr(), main_scene.spheres.data(), sizeof(main_scene.spheres[0]) * main_scene.spheres.size());
-    std::memcpy(renderer.geometry_buffer_ptr(), main_scene.triangles.data(), sizeof(main_scene.triangles[0]) * main_scene.triangles.size());
-    std::memcpy(renderer.bvh_buffer_ptr(), main_scene.packed_nodes.data(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size());
+    renderer.update_geometry_buffer(main_scene.triangles.data());
+    renderer.update_bvh_buffer(main_scene.packed_nodes.data());
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize.x = (float)width;

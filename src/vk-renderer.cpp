@@ -108,8 +108,9 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
     acquire_semaphores = api.create_semaphores(virtual_frames_count);
 
     scene_buffer = api.create_buffer(scene_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    geometry_buffer = api.create_buffer(geometry_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    bvh_buffer = api.create_buffer(bvh_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    geometry_buffer = api.create_buffer(geometry_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    bvh_buffer = api.create_buffer(bvh_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
 
     for (size_t index = 0; index < virtual_frames_count; index++) {
         api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], scene_buffer);
@@ -185,6 +186,7 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
 
+    // TODO: Move this into the API
     VkImageSubresourceLayers image_subresource_layers   = {};
     image_subresource_layers.aspectMask                 = VK_IMAGE_ASPECT_COLOR_BIT;
     image_subresource_layers.mipLevel                   = 0;
@@ -475,4 +477,60 @@ void vkrenderer::handle_swapchain_result(VkResult function_result) {
         default:
             return;
     }
+}
+
+
+// TODO: Integrate into the API so that we no longer have to wait for the fence
+void vkrenderer::update_geometry_buffer(void* data) {
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
+
+    auto cmd_buf = command_buffers[virtual_frame_index];
+    api.start_record(cmd_buf);
+
+    auto staging_buffer = api.create_buffer(geometry_buffer.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    std::memcpy(staging_buffer.alloc_info.pMappedData, data, staging_buffer.size);
+    // std::memcpy(geometry_staging_buffer.alloc_info.pMappedData, data, geometry_staging_buffer.size);
+
+    VkBufferCopy buffer_copy = {};
+    buffer_copy.srcOffset = 0;
+    buffer_copy.dstOffset = 0;
+    buffer_copy.size = staging_buffer.size;
+
+    vkCmdCopyBuffer(cmd_buf, staging_buffer.handle, geometry_buffer.handle, 1, &buffer_copy);
+
+    api.end_record(cmd_buf);
+
+    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
+
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+
+    api.destroy_buffer(staging_buffer);
+}
+
+void vkrenderer::update_bvh_buffer(void* data) {
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
+
+    auto cmd_buf = command_buffers[virtual_frame_index];
+    api.start_record(cmd_buf);
+
+    auto staging_buffer = api.create_buffer(bvh_buffer.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    std::memcpy(staging_buffer.alloc_info.pMappedData, data, staging_buffer.size);
+    // std::memcpy(bvh_staging_buffer.alloc_info.pMappedData, data, bvh_staging_buffer.size);
+
+    VkBufferCopy buffer_copy = {};
+    buffer_copy.srcOffset = 0;
+    buffer_copy.dstOffset = 0;
+    buffer_copy.size = staging_buffer.size;
+
+    vkCmdCopyBuffer(cmd_buf, staging_buffer.handle, bvh_buffer.handle, 1, &buffer_copy);
+
+    api.end_record(cmd_buf);
+
+    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
+
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+
+    api.destroy_buffer(staging_buffer);
 }
