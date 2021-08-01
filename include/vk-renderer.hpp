@@ -31,13 +31,9 @@ class vkrenderer {
             return scene_buffer.alloc_info.pMappedData;
         }
 
-        inline void* geometry_buffer_ptr() {
-            return geometry_buffer.alloc_info.pMappedData;
-        }
+        void update_geometry_buffer(void* data);
 
-        inline void* bvh_buffer_ptr() {
-            return bvh_buffer.alloc_info.pMappedData;
-        }
+        void update_bvh_buffer(void* data);
 
     private:
 
@@ -54,7 +50,6 @@ class vkrenderer {
 
         std::vector<VkCommandBuffer>    command_buffers;
 
-        // TODO: Maybe use a map in the future
         std::vector<VkDescriptorSetLayoutBinding> compute_sets_bindings;
         std::vector<VkDescriptorSet>    compute_shader_sets;
         Pipeline                        compute_pipeline;
