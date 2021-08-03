@@ -74,6 +74,33 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     return std::move(buffer);
 }
 
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Buffer dst, size_t size) {
+    VkBufferCopy buffer_copy = {};
+    buffer_copy.srcOffset = 0;
+    buffer_copy.dstOffset = 0;
+    buffer_copy.size = size;
+
+    vkCmdCopyBuffer(cmd_buf, src.handle, dst.handle, 1, &buffer_copy);
+}
+
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Image dst) {
+    VkImageSubresourceLayers image_subresource_layers   = {};
+    image_subresource_layers.aspectMask                 = dst.subresource_range.aspectMask;
+    image_subresource_layers.mipLevel                   = 0;
+    image_subresource_layers.baseArrayLayer             = 0;
+    image_subresource_layers.layerCount                 = 1;
+
+    VkBufferImageCopy buffer_to_image_copy  = {};
+    buffer_to_image_copy.bufferOffset       = 0;
+    buffer_to_image_copy.bufferRowLength    = 0;
+    buffer_to_image_copy.bufferImageHeight  = 0;
+    buffer_to_image_copy.imageSubresource   = image_subresource_layers;
+    buffer_to_image_copy.imageOffset        = { 0, 0, 0 };
+    buffer_to_image_copy.imageExtent        = dst.size;
+
+    vkCmdCopyBufferToImage(cmd_buf, src.handle, dst.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
+}
+
 void vkapi::destroy_buffer(Buffer& buffer) {
     // vmaUnmapMemory(context.allocator, buffer.alloc);
     vmaDestroyBuffer(context.allocator, buffer.handle, buffer.alloc);

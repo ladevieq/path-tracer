@@ -47,6 +47,8 @@ class vkapi {
         ~vkapi();
 
         Buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
+        void copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Buffer dst, size_t size);
+        void copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Image dst);
         void destroy_buffer(Buffer& buffer);
 
 
