@@ -186,22 +186,7 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
 
-    // TODO: Move this into the API
-    VkImageSubresourceLayers image_subresource_layers   = {};
-    image_subresource_layers.aspectMask                 = VK_IMAGE_ASPECT_COLOR_BIT;
-    image_subresource_layers.mipLevel                   = 0;
-    image_subresource_layers.baseArrayLayer             = 0;
-    image_subresource_layers.layerCount                 = 1;
-
-    VkBufferImageCopy buffer_to_image_copy  = {};
-    buffer_to_image_copy.bufferOffset       = 0;
-    buffer_to_image_copy.bufferRowLength    = 0;
-    buffer_to_image_copy.bufferImageHeight  = 0;
-    buffer_to_image_copy.imageSubresource   = image_subresource_layers;
-    buffer_to_image_copy.imageOffset        = { 0, 0, 0 };
-    buffer_to_image_copy.imageExtent        = atlas_size;
-
-    vkCmdCopyBufferToImage(cmd_buf, staging_buffer.handle, ui_texture.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
+    api.copy_buffer(cmd_buf, staging_buffer, ui_texture);
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, ui_texture);
 
@@ -490,14 +475,8 @@ void vkrenderer::update_geometry_buffer(void* data) {
 
     auto staging_buffer = api.create_buffer(geometry_buffer.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     std::memcpy(staging_buffer.alloc_info.pMappedData, data, staging_buffer.size);
-    // std::memcpy(geometry_staging_buffer.alloc_info.pMappedData, data, geometry_staging_buffer.size);
 
-    VkBufferCopy buffer_copy = {};
-    buffer_copy.srcOffset = 0;
-    buffer_copy.dstOffset = 0;
-    buffer_copy.size = staging_buffer.size;
-
-    vkCmdCopyBuffer(cmd_buf, staging_buffer.handle, geometry_buffer.handle, 1, &buffer_copy);
+    api.copy_buffer(cmd_buf, staging_buffer, geometry_buffer, staging_buffer.size);
 
     api.end_record(cmd_buf);
 
@@ -517,14 +496,8 @@ void vkrenderer::update_bvh_buffer(void* data) {
 
     auto staging_buffer = api.create_buffer(bvh_buffer.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     std::memcpy(staging_buffer.alloc_info.pMappedData, data, staging_buffer.size);
-    // std::memcpy(bvh_staging_buffer.alloc_info.pMappedData, data, bvh_staging_buffer.size);
 
-    VkBufferCopy buffer_copy = {};
-    buffer_copy.srcOffset = 0;
-    buffer_copy.dstOffset = 0;
-    buffer_copy.size = staging_buffer.size;
-
-    vkCmdCopyBuffer(cmd_buf, staging_buffer.handle, bvh_buffer.handle, 1, &buffer_copy);
+    api.copy_buffer(cmd_buf, staging_buffer, bvh_buffer, staging_buffer.size);
 
     api.end_record(cmd_buf);
 
