@@ -10,13 +10,10 @@
 
 class scene {
     struct metadata {
-        color sky_color = { 0.5, 0.7, 1.0 };
-        color ground_color = { 1.0, 1.0, 1.0 };
-
         camera cam;
 
         // uint32_t max_bounce = 50;
-        uint32_t max_bounce = 1;
+        uint32_t max_bounce = 4;
 
         // Output image resolution
         uint32_t width;

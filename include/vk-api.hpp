@@ -10,6 +10,7 @@ struct Buffer {
     VmaAllocationInfo   alloc_info;
     VkBuffer            handle;
     size_t              size;
+    VkDeviceAddress     device_address;
 };
 
 struct Pipeline {

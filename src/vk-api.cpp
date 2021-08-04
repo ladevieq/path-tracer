@@ -61,7 +61,7 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     VkBufferCreateInfo buffer_info  = {};
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size                = data_size;
-    buffer_info.usage               = buffer_usage;
+    buffer_info.usage               = buffer_usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR;
      
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = mem_usage;
@@ -70,6 +70,13 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, &buffer.alloc_info))
 
     buffer.size = data_size;
+
+    VkBufferDeviceAddressInfo buffer_device_address_info = {};
+    buffer_device_address_info.sType    = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    buffer_device_address_info.pNext    = VK_NULL_HANDLE;
+    buffer_device_address_info.buffer   = buffer.handle;
+
+    buffer.device_address = vkGetBufferDeviceAddress(context.device, &buffer_device_address_info);
 
     return std::move(buffer);
 }
@@ -440,14 +447,19 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
 
     VKRESULT(vkCreateDescriptorSetLayout(context.device, &descriptor_set_layout_create_info, VK_NULL_HANDLE, &pipeline.descriptor_set_layout))
 
+    VkPushConstantRange push_constant               = {};
+    push_constant.stageFlags                        = VK_SHADER_STAGE_COMPUTE_BIT;
+    push_constant.offset                            = 0;
+    push_constant.size                              = 24;
+
     VkPipelineLayoutCreateInfo layout_create_info   = {};
     layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_create_info.pNext                        = VK_NULL_HANDLE;
     layout_create_info.flags                        = 0;
     layout_create_info.setLayoutCount               = 1;
     layout_create_info.pSetLayouts                  = &pipeline.descriptor_set_layout;
-    layout_create_info.pushConstantRangeCount       = 0;
-    layout_create_info.pPushConstantRanges          = VK_NULL_HANDLE;
+    layout_create_info.pushConstantRangeCount       = 1;
+    layout_create_info.pPushConstantRanges          = &push_constant;
 
     VKRESULT(vkCreatePipelineLayout(context.device, &layout_create_info, VK_NULL_HANDLE, &pipeline.layout))
 
@@ -522,6 +534,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
 
     VKRESULT(vkCreateDescriptorSetLayout(context.device, &descriptor_set_layout_create_info, nullptr, &pipeline.descriptor_set_layout))
 
+
     VkPipelineLayoutCreateInfo layout_create_info   = {};
     layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_create_info.pNext                        = nullptr;
@@ -543,24 +556,6 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     input_assembly_state_create_info.flags                                  = 0;
     input_assembly_state_create_info.topology                               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    // VkViewport viewport = {};
-    // viewport.x          = 0.f;
-    // viewport.y          = 0.f;
-    // viewport.width      = 384.f;
-    // viewport.height     = 186.f;
-    // viewport.minDepth   = 0.f;
-    // viewport.maxDepth   = 1.f;
-
-    // VkRect2D scissor    = {};
-    // scissor.offset      = {
-    //     0,
-    //     0,
-    // };
-    // scissor.extent      = {
-    //     384,
-    //     186,
-    // };
-
     VkPipelineViewportStateCreateInfo viewport_state_create_info            = {};
     viewport_state_create_info.sType                                        = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state_create_info.pNext                                        = nullptr;
@@ -569,10 +564,6 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, std::vector<Vk
     viewport_state_create_info.pViewports                                   = VK_NULL_HANDLE;
     viewport_state_create_info.scissorCount                                 = 1;
     viewport_state_create_info.pScissors                                    = VK_NULL_HANDLE;
-    // viewport_state_create_info.viewportCount                                = 1;
-    // viewport_state_create_info.pViewports                                   = &viewport;
-    // viewport_state_create_info.scissorCount                                 = 1;
-    // viewport_state_create_info.pScissors                                    = &scissor;
 
     VkPipelineRasterizationStateCreateInfo rasterization_state_create_info  = {};
     rasterization_state_create_info.sType                                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;

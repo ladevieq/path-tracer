@@ -38,34 +38,13 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
     compute_sets_bindings = {
         {
             .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-        {
-            .binding = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-        {
-            .binding = 2,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-        {
-            .binding = 3,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
             .pImmutableSamplers = VK_NULL_HANDLE,
         },
         {
-            .binding = 4,
+            .binding = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -110,13 +89,6 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
     scene_buffer = api.create_buffer(scene_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     geometry_buffer = api.create_buffer(geometry_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
     bvh_buffer = api.create_buffer(bvh_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-
-
-    for (size_t index = 0; index < virtual_frames_count; index++) {
-        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[0], scene_buffer);
-        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[1], geometry_buffer);
-        api.update_descriptor_set_buffer(compute_shader_sets[index], compute_sets_bindings[2], bvh_buffer);
-    }
 
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
     render_pass = api.create_render_pass(attachments_format, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -315,8 +287,8 @@ void vkrenderer::begin_frame() {
     auto output_image = accumulation_images[0];
     auto accumulation_image = accumulation_images[1];
 
-    api.update_descriptor_set_image(compute_shader_sets[virtual_frame_index], compute_sets_bindings[3], output_image.view, VK_NULL_HANDLE);
-    api.update_descriptor_set_image(compute_shader_sets[virtual_frame_index], compute_sets_bindings[4], accumulation_image.view, VK_NULL_HANDLE);
+    api.update_descriptor_set_image(compute_shader_sets[virtual_frame_index], compute_sets_bindings[0], output_image.view, VK_NULL_HANDLE);
+    api.update_descriptor_set_image(compute_shader_sets[virtual_frame_index], compute_sets_bindings[1], accumulation_image.view, VK_NULL_HANDLE);
 
     api.update_descriptor_set_image(tonemapping_shader_sets[virtual_frame_index], tonemapping_sets_bindings[0], swapchain.images[swapchain_image_index].view, VK_NULL_HANDLE);
     api.update_descriptor_set_image(tonemapping_shader_sets[virtual_frame_index], tonemapping_sets_bindings[1], output_image.view, VK_NULL_HANDLE);
@@ -384,6 +356,9 @@ void vkrenderer::ui() {
 void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto cmd_buf = command_buffers[virtual_frame_index];
 
+    vkCmdPushConstants(cmd_buf, compute_pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer.device_address);
+    vkCmdPushConstants(cmd_buf, compute_pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 8, (void*)&geometry_buffer.device_address);
+    vkCmdPushConstants(cmd_buf, compute_pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 16, 8, (void*)&bvh_buffer.device_address);
     api.run_compute_pipeline(cmd_buf, compute_pipeline, compute_shader_sets[virtual_frame_index], width / 8, height / 8, 1);
 
 

@@ -80,6 +80,7 @@
     X(vkDestroyCommandPool)           \
     X(vkBeginCommandBuffer)           \
     X(vkCmdPipelineBarrier)           \
+    X(vkCmdPushConstants)             \
     X(vkCmdClearColorImage)           \
     X(vkCmdBeginRenderPass)           \
     X(vkCmdBindPipeline)              \
@@ -113,6 +114,7 @@
     X(vkCreateDescriptorPool)         \
     X(vkAllocateDescriptorSets)       \
     X(vkUpdateDescriptorSets)         \
+    X(vkGetBufferDeviceAddress)       \
     X(vkGetBufferMemoryRequirements)  \
     X(vkGetImageMemoryRequirements)   \
     X(vkAllocateMemory)               \
