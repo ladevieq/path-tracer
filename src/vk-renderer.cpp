@@ -359,12 +359,12 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     vkCmdPushConstants(cmd_buf, compute_pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer.device_address);
     vkCmdPushConstants(cmd_buf, compute_pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 8, (void*)&geometry_buffer.device_address);
     vkCmdPushConstants(cmd_buf, compute_pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 16, 8, (void*)&bvh_buffer.device_address);
-    api.run_compute_pipeline(cmd_buf, compute_pipeline, compute_shader_sets[virtual_frame_index], width / 8, height / 8, 1);
+    api.run_compute_pipeline(cmd_buf, compute_pipeline, compute_shader_sets[virtual_frame_index], (width / 8) + 1, (height / 8) + 1, 1);
 
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, swapchain.images[swapchain_image_index]);
 
-    api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, tonemapping_shader_sets[virtual_frame_index], width / 8, height / 8, 1);
+    api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, tonemapping_shader_sets[virtual_frame_index], (width / 8) + 1, (height / 8) + 1, 1);
 }
 
 void vkrenderer::finish_frame() {
