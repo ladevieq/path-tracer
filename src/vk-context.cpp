@@ -108,17 +108,24 @@ void vkcontext::create_device() {
     float queue_priority                        = 1.f;
     queue_create_info.pQueuePriorities          = &queue_priority;
 
-    VkPhysicalDeviceFeatures device_features    = {};
+    VkPhysicalDeviceVulkan12Features physical_device_12_features    = {};
+    physical_device_12_features.sType                               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    physical_device_12_features.pNext                               = VK_NULL_HANDLE;
+    physical_device_12_features.bufferDeviceAddress                 = VK_TRUE;
+
+    VkPhysicalDeviceFeatures2 device_features   = {};
+    device_features.sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    device_features.pNext                       = &physical_device_12_features;
 
     std::vector<const char*> device_ext         = {
-        "VK_KHR_swapchain"
+        "VK_KHR_swapchain",
     };
 
     VkDeviceCreateInfo device_create_info       = {};
     device_create_info.sType                    = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.pNext                    = &device_features;
     device_create_info.pQueueCreateInfos        = &queue_create_info;
     device_create_info.queueCreateInfoCount     = 1;
-    device_create_info.pEnabledFeatures         = &device_features;
     device_create_info.ppEnabledExtensionNames  = device_ext.data();
     device_create_info.enabledExtensionCount    = device_ext.size();
     device_create_info.enabledLayerCount        = 0; // Deprecated https://www.khronos.org/registry/vulkan/specs/1.2/html/chap31.html#extendingvulkan-layers-devicelayerdeprecation
@@ -140,6 +147,7 @@ void vkcontext::create_memory_allocator() {
     allocator_info.physicalDevice = physical_device;
     allocator_info.device = device;
     allocator_info.instance = instance;
+    allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
      
     vmaCreateAllocator(&allocator_info, &allocator);
 }

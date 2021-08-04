@@ -1,3 +1,5 @@
+#extension GL_EXT_buffer_reference : require
+
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 struct ray {
@@ -67,9 +69,7 @@ struct bvh_node {
     int primitive_id;
 };
 
-layout(set = 0, binding = 0) buffer scene_metadata {
-    vec4 sky_color;
-    vec4 ground_color;
+layout(buffer_reference) readonly buffer scene_metadata {
     camera cam;
 
     uint max_bounce;
@@ -84,17 +84,23 @@ layout(set = 0, binding = 0) buffer scene_metadata {
     uint padding;
 };
 
-layout(set = 0, binding = 1) buffer geometry {
+layout(buffer_reference) readonly buffer primitives_array {
     // sphere[] spheres;
-    triangle[] triangles;
+    triangle triangles[];
 };
 
-layout(set = 0, binding = 2) buffer bvh {
+layout(buffer_reference) readonly buffer nodes_array {
     bvh_node[] nodes;
 };
 
-layout(set = 0, binding = 3, rgba32f) uniform writeonly image2D output_image;
-layout(set = 0, binding = 4, rgba32f) uniform readonly image2D accumulation_image;
+layout(set = 0, binding = 0, rgba32f) uniform writeonly image2D output_image;
+layout(set = 0, binding = 1, rgba32f) uniform readonly image2D accumulation_image;
+
+layout(push_constant) uniform buffers {
+    scene_metadata scene;
+    primitives_array geometry;
+    nodes_array bvh;
+} bufs;
 
 vec3 at(ray r, float t) {
     return r.origin + r.direction * t;
@@ -154,12 +160,12 @@ bool hit_aabb(vec3 minimum, vec3 maximum, ray r, float min_t, float max_t) {
 // uint hit_aabbs(ray r, float min_t, float max_t) {
 //     uint hit_count = 0;
 //     // for (uint idx = 0; idx <= spheres_count * 2; idx++) {
-//     for (uint idx = 0; idx <= triangles_count * 2; idx++) {
-//         hit_count += uint(hit_aabb(nodes[idx].bb, r, min_t, max_t));
+//     for (uint idx = 0; idx <= bufs.scene.triangles_count * 2; idx++) {
+//         hit_count += uint(hit_aabb(bufs.bvh.nodes[idx].bb, r, min_t, max_t));
 // 
-//         if (nodes[idx].primitive_id >= 0) {
-//             // hit_count += uint(hit_aabb(spheres[nodes[idx].primitive_id].bb, r, min_t, max_t));
-//             // hit_count += uint(hit_aabb(triangles[nodes[idx].primitive_id].bb, r, min_t, max_t));
+//         if (bufs.bvh.nodes[idx].primitive_id >= 0) {
+//             // hit_count += uint(hit_aabb(spheres[bufs.bvh.nodes[idx].primitive_id].bb, r, min_t, max_t));
+//             // hit_count += uint(hit_aabb(triangles[bufs.bvh.nodes[idx].primitive_id].bb, r, min_t, max_t));
 //         }
 //     }
 // 
@@ -218,10 +224,11 @@ bool hit_triangle(triangle tri, ray r, float min_t, float max_t, out hit_info in
     info.t = t;
     info.point = at(r, info.t);
 
-    vec3 outward_normal = normal;
+    // vec3 outward_normal = normal;
     // info.front_face = dot(outward_normal, r.direction) < 0.0;
     info.normal = normal;
-    info.mat = material(vec4(u, v, 0.0, 0.0), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
+    // info.mat = material(vec4(u, v, 0.0, 0.0), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
+    info.mat = material(vec4(0.55), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
 
     return true;
 }
@@ -234,23 +241,23 @@ bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
 
     while(id != -1) {
         // Leafs
-        if (nodes[id].primitive_id != -1) {
-            // if (hit_sphere(spheres[nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
+        if (bufs.bvh.nodes[id].primitive_id != -1) {
+            // if (hit_sphere(spheres[bufs.bvh.nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
             //     info = temp_info;
             //     closest_t = temp_info.t;
             //     hit = true;
             // }
-            if (hit_triangle(triangles[nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
+            if (hit_triangle(bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
                 info = temp_info;
                 closest_t = temp_info.t;
                 hit = true;
             }
-            id = nodes[id].next_id;
+            id = bufs.bvh.nodes[id].next_id;
         } else { // Internal nodes
-            if (hit_aabb(nodes[id].min, nodes[id].max, r, min_t, closest_t)) {
+            if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r, min_t, closest_t)) {
                 id++;
             } else {
-                id = nodes[id].next_id;
+                id = bufs.bvh.nodes[id].next_id;
             }
         }
     }
@@ -309,7 +316,7 @@ vec4 ray_color(ray r, uint seed) {
     vec4 final_color = vec4(0.0);
     vec4 throughput = vec4(1.0);
     ray current_ray = r;
-    while (hit_node(current_ray, 0.001, 1e15, info) && bounces < max_bounce) {
+    while (hit_node(current_ray, 0.001, 1e15, info) && bounces < bufs.scene.max_bounce) {
         ray scattered;
         vec4 attenuation = vec4(0.0);
         // if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
@@ -350,27 +357,27 @@ void main() {
     uint x = gl_GlobalInvocationID.x;
     uint y = gl_GlobalInvocationID.y;
 
-    vec2 uv = vec2(float(x) / (width - 1), 1.0 - (float(y) / (height - 1)));
+    vec2 uv = vec2(float(x) / (bufs.scene.width - 1), 1.0 - (float(y) / (bufs.scene.height - 1)));
 
-    uint seed = uint(x * uint(1973) + y * uint(9277) + sample_index * uint(26699)) | uint(1);
+    uint seed = uint(x * uint(1973) + y * uint(9277) + bufs.scene.sample_index * uint(26699)) | uint(1);
     vec2 rand_disk = disk_vec(seed);
-    vec2 jittered_uvs = uv + vec2(rand(seed) / (width - 1), rand(seed) / (height - 1));
+    vec2 jittered_uvs = uv + vec2(rand(seed) / (bufs.scene.width - 1), rand(seed) / (bufs.scene.height - 1));
     vec2 lens_disk = vec2(0.0);
-    if (enable_dof) {
-        lens_disk = rand_disk * cam.lens_radius;
+    if (bufs.scene.enable_dof) {
+        lens_disk = rand_disk * bufs.scene.cam.lens_radius;
     }
 
-    vec3 offset = lens_disk.x * cam.right.xyz + lens_disk.y * cam.up.xyz;
-    vec4 proj_plane_pos = cam.first_pixel + jittered_uvs.x * cam.horizontal + jittered_uvs.y * cam.vertical;
+    vec3 offset = lens_disk.x * bufs.scene.cam.right.xyz + lens_disk.y * bufs.scene.cam.up.xyz;
+    vec4 proj_plane_pos = bufs.scene.cam.first_pixel + jittered_uvs.x * bufs.scene.cam.horizontal + jittered_uvs.y * bufs.scene.cam.vertical;
 
-    ray r = ray(cam.position.xyz + offset, proj_plane_pos.xyz - cam.position.xyz - offset);
+    ray r = ray(bufs.scene.cam.position.xyz + offset, proj_plane_pos.xyz - bufs.scene.cam.position.xyz - offset);
     vec4 out_color = ray_color(r, seed);
 
-    // if (debug_bvh) {
+    // if (bufs.scene.debug_bvh) {
     //     out_color -= hit_aabbs(r, 0.001, 1e15) * vec4(0.0, 0.025, 0.025, 0.0);
     // }
 
-    float spp_scale = (1.0 / sample_index);
+    float spp_scale = (1.0 / bufs.scene.sample_index);
     vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));
     imageStore(output_image, ivec2(x, y), vec4(mix(acc_color, out_color, spp_scale)));
 }
