@@ -1,4 +1,7 @@
 #include "window.hpp"
+
+#include <iostream>
+
 #include "vk-renderer.hpp"
 #include "utils.hpp"
 

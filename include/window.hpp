@@ -71,6 +71,7 @@ enum KEYS: uint32_t {
 };
 #else
 enum KEYS: uint32_t {
+    SPACE = 32,
     A = 0x61,
     B,
     C,

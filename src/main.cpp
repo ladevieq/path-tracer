@@ -116,7 +116,7 @@ int main() {
                 }
                 case EVENT_TYPES::KEY_PRESS: {
                     auto move_speed = 0.01f * delta_time;
-                    if (wnd.keyboard[KEYS::LSHIFT] || wnd.keyboard[KEYS::RSHIFT] || wnd.keyboard[KEYS::SHIFT]) {
+                    if (wnd.keyboard[KEYS::LSHIFT] || wnd.keyboard[KEYS::RSHIFT]) {
                         move_speed *= 10.f;
                     }
 
