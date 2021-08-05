@@ -153,7 +153,7 @@ int main() {
                             move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.up.unit() * move_speed;
                             break;
                         }
-                        case KEYS::CTRL: {
+                        case KEYS::LCTRL: {
                             move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.up.unit() * move_speed;
                             break;
                         }

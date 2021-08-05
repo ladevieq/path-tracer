@@ -35,8 +35,10 @@ class vkrenderer;
 // TODO improve this
 #if defined(WINDOWS)
 enum KEYS: uint32_t {
-    SHIFT = 0x10,
-    CTRL,
+    LSHIFT = 0x10,
+    RSHIFT = 0x10,
+    LCTRL = 0x11,
+    RCTRL = 0x11,
     ALT,
     SPACE = 0x20,
     A = 0x41,
@@ -65,8 +67,6 @@ enum KEYS: uint32_t {
     X,
     Y,
     Z,
-    LSHIFT = 0xA0,
-    RSHIFT,
     MAX_KEYS = 255
 };
 #else

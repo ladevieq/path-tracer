@@ -235,7 +235,7 @@ void window::poll_events() {
     MSG msg = {};
 
     // Generate keydown events pressed keys
-    for (size_t virtual_key = KEYS::SHIFT; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
+    for (size_t virtual_key = KEYS::LSHIFT; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
         if (keyboard[virtual_key]) {
             events.push_back({ 
                 .key = (KEYS)virtual_key,
