@@ -217,6 +217,9 @@ int main() {
         }
 
         ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.max_bounce, 1, 250);
+        if (ImGui::SliderInt("downscale factor", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.downscale_factor, 1, 32)) {
+            reset_accumulation = true;
+        }
 
         if (ImGui::Checkbox("debug bvh", (bool*)&((scene*) renderer.scene_buffer_ptr())->meta.debug_bvh)) {
             reset_accumulation = true;
@@ -240,7 +243,8 @@ int main() {
                 renderer.reset_accumulation();
             }
 
-            renderer.compute(width, height);
+            float scale = (float)((scene*) renderer.scene_buffer_ptr())->meta.downscale_factor;
+            renderer.compute(width / scale, height / scale);
 
             ((scene*) renderer.scene_buffer_ptr())->meta.sample_index++;
 

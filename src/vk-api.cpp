@@ -18,23 +18,22 @@ vkapi::vkapi() {
 
     VKRESULT(vkCreateCommandPool(context.device, &cmd_pool_create_info, nullptr, &command_pool))
 
-
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
         {
             .type                               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount                    = (uint32_t)0xff,
+            .descriptorCount                    = (uint32_t)1024,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount                    = (uint32_t)0xff,
+            .descriptorCount                    = (uint32_t)1024,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount                    = (uint32_t)0xff,
+            .descriptorCount                    = (uint32_t)1024,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount                    = (uint32_t)0xff,
+            .descriptorCount                    = (uint32_t)1024,
         }
     };
 
@@ -47,9 +46,67 @@ vkapi::vkapi() {
     descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes.data();
 
     VKRESULT(vkCreateDescriptorPool(context.device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
+
+    // Global descriptor
+     VkDescriptorSetLayoutBinding bindless_layout_bindings[] = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = 1024,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+            },
+    };
+
+    VkDescriptorBindingFlags flag = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+    VkDescriptorSetLayoutBindingFlagsCreateInfo descriptor_set_layout_binding_flags = {};
+    descriptor_set_layout_binding_flags.sType           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    descriptor_set_layout_binding_flags.pNext           = VK_NULL_HANDLE;
+    descriptor_set_layout_binding_flags.bindingCount    = 1;
+    descriptor_set_layout_binding_flags.pBindingFlags   = &flag;
+
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
+    descriptor_set_layout_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_set_layout_create_info.pNext         = &descriptor_set_layout_binding_flags;
+    descriptor_set_layout_create_info.flags         = 0;
+    descriptor_set_layout_create_info.bindingCount  = sizeof(bindless_layout_bindings) / sizeof(VkDescriptorSetLayoutBinding);
+    descriptor_set_layout_create_info.pBindings     = bindless_layout_bindings;
+
+    VKRESULT(vkCreateDescriptorSetLayout(context.device, &descriptor_set_layout_create_info, nullptr, &bindless_descriptor.set_layout))
+
+
+    VkPushConstantRange push_constant               = {};
+    push_constant.stageFlags                        = VK_SHADER_STAGE_COMPUTE_BIT;
+    push_constant.offset                            = 0;
+    push_constant.size                              = 64;
+
+    VkPipelineLayoutCreateInfo layout_create_info   = {};
+    layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_create_info.pNext                        = nullptr;
+    layout_create_info.flags                        = 0;
+    layout_create_info.setLayoutCount               = 1;
+    layout_create_info.pSetLayouts                  = &bindless_descriptor.set_layout;
+    layout_create_info.pushConstantRangeCount       = 1;
+    layout_create_info.pPushConstantRanges          = &push_constant;
+
+    VKRESULT(vkCreatePipelineLayout(context.device, &layout_create_info, nullptr, &bindless_descriptor.pipeline_layout))
+
+
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info    = {};
+    descriptor_set_allocate_info.sType                          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    descriptor_set_allocate_info.pNext                          = VK_NULL_HANDLE;
+    descriptor_set_allocate_info.descriptorPool                 = descriptor_pool;
+    descriptor_set_allocate_info.descriptorSetCount             = 1;
+    descriptor_set_allocate_info.pSetLayouts                    = &bindless_descriptor.set_layout;
+
+    vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, &bindless_descriptor.set);
 }
 
 vkapi::~vkapi() {
+    // Free bindless descriptor stuff
+    vkDestroyDescriptorSetLayout(context.device, bindless_descriptor.set_layout, nullptr);
+    vkDestroyPipelineLayout(context.device, bindless_descriptor.pipeline_layout, nullptr);
+    vkFreeDescriptorSets(context.device, descriptor_pool, 1, &bindless_descriptor.set);
+
     vkDestroyCommandPool(context.device, command_pool, nullptr);
     vkDestroyDescriptorPool(context.device, descriptor_pool, nullptr);
 }
@@ -109,7 +166,6 @@ void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Image dst) {
 }
 
 void vkapi::destroy_buffer(Buffer& buffer) {
-    // vmaUnmapMemory(context.allocator, buffer.alloc);
     vmaDestroyBuffer(context.allocator, buffer.handle, buffer.alloc);
 }
 
@@ -164,9 +220,14 @@ Image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
 
     VKRESULT(vkCreateImageView(context.device, &image_view_create_info, VK_NULL_HANDLE, &image.view))
 
+    image.bindless_index = bindless_descriptor.indices.back();
+    bindless_descriptor.indices.pop_back();
+
     return std::move(image);
 }
 void vkapi::destroy_image(Image &image) {
+    bindless_descriptor.indices.push_back(image.bindless_index);
+
     vmaDestroyImage(context.allocator, image.handle, image.alloc);
     vkDestroyImageView(context.device, image.view, nullptr);
 }
@@ -405,7 +466,7 @@ void vkapi::destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers) {
 }
 
 
-Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings) {
+Pipeline vkapi::create_compute_pipeline(const char* shader_name) {
     Pipeline pipeline {
         .bind_point = VK_PIPELINE_BIND_POINT_COMPUTE
     };
@@ -438,37 +499,12 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name, std::vector<VkD
     stage_create_info.pSpecializationInfo           = VK_NULL_HANDLE;
 
 
-    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
-    descriptor_set_layout_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptor_set_layout_create_info.pNext         = VK_NULL_HANDLE;
-    descriptor_set_layout_create_info.flags         = 0;
-    descriptor_set_layout_create_info.bindingCount  = bindings.size();
-    descriptor_set_layout_create_info.pBindings     = bindings.data();
-
-    VKRESULT(vkCreateDescriptorSetLayout(context.device, &descriptor_set_layout_create_info, VK_NULL_HANDLE, &pipeline.descriptor_set_layout))
-
-    VkPushConstantRange push_constant               = {};
-    push_constant.stageFlags                        = VK_SHADER_STAGE_COMPUTE_BIT;
-    push_constant.offset                            = 0;
-    push_constant.size                              = 24;
-
-    VkPipelineLayoutCreateInfo layout_create_info   = {};
-    layout_create_info.sType                        = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_create_info.pNext                        = VK_NULL_HANDLE;
-    layout_create_info.flags                        = 0;
-    layout_create_info.setLayoutCount               = 1;
-    layout_create_info.pSetLayouts                  = &pipeline.descriptor_set_layout;
-    layout_create_info.pushConstantRangeCount       = 1;
-    layout_create_info.pPushConstantRanges          = &push_constant;
-
-    VKRESULT(vkCreatePipelineLayout(context.device, &layout_create_info, VK_NULL_HANDLE, &pipeline.layout))
-
     VkComputePipelineCreateInfo create_info         = {};
     create_info.sType                               = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     create_info.pNext                               = VK_NULL_HANDLE;
     create_info.flags                               = 0;
     create_info.stage                               = stage_create_info;
-    create_info.layout                              = pipeline.layout;
+    create_info.layout                              = bindless_descriptor.pipeline_layout;
 
     VKRESULT(vkCreateComputePipelines(
         context.device,
@@ -786,6 +822,9 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     };
 
     for (size_t image_index = 0; image_index < swapchain.image_count; image_index++) {
+        swapchain.images[image_index].bindless_index = bindless_descriptor.indices.back();
+        bindless_descriptor.indices.pop_back();
+
         swapchain.images[image_index].handle = images[image_index];
         swapchain.images[image_index].size = image_size;
         swapchain.images[image_index].subresource_range = image_subresource_range;
@@ -813,6 +852,8 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
 
 void vkapi::destroy_swapchain(Swapchain& swapchain) {
     for(auto &image: swapchain.images) {
+        bindless_descriptor.indices.push_back(image.bindless_index);
+
         vkDestroyImageView(context.device, image.view, nullptr);
     }
     vkDestroySwapchainKHR(context.device, swapchain.handle, nullptr);
@@ -863,6 +904,30 @@ void vkapi::update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayo
     write_descriptor.pTexelBufferView           = VK_NULL_HANDLE;
 
     vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
+}
+
+void vkapi::update_bindless_descriptor_set_images(std::vector<Image> &images, std::vector<VkSampler> &samplers) {
+    std::vector<VkDescriptorImageInfo> descriptor_images_info   { images.size() };
+    std::vector<VkWriteDescriptorSet> writes_descriptor         { images.size() };
+
+    for (size_t image_index = 0; image_index < images.size(); image_index++) {
+        descriptor_images_info[image_index].sampler         = samplers[image_index];
+        descriptor_images_info[image_index].imageView       = images[image_index].view;
+        descriptor_images_info[image_index].imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
+
+        writes_descriptor[image_index].sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes_descriptor[image_index].pNext                = nullptr;
+        writes_descriptor[image_index].dstSet               = bindless_descriptor.set;
+        writes_descriptor[image_index].dstBinding           = 0;
+        writes_descriptor[image_index].dstArrayElement      = images[image_index].bindless_index;
+        writes_descriptor[image_index].descriptorCount      = 1;
+        writes_descriptor[image_index].descriptorType       = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes_descriptor[image_index].pImageInfo           = &descriptor_images_info[image_index];
+        writes_descriptor[image_index].pBufferInfo          = VK_NULL_HANDLE;
+        writes_descriptor[image_index].pTexelBufferView     = VK_NULL_HANDLE;
+    }
+
+    vkUpdateDescriptorSets(context.device, writes_descriptor.size(), writes_descriptor.data(), 0, nullptr);
 }
 
 
@@ -932,8 +997,8 @@ void vkapi::end_render_pass(VkCommandBuffer command_buffer) {
 }
 
 
-void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
-    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.layout, 0, 1, &set, 0, nullptr);
+void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle);
 

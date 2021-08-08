@@ -108,10 +108,15 @@ void vkcontext::create_device() {
     float queue_priority                        = 1.f;
     queue_create_info.pQueuePriorities          = &queue_priority;
 
-    VkPhysicalDeviceVulkan12Features physical_device_12_features    = {};
-    physical_device_12_features.sType                               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    physical_device_12_features.pNext                               = VK_NULL_HANDLE;
-    physical_device_12_features.bufferDeviceAddress                 = VK_TRUE;
+    VkPhysicalDeviceVulkan12Features physical_device_12_features            = {};
+    physical_device_12_features.sType                                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    physical_device_12_features.pNext                                       = VK_NULL_HANDLE;
+    physical_device_12_features.bufferDeviceAddress                         = VK_TRUE;
+    physical_device_12_features.runtimeDescriptorArray                      = VK_TRUE;
+    physical_device_12_features.shaderStorageImageArrayNonUniformIndexing   = VK_TRUE;
+    physical_device_12_features.descriptorBindingPartiallyBound             = VK_TRUE;
+    physical_device_12_features.descriptorBindingPartiallyBound             = VK_TRUE;
+    physical_device_12_features.descriptorBindingUpdateUnusedWhilePending   = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 device_features   = {};
     device_features.sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;

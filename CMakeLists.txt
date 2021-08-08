@@ -16,6 +16,7 @@ project(path-tracer VERSION 1.0 LANGUAGES CXX)
 
 find_package(imgui CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 if(UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)

@@ -15,6 +15,7 @@ struct Buffer {
 
 struct Pipeline {
     std::vector<VkShaderModule> shader_modules;
+    // TODO: Remove once all pipelines use bindless layout
     VkDescriptorSetLayout       descriptor_set_layout;
     VkPipelineLayout            layout;
     VkPipeline                  handle;
@@ -29,14 +30,29 @@ struct Image {
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
     VkExtent3D              size;
+    uint32_t                 bindless_index;
 };
 
 struct Swapchain {
-    size_t                      image_count;
-    std::vector<Image>          images;
-    VkSwapchainKHR              handle;
-    VkSurfaceFormatKHR          surface_format;
-    VkExtent2D                  extent;
+    size_t                  image_count;
+    std::vector<Image>      images;
+    VkSwapchainKHR          handle;
+    VkSurfaceFormatKHR      surface_format;
+    VkExtent2D              extent;
+};
+
+struct global_descriptor {
+    VkDescriptorSetLayout   set_layout;
+    VkPipelineLayout        pipeline_layout;
+    VkDescriptorSet         set;
+
+    std::vector<uint32_t>   indices;
+
+    global_descriptor() {
+        for (size_t index = 0; index < 1024; index++) {
+            indices.push_back(index);
+        }
+    }
 };
 
 class window;
@@ -89,7 +105,7 @@ class vkapi {
         void destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers);
 
 
-        Pipeline create_compute_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings);
+        Pipeline create_compute_pipeline(const char* shader_name);
         Pipeline create_graphics_pipeline(const char* shader_name, std::vector<VkDescriptorSetLayoutBinding>& bindings, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states);
         void destroy_pipeline(Pipeline &pipeline);
 
@@ -108,6 +124,7 @@ class vkapi {
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer);
         void update_descriptor_set_buffer(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, Buffer& buffer, VkDeviceSize offset, VkDeviceSize range);
         void update_descriptor_set_image(VkDescriptorSet set, VkDescriptorSetLayoutBinding binding, VkImageView view, VkSampler sampler);
+        void update_bindless_descriptor_set_images(std::vector<Image> &images, std::vector<VkSampler> &samplers);
 
 
         void start_record(VkCommandBuffer command_buffer);
@@ -117,7 +134,7 @@ class vkapi {
         void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, Pipeline pipeline);
         void end_render_pass(VkCommandBuffer command_buffer);
 
-        void run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+        void run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
 
         void draw(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, uint32_t vertex_count, uint32_t vertex_offset);
         void draw(VkCommandBuffer command_buffer, Pipeline pipeline, VkDescriptorSet set, Buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
@@ -133,12 +150,14 @@ class vkapi {
 
         vkcontext           context;
 
+        global_descriptor   bindless_descriptor;
+
     private:
 
         const char* shader_stage_extension(VkShaderStageFlags shader_stage);
 
-        VkCommandPool       command_pool;
-        VkDescriptorPool    descriptor_pool;
+        VkCommandPool               command_pool;
+        VkDescriptorPool            descriptor_pool;
 
 };
 

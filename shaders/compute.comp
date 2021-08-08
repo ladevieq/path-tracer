@@ -1,4 +1,5 @@
 #extension GL_EXT_buffer_reference : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -81,7 +82,7 @@ layout(buffer_reference) readonly buffer scene_metadata {
     uint triangles_count;
     bool enable_dof;
     bool debug_bvh;
-    uint padding;
+    uint downscale_factor;
 };
 
 layout(buffer_reference) readonly buffer primitives_array {
@@ -93,13 +94,15 @@ layout(buffer_reference) readonly buffer nodes_array {
     bvh_node[] nodes;
 };
 
-layout(set = 0, binding = 0, rgba32f) uniform writeonly image2D output_image;
-layout(set = 0, binding = 1, rgba32f) uniform readonly image2D accumulation_image;
+layout(set = 0, binding = 0, rgba32f) uniform image2D images[];
 
 layout(push_constant) uniform buffers {
     scene_metadata scene;
     primitives_array geometry;
     nodes_array bvh;
+    uint output_image_index;
+    uint accumulation_image_index;
+    uint padding[2];
 } bufs;
 
 vec3 at(ray r, float t) {
@@ -354,8 +357,8 @@ vec4 ray_color(ray r, uint seed) {
 }
 
 void main() {
-    uint x = gl_GlobalInvocationID.x;
-    uint y = gl_GlobalInvocationID.y;
+    uint x = gl_GlobalInvocationID.x * bufs.scene.downscale_factor;
+    uint y = gl_GlobalInvocationID.y * bufs.scene.downscale_factor;
 
     vec2 uv = vec2(float(x) / (bufs.scene.width - 1), 1.0 - (float(y) / (bufs.scene.height - 1)));
 
@@ -378,6 +381,12 @@ void main() {
     // }
 
     float spp_scale = (1.0 / bufs.scene.sample_index);
-    vec4 acc_color = imageLoad(accumulation_image, ivec2(x, y));
-    imageStore(output_image, ivec2(x, y), vec4(mix(acc_color, out_color, spp_scale)));
+    vec4 acc_color = imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], ivec2(x, y));
+    out_color = vec4(mix(acc_color, out_color, spp_scale));
+
+    for (uint i = 0; i < bufs.scene.downscale_factor; i++) {
+        for (uint j = 0; j < bufs.scene.downscale_factor; j++) {
+            imageStore(images[nonuniformEXT(bufs.output_image_index)], ivec2(x + i, y + j), out_color);
+        }
+    }
 }
