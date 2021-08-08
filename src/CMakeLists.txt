@@ -1,5 +1,3 @@
-find_package(nlohmann_json CONFIG REQUIRED)
-
 add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)

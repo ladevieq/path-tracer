@@ -33,7 +33,7 @@ void *vulkanLibrary = dlopen("libvulkan.1.dylib", RTLD_NOW);
     VULKAN_DEVICE_FUNCTIONS
 #undef X
 
-#define X(name)                                                                     \
+#define X(name)                                                                 \
 void Load_##name()                                                              \
 {                                                                               \
     name = reinterpret_cast<PFN_##name>(LoadProcAddress(vulkanLibrary, #name)); \
@@ -44,7 +44,7 @@ void Load_##name()                                                              
 VULKAN_EXPORTED_FUNCTIONS
 #undef X
 
-#define X(name)                                                                     \
+#define X(name)                                                                 \
 void Load_##name()                                                              \
 {                                                                               \
     name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(nullptr, #name)); \

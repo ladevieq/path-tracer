@@ -50,8 +50,6 @@ class vkrenderer {
 
         std::vector<VkCommandBuffer>    command_buffers;
 
-        std::vector<VkDescriptorSetLayoutBinding> compute_sets_bindings;
-        std::vector<VkDescriptorSet>    compute_shader_sets;
         Pipeline                        compute_pipeline;
 
         Buffer                          scene_buffer;
@@ -59,8 +57,6 @@ class vkrenderer {
         Buffer                          bvh_buffer;
 
 
-        std::vector<VkDescriptorSetLayoutBinding> tonemapping_sets_bindings;
-        std::vector<VkDescriptorSet>    tonemapping_shader_sets;
         Pipeline                        tonemapping_pipeline;
 
         std::vector<VkDescriptorSetLayoutBinding> ui_sets_bindings;
