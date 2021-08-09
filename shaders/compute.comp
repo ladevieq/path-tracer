@@ -94,7 +94,7 @@ layout(buffer_reference) readonly buffer nodes_array {
     bvh_node[] nodes;
 };
 
-layout(set = 0, binding = 0, rgba32f) uniform image2D images[];
+layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
 
 layout(push_constant) uniform buffers {
     scene_metadata scene;

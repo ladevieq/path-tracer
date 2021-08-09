@@ -44,9 +44,9 @@ class vkrenderer {
         uint32_t                        virtual_frame_index = 0;
         uint32_t                        swapchain_image_index = 0;
 
-        std::vector<Image>              accumulation_images;
-        VkSampler                       ui_texture_sampler;
-        Image                           ui_texture;
+        std::vector<image>              accumulation_images;
+        sampler                         ui_texture_sampler;
+        image                           ui_texture;
 
         std::vector<VkCommandBuffer>    command_buffers;
 
@@ -59,11 +59,8 @@ class vkrenderer {
 
         Pipeline                        tonemapping_pipeline;
 
-        std::vector<VkDescriptorSetLayoutBinding> ui_sets_bindings;
-        std::vector<Buffer>             ui_transforms_buffers;
         std::vector<Buffer>             ui_vertex_buffers;
         std::vector<Buffer>             ui_index_buffers;
-        std::vector<VkDescriptorSet>    ui_sets;
         Pipeline                        ui_pipeline;
         VkRenderPass                    render_pass;
         std::vector<VkFramebuffer>      framebuffers;
