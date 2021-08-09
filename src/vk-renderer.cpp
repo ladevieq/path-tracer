@@ -55,44 +55,21 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
     geometry_buffer = api.create_buffer(geometry_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
     bvh_buffer = api.create_buffer(bvh_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
+
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
     render_pass = api.create_render_pass(attachments_format, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-    for (auto& image : swapchain.images) {
-        std::vector<Image> attachments { image };
+    for (auto& current_image : swapchain.images) {
+        std::vector<image> attachments { current_image };
         framebuffers.push_back(api.create_framebuffer(render_pass, attachments, swapchain.extent));
     }
 
-    ui_sets_bindings = {
-        {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-        {
-            .binding = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-        {
-            .binding = 2,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .pImmutableSamplers = VK_NULL_HANDLE,
-        },
-    };
 
     std::vector<VkDynamicState> dynamic_states {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR
     };
-    ui_pipeline = api.create_graphics_pipeline("ui", ui_sets_bindings, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass, dynamic_states);
-    ui_sets = api.create_descriptor_sets(ui_pipeline.descriptor_set_layout, virtual_frames_count);
+    ui_pipeline = api.create_graphics_pipeline("ui", (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), render_pass, dynamic_states);
 
     ImGui::CreateContext();
     auto io = ImGui::GetIO();
@@ -136,7 +113,7 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
 
     api.destroy_buffer(staging_buffer);
 
-    std::vector<Image> images = {
+    std::vector<image> images = {
         accumulation_images[0],
         accumulation_images[1],
 
@@ -144,25 +121,25 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
         swapchain.images[1],
         swapchain.images[2]
     };
-    std::vector<VkSampler> samplers { images.size(), VK_NULL_HANDLE };
 
-    api.update_bindless_descriptor_set_images(images, samplers);
+    api.update_descriptor_images(images, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
-    virtual_frame_index++;
+    std::vector<image> sampled_images = {
+        ui_texture
+    };
+    api.update_descriptor_images(sampled_images, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 
     ui_texture_sampler = api.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
-    for (size_t index = 0; index < virtual_frames_count; index++) {
-        api.update_descriptor_set_image(ui_sets[index], ui_sets_bindings[2], ui_texture.view, ui_texture_sampler);
-    }
+    std::vector<sampler> samplers = {
+        ui_texture_sampler,
+    };
+    api.update_descriptor_samplers(samplers);
+
+    virtual_frame_index++;
 
     ui_vertex_buffers.resize(virtual_frames_count);
     ui_index_buffers.resize(virtual_frames_count);
-
-    for (size_t index = 0; index < virtual_frames_count; index++) {
-        ui_transforms_buffers.push_back(api.create_buffer(sizeof(UiTransforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU));
-        api.update_descriptor_set_buffer(ui_sets[index], ui_sets_bindings[1], ui_transforms_buffers[index]);
-    }
 }
 
 vkrenderer::~vkrenderer() {
@@ -187,10 +164,6 @@ vkrenderer::~vkrenderer() {
         api.destroy_framebuffer(framebuffer);
     }
 
-    for (auto& transforms_buffer: ui_transforms_buffers) {
-        api.destroy_buffer(transforms_buffer);
-    }
-
     for (auto& vertex_buffer: ui_vertex_buffers) {
         api.destroy_buffer(vertex_buffer);
     }
@@ -205,8 +178,6 @@ vkrenderer::~vkrenderer() {
     api.destroy_pipeline(tonemapping_pipeline);
     api.destroy_pipeline(ui_pipeline);
 
-    api.destroy_descriptor_sets(ui_sets);
-
     api.destroy_swapchain(swapchain);
     api.destroy_surface(platform_surface);
 }
@@ -215,19 +186,13 @@ void vkrenderer::begin_frame() {
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
 
-    ((UiTransforms*)ui_transforms_buffers[virtual_frame_index].alloc_info.pMappedData)->scale_x = 2.f / draw_data->DisplaySize.x;
-    ((UiTransforms*)ui_transforms_buffers[virtual_frame_index].alloc_info.pMappedData)->scale_y = 2.f / draw_data->DisplaySize.y;
-    ((UiTransforms*)ui_transforms_buffers[virtual_frame_index].alloc_info.pMappedData)->translate_x = -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x);
-    ((UiTransforms*)ui_transforms_buffers[virtual_frame_index].alloc_info.pMappedData)->translate_y = -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y);
-
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
 
     if (ui_vertex_buffers[virtual_frame_index].size < draw_data->TotalVtxCount * sizeof(VkVertex)) {
         api.destroy_buffer(ui_vertex_buffers[virtual_frame_index]);
 
-        ui_vertex_buffers[virtual_frame_index] = api.create_buffer(draw_data->TotalVtxCount * sizeof(VkVertex), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        api.update_descriptor_set_buffer(ui_sets[virtual_frame_index], ui_sets_bindings[0], ui_vertex_buffers[virtual_frame_index]);
+        ui_vertex_buffers[virtual_frame_index] = api.create_buffer(draw_data->TotalVtxCount * sizeof(VkVertex), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
     if (ui_index_buffers[virtual_frame_index].size < draw_data->TotalIdxCount * sizeof(ImDrawIdx)) {
         api.destroy_buffer(ui_index_buffers[virtual_frame_index]);
@@ -295,6 +260,21 @@ void vkrenderer::ui() {
 
     vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
 
+    float scale[] {
+        2.f / draw_data->DisplaySize.x,
+        2.f / draw_data->DisplaySize.y,
+    };
+    float translate[] {
+        -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
+        -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
+    };
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 32, 8, (void*)&ui_vertex_buffers[virtual_frame_index].device_address);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 40, 8, (void*)&scale);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 48, 8, (void*)&translate);
+
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 56, 4, (void*)&ui_texture.bindless_sampled_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 60, 4, (void*)&ui_texture_sampler.bindless_index);
+
     off_t vertex_buffer_offset = 0;
     off_t index_buffer_offset = 0;
     for (size_t cmd_index = 0; cmd_index < draw_data->CmdListsCount; cmd_index++) {
@@ -312,7 +292,7 @@ void vkrenderer::ui() {
             };
             vkCmdSetScissor(cmd_buf, 0, 1, &rect);
 
-            api.draw(cmd_buf, ui_pipeline, ui_sets[virtual_frame_index], ui_index_buffers[virtual_frame_index], draw_cmd.ElemCount, index_buffer_offset + draw_cmd.IdxOffset, vertex_buffer_offset + draw_cmd.VtxOffset);
+            api.draw(cmd_buf, ui_pipeline, ui_index_buffers[virtual_frame_index], draw_cmd.ElemCount, index_buffer_offset + draw_cmd.IdxOffset, vertex_buffer_offset + draw_cmd.VtxOffset);
         }
 
         vertex_buffer_offset += draw_list->VtxBuffer.Size;
@@ -328,16 +308,16 @@ void vkrenderer::compute(uint32_t width, uint32_t height) {
     vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer.device_address);
     vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 8, (void*)&geometry_buffer.device_address);
     vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 16, 8, (void*)&bvh_buffer.device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 24, 4, (void*)&accumulation_images[0].bindless_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 28, 4, (void*)&accumulation_images[1].bindless_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 24, 4, (void*)&accumulation_images[0].bindless_storage_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 28, 4, (void*)&accumulation_images[1].bindless_storage_index);
     api.run_compute_pipeline(cmd_buf, compute_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
 
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, swapchain.images[swapchain_image_index]);
 
     vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer.device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 4, (void*)&swapchain.images[swapchain_image_index].bindless_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 12, 4, (void*)&accumulation_images[0].bindless_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 4, (void*)&swapchain.images[swapchain_image_index].bindless_storage_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 12, 4, (void*)&accumulation_images[0].bindless_storage_index);
 
     api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
 }
@@ -393,7 +373,7 @@ void vkrenderer::recreate_swapchain() {
 
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[0], VK_TRUE, UINT64_MAX))
 
-    std::vector<Image> images = {
+    std::vector<image> images = {
         accumulation_images[0],
         accumulation_images[1],
 
@@ -401,17 +381,16 @@ void vkrenderer::recreate_swapchain() {
         swapchain.images[1],
         swapchain.images[2]
     };
-    std::vector<VkSampler> samplers { images.size(), VK_NULL_HANDLE };
 
-    api.update_bindless_descriptor_set_images(images, samplers);
+    api.update_descriptor_images(images, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
     for (auto& framebuffer: framebuffers) {
         api.destroy_framebuffer(framebuffer);
     }
     framebuffers.clear();
 
-    for (auto& image : swapchain.images) {
-        std::vector<Image> attachments { image };
+    for (auto& current_image : swapchain.images) {
+        std::vector<image> attachments { current_image };
         framebuffers.push_back(api.create_framebuffer(render_pass, attachments, swapchain.extent));
     }
 }
