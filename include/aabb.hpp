@@ -26,23 +26,23 @@ class aabb {
         }
 
         void union_with(const aabb &box) {
-            minimum.x = fmin(minimum.x, box.minimum.x);
-            minimum.y = fmin(minimum.y, box.minimum.y);
-            minimum.z = fmin(minimum.z, box.minimum.z);
+            minimum.x = minimum.x < box.minimum.x ? minimum.x : box.minimum.x;
+            minimum.y = minimum.y < box.minimum.y ? minimum.y : box.minimum.y;
+            minimum.z = minimum.z < box.minimum.z ? minimum.z : box.minimum.z;
 
-            maximum.x = fmax(maximum.x, box.maximum.x);
-            maximum.y = fmax(maximum.y, box.maximum.y);
-            maximum.z = fmax(maximum.z, box.maximum.z);
+            maximum.x = maximum.x > box.maximum.x ? maximum.x : box.maximum.x;
+            maximum.y = maximum.y > box.maximum.y ? maximum.y : box.maximum.y;
+            maximum.z = maximum.z > box.maximum.z ? maximum.z : box.maximum.z;
         }
 
         void union_with(const point3 &point) {
-            minimum.x = fmin(minimum.x, point.x);
-            minimum.y = fmin(minimum.y, point.y);
-            minimum.z = fmin(minimum.z, point.z);
+            minimum.x = minimum.x < point.x ? minimum.x : point.x;
+            minimum.y = minimum.y < point.y ? minimum.y : point.y;
+            minimum.z = minimum.z < point.z ? minimum.z : point.z;
 
-            maximum.x = fmax(maximum.x, point.x);
-            maximum.y = fmax(maximum.y, point.y);
-            maximum.z = fmax(maximum.z, point.z);
+            maximum.x = maximum.x > point.x ? maximum.x : point.x;
+            maximum.y = maximum.y > point.y ? maximum.y : point.y;
+            maximum.z = maximum.z > point.z ? maximum.z : point.z;
         }
 
         int32_t maximum_axis() {

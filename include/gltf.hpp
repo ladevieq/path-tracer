@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <vector>
+#include <optional>
 
 #include <nlohmann/json.hpp>
 
@@ -17,18 +18,25 @@ struct mesh_part {
 };
 
 struct mesh {
-    std::vector<std::vector<mesh_part>> nodes;
+    std::vector<mesh_part> parts;
+};
+
+struct node {
+    std::vector<node> children;
+    std::optional<mesh> mesh;
 };
 
 class gltf {
 public:
-    static mesh load(std::filesystem::path &path, std::string &filename);
+    static node load(std::filesystem::path &path, std::string &filename);
 
 private:
 
-    static void load_node(json &gltf_json, json &node, std::vector<std::vector<uint8_t>> &buffers_content, mesh& gltf_mesh);
+    static void load_node(json &gltf_json, uint32_t index, node &parent, std::vector<mesh> &meshes);
 
-    static void load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content, mesh& gltf_mesh);
+    static std::vector<mesh> load_meshes(json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content);
+
+    static mesh_part load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content);
 };
 
 #endif
