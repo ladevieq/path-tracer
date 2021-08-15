@@ -1,6 +1,7 @@
 #include "scene.hpp"
 
 #include <filesystem>
+#include <queue>
 
 #include "utils.hpp"
 #include "gltf.hpp"
@@ -69,23 +70,42 @@
 scene::scene(camera cam, uint32_t width, uint32_t height)
     :meta(cam, width, height){
 
+    // auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
+    // auto bistro_interior_filename = std::string("BistroInterior.gltf");
+    // auto root_node = gltf::load(bistro_interior_path, bistro_interior_filename);
+
     auto sponza_path = std::filesystem::path("../models/sponza");
     auto sponza_filename = std::string("Sponza.gltf");
-    auto mesh = gltf::load(sponza_path, sponza_filename);
+    auto root_node = gltf::load(sponza_path, sponza_filename);
 
-    auto node = mesh.nodes[0];
-    for (auto& mesh_part: node) {
-        for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
-            auto i1 = mesh_part.indices[i];
-            auto i2 = mesh_part.indices[i + 1];
-            auto i3 = mesh_part.indices[i + 2];
+    std::queue<node> nodes_to_load {};
+    nodes_to_load.push(root_node);
 
-            auto v1 = vertex { .position = mesh_part.positions[i1] };
-            auto v2 = vertex { .position = mesh_part.positions[i2] };
-            auto v3 = vertex { .position = mesh_part.positions[i3] };
+    while(nodes_to_load.size() != 0) {
+        auto &node = nodes_to_load.front();
 
-            triangles.emplace_back(v1, v2, v3);
+        if (node.mesh) {
+            auto &mesh = node.mesh.value();
+            for (auto& mesh_part: mesh.parts) {
+                for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
+                    auto i1 = mesh_part.indices[i];
+                    auto i2 = mesh_part.indices[i + 1];
+                    auto i3 = mesh_part.indices[i + 2];
+
+                    auto v1 = vertex { .position = mesh_part.positions[i1] };
+                    auto v2 = vertex { .position = mesh_part.positions[i2] };
+                    auto v3 = vertex { .position = mesh_part.positions[i3] };
+
+                    triangles.emplace_back(v1, v2, v3);
+                }
+            }
         }
+
+        for (auto &node: node.children) {
+            nodes_to_load.push(node);
+        }
+
+        nodes_to_load.pop();
     }
 
     // random_scene();
