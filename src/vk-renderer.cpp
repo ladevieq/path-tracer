@@ -10,7 +10,11 @@
 #include "scene.hpp"
 #include "window.hpp"
 
+#ifdef _DEBUG
 #define VKRESULT(result) assert(result == VK_SUCCESS);
+#else
+#define VKRESULT(result) result;
+#endif
 
 struct VkVertex {
     float x, y;
