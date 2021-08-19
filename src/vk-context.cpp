@@ -7,7 +7,11 @@
 #define VMA_IMPLEMENTATION
 #include "thirdparty/vk_mem_alloc.h"
 
+#ifdef _DEBUG
 #define VKRESULT(result) assert(result == VK_SUCCESS);
+#else
+#define VKRESULT(result) result;
+#endif
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                              VkDebugUtilsMessageTypeFlagsEXT type,
