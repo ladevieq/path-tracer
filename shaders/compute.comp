@@ -160,20 +160,30 @@ bool hit_aabb(vec3 minimum, vec3 maximum, ray r, float min_t, float max_t) {
     return t1 >= t0;
 }
 
-// uint hit_aabbs(ray r, float min_t, float max_t) {
-//     uint hit_count = 0;
-//     // for (uint idx = 0; idx <= spheres_count * 2; idx++) {
-//     for (uint idx = 0; idx <= bufs.scene.triangles_count * 2; idx++) {
-//         hit_count += uint(hit_aabb(bufs.bvh.nodes[idx].bb, r, min_t, max_t));
-// 
-//         if (bufs.bvh.nodes[idx].primitive_id >= 0) {
-//             // hit_count += uint(hit_aabb(spheres[bufs.bvh.nodes[idx].primitive_id].bb, r, min_t, max_t));
-//             // hit_count += uint(hit_aabb(triangles[bufs.bvh.nodes[idx].primitive_id].bb, r, min_t, max_t));
-//         }
-//     }
-// 
-//     return hit_count;
-// }
+uint hit_aabbs(ray r, float min_t, float max_t) {
+    uint hit_count = 0;
+    int id = 0;
+
+    while(id != -1) {
+        if (bufs.bvh.nodes[id].primitive_id != -1) {
+            triangle tri = bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id];
+            vec3 minimum = min(tri.v1.position, min(tri.v2.position, tri.v3.position)).xyz;
+            vec3 maximum = max(tri.v1.position, max(tri.v2.position, tri.v3.position)).xyz;
+
+            if (hit_aabb(minimum, maximum, r, min_t, max_t)) {
+                hit_count++;
+            }
+            id = bufs.bvh.nodes[id].next_id;
+        } else if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r, min_t, max_t)) {
+                hit_count++;
+                id++;
+        } else {
+            id = bufs.bvh.nodes[id].next_id;
+        }
+    }
+
+    return hit_count;
+}
 
 bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     vec3 origin_center = r.origin - s.position.xyz;
@@ -374,11 +384,13 @@ void main() {
     vec4 proj_plane_pos = bufs.scene.cam.first_pixel + jittered_uvs.x * bufs.scene.cam.horizontal + jittered_uvs.y * bufs.scene.cam.vertical;
 
     ray r = ray(bufs.scene.cam.position.xyz + offset, proj_plane_pos.xyz - bufs.scene.cam.position.xyz - offset);
-    vec4 out_color = ray_color(r, seed);
+    vec4 out_color = vec4(0.0);
 
-    // if (bufs.scene.debug_bvh) {
-    //     out_color -= hit_aabbs(r, 0.001, 1e15) * vec4(0.0, 0.025, 0.025, 0.0);
-    // }
+    if (bufs.scene.debug_bvh) {
+        out_color = hit_aabbs(r, 0.001, 1e15) * vec4(0.001, 0.0, 0.0, 1.0);
+    } else {
+        out_color = ray_color(r, seed);
+    }
 
     float spp_scale = (1.0 / bufs.scene.sample_index);
     vec4 acc_color = imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], ivec2(x, y));
