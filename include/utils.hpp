@@ -9,6 +9,7 @@ std::vector<uint8_t> read_file(const char* path);
 std::vector<uint8_t> read_file(std::string& path);
 
 #define PI 3.14159265359
+#define EPSILON 0.000001
 
 inline float deg_to_rad(float deg) {
     return deg * PI / 180.0;

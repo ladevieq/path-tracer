@@ -2,6 +2,7 @@
 #define __VEC3_HPP_
 
 #include <iostream>
+#include <xmmintrin.h>
 
 class vec3 {
     public:
@@ -9,10 +10,15 @@ class vec3 {
 
     vec3(float x);
     vec3(float x, float y, float z);
+    vec3(__m128& v);
+    vec3(__m128&& v);
+    vec3(const vec3& vec);
 
     vec3 operator-() const;
 
-    vec3& operator+=(vec3 vec);
+    vec3& operator=(const vec3& vec);
+
+    vec3& operator+=(const vec3& vec);
 
     vec3& operator*=(float scale);
 
@@ -28,7 +34,11 @@ class vec3 {
 
     vec3 cross(const vec3& vec) const;
 
-    vec3 unit() const;
+    vec3& min(const vec3& vec);
+
+    vec3& max(const vec3& vec);
+
+    vec3& normalize();
 
     bool near_zero() const;
 
@@ -36,37 +46,28 @@ class vec3 {
 
     static vec3 random(float min, float max);
 
-    float x, y, z;
-    float padding;
+    __m128 v;
 };
 
-vec3 lerp(vec3 u, vec3 v, float t);
+vec3 lerp(const vec3& u, const vec3& v, float t);
 
-vec3 operator+(vec3 u, vec3 v);
+vec3 operator+(const vec3& u, const vec3& v);
 
-vec3 operator-(vec3 u, vec3 v);
+vec3 operator-(const vec3& u, const vec3& v);
 
-vec3 operator*(vec3 u, vec3 v);
+vec3 operator*(const vec3& u, const vec3& v);
 
-vec3 operator*(vec3 u, float scale);
+vec3 operator*(const vec3& u, float scale);
 
-vec3 operator*(float scale, vec3 u);
+vec3 operator*(float scale, const vec3& u);
 
-vec3 operator/(vec3 u, float scale);
+vec3 operator/(const vec3& u, float scale);
 
-vec3 reflect(vec3 v, vec3 n);
+vec3 reflect(const vec3& v, const vec3& n);
 
 vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat);
 
 std::ostream& operator<<(std::ostream& out, vec3 vec);
-
-vec3 random_in_unit_sphere();
-
-vec3 random_unit_vector();
-
-vec3 random_in_hemisphere(const vec3& normal);
-
-vec3 random_in_unit_disk();
 
 using point3 = vec3;
 using color = vec3;

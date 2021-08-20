@@ -12,9 +12,9 @@ camera::camera(
         float focus_dist
     ) : position(position), lens_radius(aperture / 2.0), fov(v_fov), focus_distance(focus_dist), aspect_ratio(aspect_ratio) {
 
-    forward = (target - position).unit();
-    right = forward.cross(vec3{ 0.0, 1.0, 0.0 }).unit();
-    up = right.cross(forward).unit();
+    forward = (target - position).normalize();
+    right = forward.cross(vec3{ 0.0, 1.0, 0.0 }).normalize();
+    up = right.cross(forward).normalize();
 
     auto h = tan(deg_to_rad(fov) / 2.0);
     auto viewport_height = 2.0 * h;
@@ -45,11 +45,12 @@ void camera::move(vec3 v) {
 }
 
 void camera::rotate_y(float theta) {
-    forward.x = forward.x * cos(theta) - forward.z * sin(theta);
-    forward.z = forward.x * sin(theta) + forward.z * cos(theta);
+    forward.v[0] = forward.v[0] * cos(theta) - forward.v[2] * sin(theta);
+    forward.v[2] = forward.v[0] * sin(theta) + forward.v[2] * cos(theta);
+    forward.normalize();
 
-    right = forward.cross(vec3{ 0.0, 1.0, 0.0 }).unit();
-    up = right.cross(forward).unit();
+    right = forward.cross(vec3{ 0.0, 1.0, 0.0 }).normalize();
+    up = right.cross(forward).normalize();
 
     auto h = tan(deg_to_rad(fov) / 2.0);
     auto viewport_height = 2.0 * h;
