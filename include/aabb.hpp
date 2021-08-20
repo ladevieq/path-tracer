@@ -16,41 +16,47 @@ class aabb {
             auto &v2 = tri.v2.position;
             auto &v3 = tri.v3.position;
 
-            minimum.x = fmin(fmin(v1.x, v2.x), v3.x);
-            minimum.y = fmin(fmin(v1.y, v2.y), v3.y);
-            minimum.z = fmin(fmin(v1.z, v2.z), v3.z);
+            // minimum.x = fmin(fmin(v1.x, v2.x), v3.x);
+            // minimum.y = fmin(fmin(v1.y, v2.y), v3.y);
+            // minimum.z = fmin(fmin(v1.z, v2.z), v3.z);
 
-            maximum.x = fmax(fmax(v1.x, v2.x), v3.x);
-            maximum.y = fmax(fmax(v1.y, v2.y), v3.y);
-            maximum.z = fmax(fmax(v1.z, v2.z), v3.z);
+            minimum.v[0] = fmin(fmin(v1.v[0], v2.v[0]), v3.v[0]);
+            minimum.v[1] = fmin(fmin(v1.v[1], v2.v[1]), v3.v[1]);
+            minimum.v[2] = fmin(fmin(v1.v[2], v2.v[2]), v3.v[2]);
+
+            // maximum.x = fmax(fmax(v1.x, v2.x), v3.x);
+            // maximum.y = fmax(fmax(v1.y, v2.y), v3.y);
+            // maximum.z = fmax(fmax(v1.z, v2.z), v3.z);
+
+            maximum.v[0] = fmax(fmax(v1.v[0], v2.v[0]), v3.v[0]);
+            maximum.v[1] = fmax(fmax(v1.v[1], v2.v[1]), v3.v[1]);
+            maximum.v[2] = fmax(fmax(v1.v[2], v2.v[2]), v3.v[2]);
         }
 
         void union_with(const aabb &box) {
-            minimum.x = minimum.x < box.minimum.x ? minimum.x : box.minimum.x;
-            minimum.y = minimum.y < box.minimum.y ? minimum.y : box.minimum.y;
-            minimum.z = minimum.z < box.minimum.z ? minimum.z : box.minimum.z;
-
-            maximum.x = maximum.x > box.maximum.x ? maximum.x : box.maximum.x;
-            maximum.y = maximum.y > box.maximum.y ? maximum.y : box.maximum.y;
-            maximum.z = maximum.z > box.maximum.z ? maximum.z : box.maximum.z;
+            minimum.min(box.minimum);
+            maximum.max(box.maximum);
         }
 
         void union_with(const point3 &point) {
-            minimum.x = minimum.x < point.x ? minimum.x : point.x;
-            minimum.y = minimum.y < point.y ? minimum.y : point.y;
-            minimum.z = minimum.z < point.z ? minimum.z : point.z;
-
-            maximum.x = maximum.x > point.x ? maximum.x : point.x;
-            maximum.y = maximum.y > point.y ? maximum.y : point.y;
-            maximum.z = maximum.z > point.z ? maximum.z : point.z;
+            minimum.min(point);
+            maximum.max(point);
         }
 
         int32_t maximum_axis() {
             vec3 diag = diagonal();
 
-            if (diag.x > diag.y && diag.x > diag.z) {
+            // if (diag.x > diag.y && diag.x > diag.z) {
+            //     return 0;
+            // } else if (diag.y > diag.z) {
+            //     return 1;
+            // } else {
+            //     return 2;
+            // }
+
+            if (diag.v[0] > diag.v[1] && diag.v[0] > diag.v[2]) {
                 return 0;
-            } else if (diag.y > diag.z) {
+            } else if (diag.v[1] > diag.v[2]) {
                 return 1;
             } else {
                 return 2;
@@ -67,7 +73,8 @@ class aabb {
 
         float surface_area() {
             auto diag = diagonal();
-            return 2.f * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
+            // return 2.f * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
+            return 2.f * (diag.v[0] * diag.v[1] + diag.v[0] * diag.v[2] + diag.v[1] * diag.v[2]);
         }
 
         vec3 minimum = vec3(std::numeric_limits<float>::max());

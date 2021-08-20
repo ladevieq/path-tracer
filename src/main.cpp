@@ -48,6 +48,8 @@ int main() {
     uint32_t height = width / aspect_ratio;
     const uint32_t samples_per_pixel = 500;
 
+    std::cerr << sizeof(vec3) << std::endl;
+
     window wnd { width , height };
 
     float delta_time = 0.f;
@@ -124,19 +126,19 @@ int main() {
 
                     switch (event.key) {
                         case KEYS::W: {
-                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.forward.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.forward * move_speed;
                             break;
                         }
                         case KEYS::S: {
-                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.forward.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.forward * move_speed;
                             break;
                         }
                         case KEYS::D: {
-                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.right.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.right * move_speed;
                             break;
                         }
                         case KEYS::A: {
-                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.right.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.right * move_speed;
                             break;
                         }
                         case KEYS::E: {
@@ -150,11 +152,11 @@ int main() {
                             break;
                         }
                         case KEYS::SPACE: {
-                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.up.unit() * move_speed;
+                            move_vec = ((scene*) renderer.scene_buffer_ptr())->meta.cam.up * move_speed;
                             break;
                         }
                         case KEYS::LCTRL: {
-                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.up.unit() * move_speed;
+                            move_vec = -((scene*) renderer.scene_buffer_ptr())->meta.cam.up * move_speed;
                             break;
                         }
                         default:

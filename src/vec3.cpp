@@ -1,87 +1,101 @@
 #include <cmath>
 #include <limits.h>
+#include <smmintrin.h>
 
 #include "vec3.hpp"
 #include "utils.hpp"
 
-vec3::vec3(): x(0.0), y(0.0), z(0.0) {}
+vec3::vec3(): v(_mm_setzero_ps()) {}
+vec3::vec3(float x): v(_mm_set1_ps(x)) {}
+vec3::vec3(float x, float y, float z): v(_mm_set_ps(0.f, z, y, x)) {}
 
-vec3::vec3(float x): x(x), y(x), z(x) {}
-vec3::vec3(float x, float y, float z): x(x), y(y), z(z) {}
-
-vec3 vec3::operator-() const {
-    return vec3 {
-        -x,
-        -y,
-        -z
-    };
+vec3::vec3(__m128& v): v(v) {}
+vec3::vec3(__m128&& v): v(std::move(v)) {}
+vec3::vec3(const vec3& vec) {
+    v = _mm_load_ps((float*)&vec.v);
 }
 
-vec3& vec3::operator+=(vec3 vec) {
-    x += vec.x;
-    y += vec.y;
-    z += vec.z;
+vec3 vec3::operator-() const {
+    return vec3(_mm_xor_ps(v, _mm_set1_ps(-0.0f)));
+}
+
+vec3& vec3::operator=(const vec3& vec) {
+    v = _mm_load_ps((float*)&vec.v);
+
+    return *this;
+}
+
+vec3& vec3::operator+=(const vec3& vec) {
+    v = _mm_add_ps(v, vec.v);
 
     return *this;
 }
 
 vec3& vec3::operator*=(float scale) {
-    x *= scale;
-    y *= scale;
-    z *= scale;
+    __m128 s = _mm_set1_ps(scale);
+    v = _mm_mul_ps(v, s);
 
     return *this;
 }
 
 vec3& vec3::operator/=(float numerator) {
-    x /= numerator;
-    y /= numerator;
-    z /= numerator;
+    __m128 s = _mm_set1_ps(numerator);
+    v = _mm_div_ps(v, s);
 
     return *this;
 }
 
 float vec3::operator[](int axis) {
-    switch (axis) {
-        case 0:
-            return x;
-        case 1:
-            return y;
-        case 2:
-            return z;
-        default:
-           return std::numeric_limits<float>::infinity();
+    if (axis > 2) {
+        return std::numeric_limits<float>::infinity();
     }
+
+    return v[axis];
 }
 
 float vec3::length() const {
-    return sqrt(length_sq());
+    return std::sqrt((_mm_dp_ps(v, v, 0b10001111))[0]);
 }
 
 float vec3::length_sq() const {
-    return x * x + y * y + z * z;
+    return (_mm_dp_ps(v, v, 0b10001111))[0];
 }
 
 float vec3::dot(const vec3& vec) const {
-    return x * vec.x + y * vec.y + z * vec.z;
+    return (_mm_dp_ps(v, vec.v, 0b10001111))[0];
 }
 
 vec3 vec3::cross(const vec3& vec) const {
-    return vec3(
-        y * vec.z - z * vec.y,
-        z * vec.x - x * vec.z,
-        x * vec.y - y * vec.x
-    );
+    __m128 tmp0 = _mm_shuffle_ps(v,v,_MM_SHUFFLE(3,0,2,1));
+    __m128 tmp1 = _mm_shuffle_ps(vec.v,vec.v,_MM_SHUFFLE(3,1,0,2));
+    __m128 tmp2 = _mm_mul_ps(tmp0,vec.v);
+    __m128 tmp3 = _mm_mul_ps(tmp0,tmp1);
+    __m128 tmp4 = _mm_shuffle_ps(tmp2,tmp2,_MM_SHUFFLE(3,0,2,1));
+    return _mm_sub_ps(tmp3,tmp4);
 }
 
-vec3 vec3::unit() const {
-    return *this / length();
+vec3& vec3::min(const vec3& vec) {
+    v = _mm_min_ps(v, vec.v);
+
+    return *this;
+}
+
+vec3& vec3::max(const vec3& vec) {
+    v = _mm_max_ps(v, vec.v);
+
+    return *this;
+}
+
+vec3& vec3::normalize() {
+    v = _mm_div_ps(v, _mm_sqrt_ps(_mm_dp_ps(v, v, 0xff)));
+
+    return *this;
 }
 
 bool vec3::near_zero() const {
-    const auto s = 1e-8;
-
-    return (fabs(x) < s) && (fabs(y) < s) && (fabs(z) < s);
+    // __m128 e = _mm_set1_ps(EPSILON);
+    // _mm_cmplt_ps(_mm_andnot_ps(_mm_set1_ps(-0.0f), v), e);
+    return (fabs(v[0]) < EPSILON) && (fabs(v[1]) < EPSILON) && (fabs(v[2]) < EPSILON);
 }
 
 vec3 vec3::random() {
@@ -92,42 +106,45 @@ vec3 vec3::random(float min, float max) {
     return vec3 { randd(min, max), randd(min, max), randd(min, max) };
 }
 
-vec3 lerp(vec3 u, vec3 v, float t) {
+
+// TODO: Use simd instructions
+vec3 lerp(const vec3& u, const vec3& v, float t) {
     return (1.0 - t) * u + t * v;
 }
 
-vec3 operator+(vec3 u, vec3 v) {
-    return vec3(u.x + v.x, u.y + v.y, u.z + v.z);
+vec3 operator+(const vec3& u, const vec3& v) {
+    return vec3(_mm_add_ps(u.v, v.v));
 }
 
-vec3 operator-(vec3 u, vec3 v) {
-    return vec3(u.x - v.x, u.y - v.y, u.z - v.z);
+vec3 operator-(const vec3& u, const vec3& v) {
+    return vec3(_mm_sub_ps(u.v, v.v));
 }
 
-vec3 operator*(vec3 u, vec3 v) {
-    return vec3(u.x * v.x, u.y * v.y, u.z * v.z);
+vec3 operator*(const vec3& u, const vec3& v) {
+    return vec3(_mm_mul_ps(u.v, v.v));
 }
 
-vec3 operator*(vec3 u, float scale) {
-    return vec3(
-        u.x * scale,
-        u.y * scale,
-        u.z * scale
-    );
+vec3 operator*(const vec3& u, float scale) {
+    __m128 s = _mm_set1_ps(scale);
+    return vec3(_mm_mul_ps(u.v, s));
 }
 
-vec3 operator*(float scale, vec3 u) {
-    return u * scale;
+vec3 operator*(float scale, const vec3& u) {
+    __m128 s = _mm_set1_ps(scale);
+    return vec3(_mm_mul_ps(u.v, s));
 }
 
-vec3 operator/(vec3 u, float scale) {
-    return (1.0 / scale) * u;
+vec3 operator/(const vec3& u, float scale) {
+    __m128 s = _mm_set1_ps(scale);
+    return vec3(_mm_div_ps(u.v, s));
 }
 
-vec3 reflect(vec3 v, vec3 n) {
+// TODO: Use simd instructions
+vec3 reflect(const vec3& v, const vec3& n) {
     return v - 2 * v.dot(n) * n;
 }
 
+// TODO: Use simd instructions
 vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat) {
     auto cos_theta = fmin(n.dot(-uv), 1.0);
     vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
@@ -137,5 +154,5 @@ vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat) {
 }
 
 std::ostream& operator<<(std::ostream& out, vec3 vec) {
-    return out << vec.x << ' ' << vec.y << ' ' << vec.z << std::endl;
+    return out << vec[0] << ' ' << vec[1] << ' ' << vec[2] << std::endl;
 }

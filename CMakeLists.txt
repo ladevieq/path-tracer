@@ -8,7 +8,7 @@ set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems
 
 if(WIN32)
 add_compile_options(
-    -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
+    -msse4.1 -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
 )
 endif()
 

@@ -91,13 +91,13 @@ public:
 
             node.primitive_id = old_node.primitive_id;
 
-            node.min[0] = old_node.bounding_box.minimum.x;
-            node.min[1] = old_node.bounding_box.minimum.y;
-            node.min[2] = old_node.bounding_box.minimum.z;
+            node.min[0] = old_node.bounding_box.minimum.v[0];
+            node.min[1] = old_node.bounding_box.minimum.v[1];
+            node.min[2] = old_node.bounding_box.minimum.v[2];
 
-            node.max[0] = old_node.bounding_box.maximum.x;
-            node.max[1] = old_node.bounding_box.maximum.y;
-            node.max[2] = old_node.bounding_box.maximum.z;
+            node.max[0] = old_node.bounding_box.maximum.v[0];
+            node.max[1] = old_node.bounding_box.maximum.v[1];
+            node.max[2] = old_node.bounding_box.maximum.v[2];
 
             if (old_node.next_id != -1) {
                 node.next_id = temp_nodes[old_node.next_id].df_id;
