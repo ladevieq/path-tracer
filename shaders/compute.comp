@@ -1,26 +1,35 @@
+// ----------------------------------------------------------------------
+// Most of the BRDF stuff in this code comes from github.com/boksajak/referencePT
+// This repo is used it Ray Tracing gems 2, reference path tracer chaper
+// ----------------------------------------------------------------------
+
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
+// Specifies minimal reflectance for dielectrics (when metalness is zero)
+// Nothing has lower reflectance than 2%, but we use 4% to have consistent results with UE4, Frostbite, et al.
+#define MIN_DIELECTRICS_F0 0.04f
+
 struct ray {
     vec3 origin;
     vec3 direction;
+    float min_t;
+    float max_t;
 };
 
 const float PI = 3.141592653589793;
-const uint LAMBERTIAN_MATERIAL  = 0;
-const uint METAL_MATERIAL       = 1;
-const uint DIELECTRIC_MATERIAL  = 2;
-const uint EMISSIVE_MATERIAL    = 3;
+
+const uint DIFFUSE = 1;
+const uint SPECULAR = 2;
 
 struct material {
     vec4 albedo;
     vec4 emissive;
-    float fuzz;
-    float ior;
-    uint type;
-    uint padding;
+    float metalness;
+    float roughness;
+    uint[2] padding;
 };
 
 struct hit_info {
@@ -28,7 +37,6 @@ struct hit_info {
     vec3 point;
     vec3 normal;
     material mat;
-    bool front_face;
 };
 
 struct sphere {
@@ -74,20 +82,19 @@ layout(buffer_reference) readonly buffer scene_metadata {
     camera cam;
 
     uint max_bounce;
+    uint min_bounce;
     uint width;
     uint height;
     uint sample_index;
 
-    // uint spheres_count;
-    uint triangles_count;
-    bool enable_dof;
-    bool debug_bvh;
-    uint downscale_factor;
+    uint enable_dof;
+    uint debug_bvh;
+    int downscale_factor;
 };
 
 layout(buffer_reference) readonly buffer primitives_array {
-    // sphere[] spheres;
-    triangle triangles[];
+    sphere[] spheres;
+    // triangle triangles[];
 };
 
 layout(buffer_reference) readonly buffer nodes_array {
@@ -105,10 +112,6 @@ layout(push_constant) uniform buffers {
     uint padding[2];
 } bufs;
 
-vec3 at(ray r, float t) {
-    return r.origin + r.direction * t;
-}
-
 uint pcg_hash(inout uint seed)
 {
     uint state = seed;
@@ -122,15 +125,7 @@ float rand(inout uint seed)
     return float(pcg_hash(seed)) / 4294967296.0;
 }
 
-vec3 unit_vec(inout uint seed) {
-    float z  = rand(seed) * 2.0 - 1.0;
-    float a = 2.0 * PI * rand(seed);
-    float r = sqrt(1.0 - z * z);
-
-    return vec3(cos(a) * r, sin(a) * r, z);
-}
-
-vec3 diffuse_reflection_cosine_weighted(inout uint seed) {
+vec3 sample_hemisphere(inout uint seed) {
     float r = rand(seed);
     float radius  = sqrt(r);
     float theta = 2.0 * PI * rand(seed);
@@ -146,7 +141,36 @@ vec2 disk_vec(inout uint seed) {
     return vec2(cos(a) * r, sin(a) * r);
 }
 
-bool hit_aabb(vec3 minimum, vec3 maximum, ray r, float min_t, float max_t) {
+// Calculates rotation quaternion from axis vector to the vector (0, 0, 1)
+// Input vector must be normalized!
+vec4 rotation_to_z_axis(vec3 axis) {
+    // Handle special case when axis is exact or near opposite of (0, 0, 1)
+    if (axis.z < -0.99999f) return vec4(1.0f, 0.0f, 0.0f, 0.0f);
+
+    return normalize(vec4(axis.y, -axis.x, 0.0f, 1.0f + axis.z));
+}
+
+vec4 invert_rotation(vec4 q) {
+    return vec4(-q.xyz, q.w);
+}
+
+// Optimized point rotation using quaternion
+// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+vec3 rotate_point(vec4 q, vec3 v) {
+    const vec3 q_axis = q.xyz;
+    return 2.0f * dot(q_axis, v) * q_axis + (q.w * q.w - dot(q_axis, q_axis)) * v + 2.0f * q.w * cross(q_axis, v);
+}
+
+vec3 at(ray r, float t) {
+    return r.origin + r.direction * t;
+}
+
+float luminance(vec3 rgb)
+{
+    return dot(rgb, vec3(0.2126f, 0.7152f, 0.0722f));
+}
+
+bool hit_aabb(vec3 minimum, vec3 maximum, ray r) {
     const vec3 invdir = 1.0 / r.direction;
     const vec3 f = (maximum.xyz - r.origin.xyz) * invdir;
     const vec3 n = (minimum.xyz - r.origin.xyz) * invdir;
@@ -154,27 +178,27 @@ bool hit_aabb(vec3 minimum, vec3 maximum, ray r, float min_t, float max_t) {
     const vec3 tmax = max(f, n);
     const vec3 tmin = min(f, n);
 
-    const float t1 = min(tmax.x, min(tmax.y, tmax.z));
-    const float t0 = max(max(tmin.x, max(tmin.y, tmin.z)), 0.0f);
+    const float t1 = min(min(tmax.x, min(tmax.y, tmax.z)), r.max_t);
+    const float t0 = max(max(max(tmin.x, max(tmin.y, tmin.z)), r.min_t), 0.0f);
 
     return t1 >= t0;
 }
 
-uint hit_aabbs(ray r, float min_t, float max_t) {
+uint hit_aabbs(ray r) {
     uint hit_count = 0;
     int id = 0;
 
     while(id != -1) {
         if (bufs.bvh.nodes[id].primitive_id != -1) {
-            triangle tri = bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id];
-            vec3 minimum = min(tri.v1.position, min(tri.v2.position, tri.v3.position)).xyz;
-            vec3 maximum = max(tri.v1.position, max(tri.v2.position, tri.v3.position)).xyz;
+            // triangle tri = bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id];
+            // vec3 minimum = min(tri.v1.position, min(tri.v2.position, tri.v3.position)).xyz;
+            // vec3 maximum = max(tri.v1.position, max(tri.v2.position, tri.v3.position)).xyz;
 
-            if (hit_aabb(minimum, maximum, r, min_t, max_t)) {
-                hit_count++;
-            }
+            // if (hit_aabb(minimum, maximum, r)) {
+            //     hit_count++;
+            // }
             id = bufs.bvh.nodes[id].next_id;
-        } else if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r, min_t, max_t)) {
+        } else if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r)) {
                 hit_count++;
                 id++;
         } else {
@@ -185,7 +209,7 @@ uint hit_aabbs(ray r, float min_t, float max_t) {
     return hit_count;
 }
 
-bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
+bool hit_sphere(sphere s, ray r, out hit_info info) {
     vec3 origin_center = r.origin - s.position.xyz;
 
     float a = dot(r.direction, r.direction);
@@ -199,10 +223,10 @@ bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
 
     float sqrt_discriminant = sqrt(discriminant);
     float root = (-half_b - sqrt_discriminant) / a;
-    if (root < min_t || root > max_t) {
+    if (root < r.min_t || root > r.max_t) {
         root = (-half_b + sqrt_discriminant) / a;
 
-        if (root < min_t || root > max_t) {
+        if (root < r.min_t || root > r.max_t) {
             return false;
         }
     }
@@ -211,14 +235,14 @@ bool hit_sphere(sphere s, ray r, float min_t, float max_t, out hit_info info) {
     info.point = at(r, info.t);
 
     vec3 outward_normal = (info.point - s.position.xyz) / s.radius;
-    info.front_face = dot(outward_normal, r.direction) < 0.0;
-    info.normal = info.front_face ? outward_normal : -outward_normal;
+    bool front_face = dot(outward_normal, r.direction) < 0.0;
+    info.normal = front_face ? outward_normal : -outward_normal;
     info.mat = s.mat;
 
     return true;
 }
 
-bool hit_triangle(triangle tri, ray r, float min_t, float max_t, out hit_info info) {
+bool hit_triangle(triangle tri, ray r, out hit_info info) {
     vec3 v2v1 = tri.v2.position.xyz - tri.v1.position.xyz;
     vec3 v3v1 = tri.v3.position.xyz - tri.v1.position.xyz;
 
@@ -230,175 +254,183 @@ bool hit_triangle(triangle tri, ray r, float min_t, float max_t, out hit_info in
     float v = d * dot(q, v2v1);
     float t = d * dot(-normal, originv1);
 
-    if (u < 0.0 || u > 1.0 || v < 0.0 || u + v > 1.0 || t < min_t || t > max_t) {
+    if (u < 0.0 || u > 1.0 || v < 0.0 || u + v > 1.0 || t < r.min_t || t > r.max_t) {
         return false;
     }
 
     info.t = t;
-    info.point = at(r, info.t);
-
-    // vec3 outward_normal = normal;
-    // info.front_face = dot(outward_normal, r.direction) < 0.0;
     info.normal = normal;
-    // info.mat = material(vec4(u, v, 0.0, 0.0), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
-    info.mat = material(vec4(0.55), vec4(0.0), 1.0, 1.5, LAMBERTIAN_MATERIAL, 0);
 
     return true;
 }
 
-bool hit_node(ray r, float min_t, float max_t, out hit_info info) {
+bool hit_node(ray r, out hit_info info) {
     hit_info temp_info;
-    float closest_t = max_t;
     bool hit = false;
     int id = 0;
 
     while(id != -1) {
         // Leafs
         if (bufs.bvh.nodes[id].primitive_id != -1) {
-            // if (hit_sphere(spheres[bufs.bvh.nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
-            //     info = temp_info;
-            //     closest_t = temp_info.t;
-            //     hit = true;
-            // }
-            if (hit_triangle(bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id], r, min_t, closest_t, temp_info)) {
+            if (hit_sphere(bufs.geometry.spheres[bufs.bvh.nodes[id].primitive_id], r, temp_info)) {
                 info = temp_info;
-                closest_t = temp_info.t;
+                r.max_t = temp_info.t;
                 hit = true;
             }
+            // if (hit_triangle(bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id], r, temp_info)) {
+            //     info = temp_info;
+            //     r.max_t = temp_info.t;
+            //     hit = true;
+            // }
             id = bufs.bvh.nodes[id].next_id;
-        } else { // Internal nodes
-            if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r, min_t, closest_t)) {
+        } else if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r)) {
                 id++;
-            } else {
-                id = bufs.bvh.nodes[id].next_id;
-            }
+        } else {
+            id = bufs.bvh.nodes[id].next_id;
         }
     }
 
+    info.point = at(r, info.t);
     return hit;
 }
 
-bool lambertian_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
-    attenuation = mat.albedo;
-    scattered = ray(info.point, normalize(info.normal + unit_vec(seed)));
-
-    return true;
+vec3 albedo_to_specular_F0(vec3 albedo, float metalness) {
+    return mix(vec3(MIN_DIELECTRICS_F0), albedo, metalness);
 }
 
-bool metal_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
-    vec3 reflected = reflect(normalize(incident.direction), info.normal);
-
-    attenuation = mat.albedo;
-    scattered = ray(info.point, reflected + mat.fuzz * unit_vec(seed)); 
-
-    return (dot(scattered.direction, info.normal) > 0.0);
+vec3 albedo_to_diffuse_reflectance(vec3 albedo, float metalness) {
+    return albedo * (1.0f - metalness);
 }
 
-float reflectance(float cosine, float eta) {
-    // Use Schlick's approximation for reflectance.
-    float r0 = (1 - eta) / (1 + eta);
-    r0 = r0 * r0;
-    return r0 + (1 - r0) * pow((1 - cosine), 5);
+// Schlick's approximation to Fresnel term
+// f90 should be 1.0, except for the trick used by Schuler (see 'shadowedF90' function)
+vec3 eval_fresnel_schlick(vec3 f0, float f90, float NdotS) {
+    return f0 + (f90 - f0) * pow(1.0f - NdotS, 5.0f);
+}
+vec3 eval_fresnel(vec3 f0, float f90, float NdotS) {
+    // Default is Schlick's approximation
+    return eval_fresnel_schlick(f0, f90, NdotS);
 }
 
-bool dielectric_scattering(material mat, ray incident, inout uint seed, hit_info info, out vec4 attenuation, out ray scattered) {
-    attenuation = vec4(1.0);
-
-    vec3 unit_dir = normalize(incident.direction);
-    float cos_theta = min(dot(-unit_dir, info.normal), 1.0);
-    float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
-
-    float eta = info.front_face ? 1.0 / mat.ior : mat.ior;
-    vec3 direction;
-
-    if (eta * sin_theta > 1.0 || reflectance(cos_theta, eta) > rand(seed)) {
-        direction = reflect(unit_dir, info.normal);
-    } else {
-        direction = refract(unit_dir, info.normal, eta);
-    }
-
-    scattered = ray(info.point, direction); 
-
-    return true;
+// Attenuates F90 for very low F0 values
+// Source: "An efficient and Physically Plausible Real-Time Shading Model" in ShaderX7 by Schuler
+// Also see section "Overbright highlights" in Hoffman's 2010 "Crafting Physically Motivated Shading Models for Game Development" for discussion
+// IMPORTANT: Note that when F0 is calculated using metalness, it's value is never less than MIN_DIELECTRICS_F0, and therefore,
+// this adjustment has no effect. To be effective, F0 must be authored separately, or calculated in different way. See main text for discussion.
+float shadowed_F90(vec3 F0) {
+    // This scaler value is somewhat arbitrary, Schuler used 60 in his article. In here, we derive it from MIN_DIELECTRICS_F0 so
+    // that it takes effect for any reflectance lower than least reflective dielectrics
+    //const float t = 60.0f;
+    const float t = (1.f / MIN_DIELECTRICS_F0);
+    return min(1.f, t * luminance(F0));
 }
 
-vec4 ray_color(ray r, uint seed) {
+float get_brdf_probability(material mat, vec3 view, vec3 shadingNormal) {
+    // Evaluate Fresnel term using the shading normal
+    // Note: we use the shading normal instead of the microfacet normal (half-vector) for Fresnel term here. That's suboptimal for rough surfaces at grazing angles, but half-vector is yet unknown at this point
+    vec3 specular_F0 = vec3(luminance(albedo_to_specular_F0(mat.albedo.rgb, mat.metalness)));
+    float diffuse_reflectance = luminance(albedo_to_diffuse_reflectance(mat.albedo.rgb, mat.metalness));
+    float fresnel = clamp(luminance(eval_fresnel(specular_F0, shadowed_F90(specular_F0), max(0.0f, dot(view, shadingNormal)))), 0.0, 1.0);
+
+    // Approximate relative contribution of BRDFs using the Fresnel term
+    float specular = fresnel;
+    float diffuse = diffuse_reflectance * (1.0f - fresnel); //< If diffuse term is weighted by Fresnel, apply it here as well
+
+    // Return probability of selecting specular BRDF over diffuse BRDF
+    float p = (specular / max(0.0001f, (specular + diffuse)));
+
+    // Clamp probability to avoid undersampling of less prominent BRDF
+    return clamp(p, 0.1f, 0.9f);
+}
+
+vec3 ray_color(ray r, uint seed) {
     hit_info info;
-    uint bounces = 0;
+    vec3 radiance = vec3(0.0);
+    vec3 throughput = vec3(1.0);
 
-    vec4 final_color = vec4(0.0);
-    vec4 throughput = vec4(1.0);
-    ray current_ray = r;
-    while (hit_node(current_ray, 0.001, 1e15, info) && bounces < bufs.scene.max_bounce) {
-        ray scattered;
-        vec4 attenuation = vec4(0.0);
-        // if ((info.mat.type == LAMBERTIAN_MATERIAL && lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        //     (info.mat.type == METAL_MATERIAL && metal_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        //     (info.mat.type == DIELECTRIC_MATERIAL && dielectric_scattering(info.mat, current_ray, seed, info, attenuation, scattered)) ||
-        //     info.mat.type == EMISSIVE_MATERIAL) {
-            lambertian_scattering(info.mat, current_ray, seed, info, attenuation, scattered);
-            // final_color += info.mat.emissive * throughput;
-            throughput *= attenuation;
+    for (uint bounce = 0; bounce < bufs.scene.max_bounce; bounce++) {
+        if (!hit_node(r, info))
+            return throughput * vec3(1.0);
 
-            float NdotR = dot(info.normal, scattered.direction);
-            float PDF = NdotR / PI;
-            vec4 BRDF = attenuation / PI;
-            throughput = (throughput * NdotR / PDF) * BRDF;
-            current_ray = scattered;
-
-            // Russian Roulette
-            // As the throughput gets smaller, the ray is more likely to get terminated early.
-            // Survivors have their value boosted to make up for fewer samples being in the average.
-            // {
-            //     float p = max(throughput.r, max(throughput.g, throughput.b));
-            //     if (rand(seed) > p) {
-            //         break;
-            //     }
-
-            //     // Add the energy we 'lose' by randomly terminating paths
-            //     throughput *= 1.0 / p;
-            // }
+        // uint brdf_type;
+        // if (info.mat.metalness == 1.f && info.mat.metalness == 0.f) {
+        //     brdf_type = SPECULAR;
+        // } else {
+        //     float brdf_probability = get_brdf_probability(info.mat, -r.direction, );
+        //     if (rand(seed) < brdf_probability) {
+        //         brdf_type = SPECULAR;
+        //     } else {
+        //         brdf_type = DIFFUSE;
+        //     }
         // }
-        bounces++;
+
+        // Move to tangent space
+        vec4 rotation_to_z = rotation_to_z_axis(info.normal);
+        vec3 view_local = rotate_point(rotation_to_z, -r.direction);
+        vec3 normal_local = vec3(0.0, 0.0, 1.0);
+        vec3 ray_dir_local = sample_hemisphere(seed);
+
+        float NdotL = dot(normal_local, ray_dir_local);
+        float pdf = NdotL / PI;
+        vec3 brdf = albedo_to_diffuse_reflectance(info.mat.albedo.xyz, info.mat.metalness) / PI;
+        throughput *= brdf / pdf;
+
+        // Move to global space
+        vec4 rotation_from_z = invert_rotation(rotation_to_z);
+        vec3 ray_dir = rotate_point(rotation_from_z, ray_dir_local);
+
+        r = ray(info.point, normalize(info.normal + ray_dir), 0.001f, 1e15);
+
+        // Russian Roulette
+        // As the throughput gets smaller, the ray is more likely to get terminated early.
+        // Survivors have their value boosted to make up for fewer samples being in the average.
+        if (bounce > bufs.scene.min_bounce) {
+            float probability = min(0.95f, luminance(throughput));
+            if (probability < rand(seed)) break;
+            throughput /= probability;
+        }
     }
 
-    return throughput;
-    // return final_color;
+    return radiance;
 }
 
-void main() {
-    uint x = gl_GlobalInvocationID.x * bufs.scene.downscale_factor;
-    uint y = gl_GlobalInvocationID.y * bufs.scene.downscale_factor;
-
-    vec2 uv = vec2(float(x) / (bufs.scene.width - 1), 1.0 - (float(y) / (bufs.scene.height - 1)));
-
-    uint seed = uint(x * uint(1973) + y * uint(9277) + bufs.scene.sample_index * uint(26699)) | uint(1);
+ray generate_camera_ray(ivec2 coords, uint seed) {
+    vec2 scene_size = vec2(bufs.scene.width - 1, bufs.scene.height - 1);
+    vec2 uv = vec2(coords.x / scene_size.x, 1.0 - coords.y / scene_size.y);
     vec2 rand_disk = disk_vec(seed);
-    vec2 jittered_uvs = uv + vec2(rand(seed) / (bufs.scene.width - 1), rand(seed) / (bufs.scene.height - 1));
+    vec2 jittered_uvs = uv + vec2(rand(seed), rand(seed)) / scene_size;
     vec2 lens_disk = vec2(0.0);
-    if (bufs.scene.enable_dof) {
+
+    if (bufs.scene.enable_dof == 1) {
         lens_disk = rand_disk * bufs.scene.cam.lens_radius;
     }
 
     vec3 offset = lens_disk.x * bufs.scene.cam.right.xyz + lens_disk.y * bufs.scene.cam.up.xyz;
-    vec4 proj_plane_pos = bufs.scene.cam.first_pixel + jittered_uvs.x * bufs.scene.cam.horizontal + jittered_uvs.y * bufs.scene.cam.vertical;
+    vec3 proj_plane_pos = bufs.scene.cam.first_pixel.xyz + jittered_uvs.x * bufs.scene.cam.horizontal.xyz + jittered_uvs.y * bufs.scene.cam.vertical.xyz;
 
-    ray r = ray(bufs.scene.cam.position.xyz + offset, proj_plane_pos.xyz - bufs.scene.cam.position.xyz - offset);
-    vec4 out_color = vec4(0.0);
+    return ray(bufs.scene.cam.position.xyz + offset, proj_plane_pos.xyz - bufs.scene.cam.position.xyz - offset, 0.001f, 1e15);
+}
 
-    if (bufs.scene.debug_bvh) {
-        out_color = hit_aabbs(r, 0.001, 1e15) * vec4(0.001, 0.0, 0.0, 1.0);
+void main() {
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * bufs.scene.downscale_factor;
+
+    uint seed = uint(coords.x * uint(1973) + coords.y * uint(9277) + bufs.scene.sample_index * uint(26699)) | uint(1);
+    ray r = generate_camera_ray(coords, seed);
+
+    vec3 out_color = vec3(0.0);
+    if (bufs.scene.debug_bvh == 1) {
+        out_color = hit_aabbs(r) * vec3(0.001, 0.0, 0.0);
     } else {
         out_color = ray_color(r, seed);
     }
 
     float spp_scale = (1.0 / bufs.scene.sample_index);
-    vec4 acc_color = imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], ivec2(x, y));
-    out_color = vec4(mix(acc_color, out_color, spp_scale));
+    vec3 acc_color = imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], coords).xyz;
+    out_color = mix(acc_color, out_color, spp_scale);
 
     for (uint i = 0; i < bufs.scene.downscale_factor; i++) {
         for (uint j = 0; j < bufs.scene.downscale_factor; j++) {
-            imageStore(images[nonuniformEXT(bufs.output_image_index)], ivec2(x + i, y + j), out_color);
+            imageStore(images[nonuniformEXT(bufs.output_image_index)], coords + ivec2(i, j), vec4(out_color, 1.0));
         }
     }
 }

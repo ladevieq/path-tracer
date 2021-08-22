@@ -5,7 +5,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(buffer_reference) readonly buffer scene_metadata {
     uint[39] unused;
-    uint downscale_factor;
+    int downscale_factor;
 };
 
 layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
@@ -17,14 +17,14 @@ layout(push_constant) uniform constants {
 } consts;
 
 void main() {
-    uint x = gl_GlobalInvocationID.x * consts.scene.downscale_factor;
-    uint y = gl_GlobalInvocationID.y * consts.scene.downscale_factor;
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * consts.scene.downscale_factor;
 
-    vec4 color = imageLoad(images[nonuniformEXT(consts.accumulation_image_index)], ivec2(x, y));
-    vec4 out_color = sqrt(color);
+    vec3 color = imageLoad(images[nonuniformEXT(consts.accumulation_image_index)], coords).rgb;
+    vec3 out_color = sqrt(color);
+
     for (uint i = 0; i < consts.scene.downscale_factor; i++) {
         for (uint j = 0; j < consts.scene.downscale_factor; j++) {
-            imageStore(images[nonuniformEXT(consts.output_image_index)], ivec2(x + i, y + j), out_color);
+            imageStore(images[nonuniformEXT(consts.output_image_index)], coords + ivec2(i, j), vec4(out_color, 1.0));
         }
     }
 }

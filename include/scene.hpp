@@ -14,18 +14,16 @@ class scene {
 
         // uint32_t max_bounce = 50;
         uint32_t max_bounce = 3;
+        uint32_t min_bounce = 1;
 
-        // Output image resolution
         uint32_t width;
         uint32_t height;
 
         uint32_t sample_index = 0;
 
-        // uint32_t spheres_count = 0;
-        uint32_t triangles_count = 0;
         uint32_t enable_dof = false;
-        uint32_t debug_bvh = false;
-        uint32_t downscale_factor = 4;
+        uint32_t debug_bvh  = false;
+        int32_t downscale_factor = 4;
 
         metadata(camera cam, uint32_t width, uint32_t height)
             : cam(cam), width(width), height(height) {}
@@ -39,8 +37,8 @@ public:
     metadata meta;
 
     // Geometry & BVH
-    // std::vector<sphere> spheres;
-    std::vector<triangle> triangles;
+    std::vector<sphere> spheres;
+    // std::vector<triangle> triangles;
     std::vector<packed_bvh_node> packed_nodes;
 };
 
