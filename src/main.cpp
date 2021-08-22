@@ -46,9 +46,6 @@ int main() {
     const float aspect_ratio = 16.0 / 9.0;
     uint32_t width = 400;
     uint32_t height = width / aspect_ratio;
-    const uint32_t samples_per_pixel = 500;
-
-    std::cerr << sizeof(vec3) << std::endl;
 
     window wnd { width , height };
 
@@ -65,12 +62,13 @@ int main() {
     auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);
     auto main_scene = scene(cam, width, height);
     auto can_render = true;
-    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[1]) * main_scene.triangles.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
-    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.nodes[0]) * main_scene.nodes.size() };
+    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[0]) * main_scene.triangles.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
+    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
 
     // Upload scene content
     std::memcpy(renderer.scene_buffer_ptr(), &main_scene.meta, sizeof(main_scene.meta));
-    renderer.update_geometry_buffer(main_scene.triangles.data());
+    // renderer.update_geometry_buffer(main_scene.triangles.data());
+    renderer.update_geometry_buffer(main_scene.spheres.data());
     renderer.update_bvh_buffer(main_scene.packed_nodes.data());
 
     ImGuiIO& io = ImGui::GetIO();
@@ -218,7 +216,8 @@ int main() {
             reset_accumulation = true;
         }
 
-        ImGui::SliderInt("bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.max_bounce, 1, 250);
+        ImGui::SliderInt("max bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.max_bounce, 1, 250);
+        ImGui::SliderInt("min bounces", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.min_bounce, 1, ((scene*) renderer.scene_buffer_ptr())->meta.max_bounce);
         if (ImGui::SliderInt("downscale factor", (int32_t*)&((scene*) renderer.scene_buffer_ptr())->meta.downscale_factor, 1, 32)) {
             reset_accumulation = true;
         }

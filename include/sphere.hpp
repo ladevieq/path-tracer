@@ -7,15 +7,12 @@
 struct sphere {
     sphere() = default;
     sphere(point3 center, material material, float radius)
-        : center(center), radius(radius), mat(material),
-            bounding_box(center, radius)
+        : center(center), radius(radius), mat(material)
     {}
 
     point3 center;
 
     material mat;
-
-    aabb bounding_box;
 
     float radius;
     float padding[3];

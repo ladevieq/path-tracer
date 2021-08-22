@@ -54,15 +54,16 @@ float vec3::operator[](int axis) {
 }
 
 float vec3::length() const {
-    return std::sqrt((_mm_dp_ps(v, v, 0b10001111))[0]);
+    __m128 t = _mm_dp_ps(v, v, 0b11110001);
+    return std::sqrt(t[0]);
 }
 
 float vec3::length_sq() const {
-    return (_mm_dp_ps(v, v, 0b10001111))[0];
+    return (_mm_dp_ps(v, v, 0b11110001))[0];
 }
 
 float vec3::dot(const vec3& vec) const {
-    return (_mm_dp_ps(v, vec.v, 0b10001111))[0];
+    return (_mm_dp_ps(v, vec.v, 0b11110001))[0];
 }
 
 vec3 vec3::cross(const vec3& vec) const {
