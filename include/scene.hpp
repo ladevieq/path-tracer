@@ -29,7 +29,7 @@ class scene {
             : cam(cam), width(width), height(height) {}
     };
 
-    void random_scene();
+    // void random_scene();
 
 public:
     scene(camera cam, uint32_t width, uint32_t height);
@@ -37,8 +37,8 @@ public:
     metadata meta;
 
     // Geometry & BVH
-    std::vector<sphere> spheres;
-    // std::vector<triangle> triangles;
+    // std::vector<sphere> spheres;
+    std::vector<triangle> triangles;
     std::vector<packed_bvh_node> packed_nodes;
 };
 

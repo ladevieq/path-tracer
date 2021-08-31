@@ -62,13 +62,13 @@ int main() {
     auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);
     auto main_scene = scene(cam, width, height);
     auto can_render = true;
-    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[0]) * main_scene.triangles.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
-    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
+    vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.triangles[0]) * main_scene.triangles.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
+    // vkrenderer renderer { wnd, sizeof(main_scene.meta), sizeof(main_scene.spheres[0]) * main_scene.spheres.size(), sizeof(main_scene.packed_nodes[0]) * main_scene.packed_nodes.size() };
 
     // Upload scene content
     std::memcpy(renderer.scene_buffer_ptr(), &main_scene.meta, sizeof(main_scene.meta));
-    // renderer.update_geometry_buffer(main_scene.triangles.data());
-    renderer.update_geometry_buffer(main_scene.spheres.data());
+    renderer.update_geometry_buffer(main_scene.triangles.data());
+    // renderer.update_geometry_buffer(main_scene.spheres.data());
     renderer.update_bvh_buffer(main_scene.packed_nodes.data());
 
     ImGuiIO& io = ImGui::GetIO();

@@ -4,8 +4,7 @@
 #include "vec3.hpp"
 
 struct material {
-    color albedo;
-    color emissive;
+    color base_color;
     float metalness = 0.f;
     float roughness = 1.f;
     uint32_t padding[2];

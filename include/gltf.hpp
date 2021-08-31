@@ -9,12 +9,14 @@
 
 using json = nlohmann::json;
 
-#include <vec3.hpp>
+#include "material.hpp"
+#include "vec3.hpp"
 
 struct mesh_part {
-    std::vector<uint16_t> indices;
-    std::vector<vec3> positions;
-    // std::vector<vec3> normals;
+    std::vector<uint16_t>   indices;
+    std::vector<vec3>       positions;
+    std::vector<vec3>       normals;
+    material                mat;
 };
 
 struct mesh {
@@ -34,9 +36,11 @@ private:
 
     static void load_node(json &gltf_json, uint32_t index, node &parent, std::vector<mesh> &meshes);
 
-    static std::vector<mesh> load_meshes(json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content);
+    static std::vector<mesh> load_meshes(json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials);
 
-    static mesh_part load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content);
+    static std::vector<material> load_materials(json &gltf_json);
+
+    static mesh_part load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials);
 };
 
 #endif

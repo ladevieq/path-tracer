@@ -24,8 +24,10 @@ node gltf::load(std::filesystem::path &path, std::string &filename) {
         buffer_index++;
     }
 
+    // auto materials = load_materials(gltf_json);
+    std::vector<material> materials;
 
-    auto meshes = load_meshes(gltf_json, buffers_content);
+    auto meshes = load_meshes(gltf_json, buffers_content, materials);
 
     node root_node;
     auto &root_children = scene["nodes"];
@@ -57,7 +59,7 @@ void gltf::load_node(json &gltf_json, uint32_t index, node &parent, std::vector<
     }
 }
 
-std::vector<mesh> gltf::load_meshes(json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content) {
+std::vector<mesh> gltf::load_meshes(json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials) {
     auto &gltf_meshes = gltf_json["meshes"];
     auto meshes_count = gltf_meshes.size();
     std::vector<mesh> meshes { meshes_count };
@@ -68,14 +70,35 @@ std::vector<mesh> gltf::load_meshes(json &gltf_json, std::vector<std::vector<uin
         auto &mesh = meshes[mesh_index];
 
         for (auto& primitive: primitives) {
-            mesh.parts.emplace_back(load_primitive(gltf_json, primitive, buffers_content));
+            mesh.parts.emplace_back(load_primitive(gltf_json, primitive, buffers_content, materials));
         }
     }
 
     return std::move(meshes);
 }
 
-mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content) {
+std::vector<material> gltf::load_materials(json &gltf_json) {
+    auto &gltf_materials = gltf_json["materials"];
+    auto materials_count = gltf_materials.size();
+    std::vector<material> materials { materials_count };
+
+    for(size_t material_index = 0; material_index < materials_count; material_index++) {
+        auto& gltf_material = gltf_materials[material_index];
+        auto& material = materials[material_index];
+
+        auto base_color = gltf_material["baseColorFactor"];
+        material.base_color.v[0] = base_color[0];
+        material.base_color.v[1] = base_color[1];
+        material.base_color.v[2] = base_color[2];
+        material.base_color.v[3] = base_color[3];
+        material.metalness = gltf_material["matellicFactor"].get<float>();
+        material.roughness = gltf_material["roughnessFactor"].get<float>();
+    }
+
+    return std::move(materials);
+}
+
+mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials) {
     auto part = mesh_part();
     auto &accessors = gltf_json["accessors"];
 
@@ -116,22 +139,27 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         }
     }
 
-    // {
-    //     auto normals_accessor_index = primitive["attributes"]["NORMAL"].get<uint32_t>();
-    //     auto normals_view_index = accessors[normals_accessor_index]["bufferView"].get<uint32_t>();
-    //     auto normals_view = gltf_json["bufferViews"][normals_view_index];
+    {
+        auto normals_accessor_index = primitive["attributes"]["NORMAL"].get<uint32_t>();
+        auto normals_view_index = accessors[normals_accessor_index]["bufferView"].get<uint32_t>();
+        auto &normals_view = gltf_json["bufferViews"][normals_view_index];
 
-    //     auto normals_buffer_index = normals_view["buffer"].get<uint32_t>();
-    //     auto normals_offset = normals_view["byteOffset"].get<size_t>();
-    //     auto normals_length = normals_view["byteLength"].get<size_t>();
+        auto normals_buffer_index = normals_view["buffer"].get<uint32_t>();
+        auto normals_offset = normals_view["byteOffset"].get<size_t>();
+        auto normals_length = normals_view["byteLength"].get<size_t>();
 
-    //     auto normals_buffer = buffers_content[normals_buffer_index];
-    //     void* normals_start = normals_buffer.data() + normals_offset;
+        auto &normals_buffer = buffers_content[normals_buffer_index];
+        float* normals_start = (float*)(normals_buffer.data() + normals_offset);
 
-    //     mesh_part.normals.resize(normals_length / (sizeof(float) * 3));
+        size_t normals_count = normals_length / (sizeof(float) * 3);
+        part.normals.resize(normals_count);
 
-    //     std::memcpy(mesh_part.normals.data(), normals_start, normals_length);
-    // }
+        for (size_t i = 0; i < normals_count; i++) {
+            part.normals[i] = vec3(normals_start[i * 3], normals_start[i * 3 + 1], normals_start[i * 3 + 2]);
+        }
+    }
+
+    // part.mat = materials[primitive["material"].get<uint32_t>()];
 
     return std::move(part);
 }
