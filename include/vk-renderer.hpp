@@ -11,7 +11,7 @@ class window;
 
 class vkrenderer {
     public:
-        vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_buffer_size, size_t bvh_buffer_size);
+        vkrenderer(window& wnd);
 
         ~vkrenderer();
 
@@ -27,6 +27,12 @@ class vkrenderer {
 
         void recreate_swapchain();
 
+        void create_scene_buffer(size_t size);
+
+        void create_geometry_buffer(size_t size);
+
+        void create_bvh_buffer(size_t size);
+
         inline void* scene_buffer_ptr() {
             return scene_buffer.alloc_info.pMappedData;
         }
@@ -35,11 +41,15 @@ class vkrenderer {
 
         void update_bvh_buffer(void* data);
 
+        void update_image(image img, void* data, size_t size);
+
+        vkapi                           api;
+
     private:
 
         void handle_swapchain_result(VkResult function_result);
 
-        vkapi                           api;
+        // vkapi                           api;
 
         uint32_t                        virtual_frame_index = 0;
         uint32_t                        swapchain_image_index = 0;
@@ -55,6 +65,7 @@ class vkrenderer {
         Buffer                          scene_buffer;
         Buffer                          geometry_buffer;
         Buffer                          bvh_buffer;
+        Buffer                          staging_buffer;
 
 
         Pipeline                        tonemapping_pipeline;

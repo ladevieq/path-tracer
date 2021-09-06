@@ -55,16 +55,16 @@
 //     spheres_count = spheres.size();
 // }
 
-scene::scene(camera cam, uint32_t width, uint32_t height)
+scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
     :meta(cam, width, height){
 
     auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
     auto bistro_interior_filename = std::string("BistroInterior.gltf");
-    auto root_node = gltf::load(bistro_interior_path, bistro_interior_filename);
+    auto root_node = gltf::load(bistro_interior_path, bistro_interior_filename, renderer);
 
     // auto sponza_path = std::filesystem::path("../models/sponza");
     // auto sponza_filename = std::string("Sponza.gltf");
-    // auto root_node = gltf::load(sponza_path, sponza_filename);
+    // auto root_node = gltf::load(sponza_path, sponza_filename, renderer);
 
     std::queue<node> nodes_to_load {};
     nodes_to_load.push(root_node);
@@ -80,11 +80,11 @@ scene::scene(camera cam, uint32_t width, uint32_t height)
                     auto i2 = mesh_part.indices[i + 1];
                     auto i3 = mesh_part.indices[i + 2];
 
-                    auto v1 = vertex { .position = mesh_part.positions[i1], .normal = mesh_part.normals[i1] };
-                    auto v2 = vertex { .position = mesh_part.positions[i2], .normal = mesh_part.normals[i2] };
-                    auto v3 = vertex { .position = mesh_part.positions[i3], .normal = mesh_part.normals[i3] };
+                    auto v1 = vertex { .position = mesh_part.positions[i1], .normal = mesh_part.normals[i1], .uv = mesh_part.uvs[i1] };
+                    auto v2 = vertex { .position = mesh_part.positions[i2], .normal = mesh_part.normals[i2], .uv = mesh_part.uvs[i2] };
+                    auto v3 = vertex { .position = mesh_part.positions[i3], .normal = mesh_part.normals[i3], .uv = mesh_part.uvs[i3] };
 
-                    triangles.emplace_back(v1, v2, v3);
+                    triangles.emplace_back(v1, v2, v3, mesh_part.mat);
                 }
             }
         }

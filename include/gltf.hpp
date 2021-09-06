@@ -12,10 +12,13 @@ using json = nlohmann::json;
 #include "material.hpp"
 #include "vec3.hpp"
 
+#include "vk-renderer.hpp"
+
 struct mesh_part {
     std::vector<uint16_t>   indices;
     std::vector<vec3>       positions;
     std::vector<vec3>       normals;
+    std::vector<vec3>       uvs;
     material                mat;
 };
 
@@ -30,7 +33,7 @@ struct node {
 
 class gltf {
 public:
-    static node load(std::filesystem::path &path, std::string &filename);
+    static node load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer);
 
 private:
 
@@ -38,7 +41,9 @@ private:
 
     static std::vector<mesh> load_meshes(json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials);
 
-    static std::vector<material> load_materials(json &gltf_json);
+    static std::vector<texture> load_textures(json &gltf_json, std::filesystem::path &path, vkrenderer &renderer);
+
+    static std::vector<material> load_materials(json &gltf_json, std::vector<texture> &textures);
 
     static mesh_part load_primitive(json &gltf_json, json &primitive, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials);
 };

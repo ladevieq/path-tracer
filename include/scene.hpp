@@ -7,12 +7,12 @@
 #include "camera.hpp"
 #include "bvh-node.hpp"
 
+#include "vk-renderer.hpp"
 
 class scene {
     struct metadata {
         camera cam;
 
-        // uint32_t max_bounce = 50;
         uint32_t max_bounce = 3;
         uint32_t min_bounce = 1;
 
@@ -32,7 +32,7 @@ class scene {
     // void random_scene();
 
 public:
-    scene(camera cam, uint32_t width, uint32_t height);
+    scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer);
 
     metadata meta;
 

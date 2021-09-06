@@ -118,6 +118,7 @@ void vkcontext::create_device() {
     physical_device_12_features.bufferDeviceAddress                         = VK_TRUE;
     physical_device_12_features.runtimeDescriptorArray                      = VK_TRUE;
     physical_device_12_features.shaderStorageImageArrayNonUniformIndexing   = VK_TRUE;
+    physical_device_12_features.shaderSampledImageArrayNonUniformIndexing   = VK_TRUE;
     physical_device_12_features.descriptorBindingPartiallyBound             = VK_TRUE;
     physical_device_12_features.descriptorBindingPartiallyBound             = VK_TRUE;
     physical_device_12_features.descriptorBindingUpdateUnusedWhilePending   = VK_TRUE;

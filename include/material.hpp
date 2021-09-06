@@ -3,11 +3,18 @@
 
 #include "vec3.hpp"
 
+struct texture {
+    uint32_t image_id;
+    uint32_t sampler_id;
+    uint32_t padding[2];
+};
+
 struct material {
     color base_color;
+    texture base_color_texture;
+    texture metallic_roughness_texture;
     float metalness = 0.f;
     float roughness = 1.f;
-    uint32_t padding[2];
 };
 
 #endif // !__MATERIAL_HPP_

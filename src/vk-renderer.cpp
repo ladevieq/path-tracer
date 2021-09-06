@@ -28,7 +28,7 @@ struct UiTransforms {
     float translate_x, translate_y;
 };
 
-vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_buffer_size, size_t bvh_buffer_size) {
+vkrenderer::vkrenderer(window& wnd) {
     platform_surface = api.create_surface(wnd);
     swapchain = api.create_swapchain(
         platform_surface,
@@ -54,10 +54,6 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
     submission_fences = api.create_fences(virtual_frames_count);
     execution_semaphores = api.create_semaphores(virtual_frames_count);
     acquire_semaphores = api.create_semaphores(virtual_frames_count);
-
-    scene_buffer = api.create_buffer(scene_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    geometry_buffer = api.create_buffer(geometry_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-    bvh_buffer = api.create_buffer(bvh_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
 
     std::vector<VkFormat> attachments_format { swapchain.surface_format.format };
@@ -87,7 +83,7 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
         .height = (uint32_t)atlas_height,
         .depth = 1,
     };
-    auto staging_buffer = api.create_buffer(atlas_width * atlas_height * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    staging_buffer = api.create_buffer(4096 * 4096 * 4 * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     std::memcpy(staging_buffer.alloc_info.pMappedData, pixels, atlas_width * atlas_height * sizeof(uint32_t));
 
     ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
@@ -114,8 +110,6 @@ vkrenderer::vkrenderer(window& wnd, size_t scene_buffer_size, size_t geometry_bu
     api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
 
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
-
-    api.destroy_buffer(staging_buffer);
 
     std::vector<image> images = {
         accumulation_images[0],
@@ -152,6 +146,7 @@ vkrenderer::~vkrenderer() {
     api.destroy_buffer(scene_buffer);
     api.destroy_buffer(geometry_buffer);
     api.destroy_buffer(bvh_buffer);
+    api.destroy_buffer(staging_buffer);
     api.destroy_fences(submission_fences);
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);
@@ -411,6 +406,18 @@ void vkrenderer::handle_swapchain_result(VkResult function_result) {
 }
 
 
+void vkrenderer::create_scene_buffer(size_t size) {
+    scene_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+}
+
+void vkrenderer::create_geometry_buffer(size_t size) {
+    geometry_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+}
+
+void vkrenderer::create_bvh_buffer(size_t size) {
+    bvh_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+}
+
 // TODO: Integrate into the API so that we no longer have to wait for the fence
 void vkrenderer::update_geometry_buffer(void* data) {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
@@ -452,4 +459,34 @@ void vkrenderer::update_bvh_buffer(void* data) {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
 
     api.destroy_buffer(staging_buffer);
+}
+
+void vkrenderer::update_image(image img, void* data, size_t size) {
+    if (staging_buffer.size < size) {
+        api.destroy_buffer(staging_buffer);
+
+        staging_buffer = api.create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    }
+
+    std::memcpy(staging_buffer.alloc_info.pMappedData, data, size);
+
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
+
+    auto cmd_buf = command_buffers[virtual_frame_index];
+    api.start_record(cmd_buf);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, img);
+
+    api.copy_buffer(cmd_buf, staging_buffer, img);
+
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, img);
+
+    api.end_record(cmd_buf);
+
+
+    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
+
+    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+
 }
