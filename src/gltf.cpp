@@ -3,11 +3,14 @@
 #include <fstream>
 #include <cstring>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "thirdparty/stb_image.h"
+
 #include "utils.hpp"
 
 const vec3 scale (0.00800000037997961);
 
-node gltf::load(std::filesystem::path &path, std::string &filename) {
+node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer) {
     std::fstream f(path / filename);
     json gltf_json;
 
@@ -24,8 +27,8 @@ node gltf::load(std::filesystem::path &path, std::string &filename) {
         buffer_index++;
     }
 
-    // auto materials = load_materials(gltf_json);
-    std::vector<material> materials;
+    auto textures = load_textures(gltf_json, path, renderer);
+    auto materials = load_materials(gltf_json, textures);
 
     auto meshes = load_meshes(gltf_json, buffers_content, materials);
 
@@ -77,7 +80,68 @@ std::vector<mesh> gltf::load_meshes(json &gltf_json, std::vector<std::vector<uin
     return std::move(meshes);
 }
 
-std::vector<material> gltf::load_materials(json &gltf_json) {
+std::vector<texture> gltf::load_textures(json &gltf_json, std::filesystem::path &path, vkrenderer &renderer) {
+    auto &gltf_images = gltf_json["images"];
+    auto images_count = gltf_images.size();
+    std::vector<image> images { images_count };
+
+    for (size_t image_index = 0; image_index < images_count; image_index++) {
+        auto &gltf_image = gltf_images[image_index];
+        int x,y,n;
+        auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
+        unsigned char *data = stbi_load(filepath.c_str(), &x, &y, &n, 4);
+        VkExtent3D size {
+            .width = static_cast<uint32_t>(x),
+            .height = static_cast<uint32_t>(y),
+            .depth = 1
+        };
+        auto img = renderer.api.create_image(size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+        renderer.update_image(img, data, x * y * 4);
+
+        stbi_image_free(data);
+
+        images[image_index] = std::move(img);
+    }
+
+    renderer.api.update_descriptor_images(images, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+
+    auto &gltf_samplers = gltf_json["samplers"];
+    auto samplers_count = gltf_samplers.size();
+    std::vector<sampler> samplers { samplers_count };
+
+    for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
+        samplers[sampler_index] = renderer.api.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    }
+
+    renderer.api.update_descriptor_samplers(samplers);
+
+    auto &gltf_textures = gltf_json["textures"];
+    auto textures_count = gltf_textures.size();
+    std::vector<texture> textures { textures_count };
+
+    for (size_t texture_index = 0; texture_index < textures_count; texture_index++) {
+        auto gltf_texture = gltf_textures[texture_index];
+
+        auto image_index = gltf_texture["source"].get<uint32_t>();
+        auto &image = images[image_index];
+
+        uint32_t sampler_id = 0;
+        if (gltf_texture.contains("sampler")) {
+            auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
+            auto &sampler = samplers[sampler_index];
+            sampler_id = sampler.bindless_index;
+        }
+
+        textures[texture_index] = texture {
+            .image_id = image.bindless_sampled_index,
+            .sampler_id = sampler_id
+        };
+    }
+
+    return std::move(textures);
+}
+
+std::vector<material> gltf::load_materials(json &gltf_json, std::vector<texture> &textures) {
     auto &gltf_materials = gltf_json["materials"];
     auto materials_count = gltf_materials.size();
     std::vector<material> materials { materials_count };
@@ -86,13 +150,38 @@ std::vector<material> gltf::load_materials(json &gltf_json) {
         auto& gltf_material = gltf_materials[material_index];
         auto& material = materials[material_index];
 
-        auto base_color = gltf_material["baseColorFactor"];
-        material.base_color.v[0] = base_color[0];
-        material.base_color.v[1] = base_color[1];
-        material.base_color.v[2] = base_color[2];
-        material.base_color.v[3] = base_color[3];
-        material.metalness = gltf_material["matellicFactor"].get<float>();
-        material.roughness = gltf_material["roughnessFactor"].get<float>();
+        if (gltf_material.contains("pbrMetallicRoughness")) {
+            auto &pbr_params = gltf_material["pbrMetallicRoughness"];
+
+            if (pbr_params.contains("baseColorFactor")) {
+                auto &base_color = pbr_params["baseColorFactor"];
+                material.base_color.v[0] = base_color[0].get<float>();
+                material.base_color.v[1] = base_color[1].get<float>();
+                material.base_color.v[2] = base_color[2].get<float>();
+                material.base_color.v[3] = base_color[3].get<float>();
+            } else
+                material.base_color = vec3(1.f);
+
+            if (pbr_params.contains("baseColorTexture")) {
+                auto base_color_index = pbr_params["baseColorTexture"]["index"].get<uint32_t>();
+                material.base_color_texture = textures[base_color_index];
+            }
+
+            if (pbr_params.contains("metallicFactor"))
+                material.metalness = pbr_params["metallicFactor"].get<float>();
+            else
+                material.metalness = 1.0;
+
+            if (pbr_params.contains("roughnessFactor"))
+                material.roughness = pbr_params["roughnessFactor"].get<float>();
+            else
+                material.roughness = 1.0;
+
+            if (pbr_params.contains("metallicRoughnessTexture")) {
+                auto metallic_roughness_index = pbr_params["metallicRoughnessTexture"]["index"].get<uint32_t>();
+                material.metallic_roughness_texture = textures[metallic_roughness_index];
+            }
+        }
     }
 
     return std::move(materials);
@@ -159,7 +248,27 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         }
     }
 
-    // part.mat = materials[primitive["material"].get<uint32_t>()];
+    {
+        auto uvs_accessor_index = primitive["attributes"]["TEXCOORD_0"].get<uint32_t>();
+        auto uvs_view_index = accessors[uvs_accessor_index]["bufferView"].get<uint32_t>();
+        auto &uvs_view = gltf_json["bufferViews"][uvs_view_index];
+
+        auto uvs_buffer_index = uvs_view["buffer"].get<uint32_t>();
+        auto uvs_offset = uvs_view["byteOffset"].get<size_t>();
+        auto uvs_length = uvs_view["byteLength"].get<size_t>();
+
+        auto &uvs_buffer = buffers_content[uvs_buffer_index];
+        float* uvs_start = (float*)(uvs_buffer.data() + uvs_offset);
+
+        size_t uvs_count = uvs_length / (sizeof(float) * 2);
+        part.uvs.resize(uvs_count);
+
+        for (size_t i = 0; i < uvs_count; i++) {
+            part.uvs[i] = vec3(uvs_start[i * 2], uvs_start[i * 2 + 1], 0.0);
+        }
+    }
+
+    part.mat = materials[primitive["material"].get<uint32_t>()];
 
     return std::move(part);
 }
