@@ -145,6 +145,36 @@ float rand(inout uint seed)
     return float(pcg_hash(seed)) / 4294967296.0;
 }
 
+vec3 less_than(vec3 vec, float value)
+{
+    return vec3(
+        (vec.x < value) ? 1.0f : 0.0f,
+        (vec.y < value) ? 1.0f : 0.0f,
+        (vec.z < value) ? 1.0f : 0.0f);
+}
+ 
+vec3 linear_to_srgb(vec3 color)
+{
+    color = clamp(color, 0.0f, 1.0f);
+     
+    return mix(
+        pow(color, vec3(1.0f / 2.4f)) * 1.055f - 0.055f,
+        color * 12.92f,
+        less_than(color, 0.0031308f)
+    );
+}
+ 
+vec3 srgb_to_linear(vec3 color)
+{
+    color = clamp(color, 0.0f, 1.0f);
+     
+    return mix(
+        pow(((color + 0.055f) / 1.055f), vec3(2.4f)),
+        color / 12.92f,
+        less_than(color, 0.04045f)
+    );
+}
+
 vec3 sample_hemisphere(inout uint seed) {
     float r = rand(seed);
     float radius  = sqrt(r);
@@ -431,12 +461,12 @@ vec3 ray_color(ray r, uint seed) {
         info.shading_normal = normalize(tri.v1.normal * info.barycentrics.x + tri.v2.normal * info.barycentrics.y + tri.v3.normal * info.barycentrics.z);
         info.uv = tri.v1.uv * info.barycentrics.x + tri.v2.uv * info.barycentrics.y + tri.v3.uv * info.barycentrics.z;
 
-        info.color = texture(
+        info.color = srgb_to_linear(texture(
             sampler2D(
                 textures[nonuniformEXT(info.mat.base_color_texture.texture_id)],
                 samplers[nonuniformEXT(info.mat.base_color_texture.sampler_id)]
             ), info.uv
-        ).xyz * info.mat.base_color.xyz;
+        ).xyz) * info.mat.base_color.xyz;
         info.metalness_roughness = texture(
             sampler2D(
                 textures[nonuniformEXT(info.mat.metallic_roughness_texture.texture_id)],
@@ -566,8 +596,8 @@ void main() {
     }
 
     float spp_scale = (1.0 / bufs.scene.sample_index);
-    vec3 acc_color = imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], coords).xyz;
-    out_color = mix(acc_color, out_color, spp_scale);
+    vec3 acc_color = srgb_to_linear(imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], coords).xyz);
+    out_color = linear_to_srgb(mix(acc_color, out_color, spp_scale));
 
     for (uint i = 0; i < bufs.scene.downscale_factor; i++) {
         for (uint j = 0; j < bufs.scene.downscale_factor; j++) {
