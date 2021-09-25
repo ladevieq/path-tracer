@@ -6,24 +6,18 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-
-// Specifies minimal reflectance for dielectrics (when metalness is zero)
-// Nothing has lower reflectance than 2%, but we use 4% to have consistent results with UE4, Frostbite, et al.
-#define MIN_DIELECTRICS_F0 0.04f
-
-struct ray {
-    vec3 origin;
-    vec3 direction;
-    float min_t;
-    float max_t;
-};
-
 const float PI = 3.141592653589793f;
 const float TWO_PI = PI * 2.0f;
 
 const uint DIFFUSE = 1;
 const uint SPECULAR = 2;
+
+#include "math.h"
+#include "color_utils.h"
+#include "rand.h"
+#include "brdf.h"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 struct tex {
     uint texture_id;
@@ -39,19 +33,6 @@ struct material {
     float metalness;
     float roughness;
     float[2] padding;
-};
-
-struct hit_info {
-    vec3 point;
-    vec3 barycentrics;
-    vec3 geometry_normal;
-    vec3 shading_normal;
-    vec3 color;
-    vec2 metalness_roughness;
-    vec2 uv;
-    material mat;
-    float t;
-    uint id;
 };
 
 struct sphere {
@@ -132,316 +113,7 @@ layout(push_constant) uniform buffers {
     uint padding[2];
 } bufs;
 
-uint pcg_hash(inout uint seed)
-{
-    uint state = seed;
-    seed *= 747796405u + 2891336453u;
-    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
-}
-
-float rand(inout uint seed)
-{
-    return float(pcg_hash(seed)) / 4294967296.0;
-}
-
-vec3 less_than(vec3 vec, float value)
-{
-    return vec3(
-        (vec.x < value) ? 1.0f : 0.0f,
-        (vec.y < value) ? 1.0f : 0.0f,
-        (vec.z < value) ? 1.0f : 0.0f);
-}
- 
-vec3 linear_to_srgb(vec3 color)
-{
-    color = clamp(color, 0.0f, 1.0f);
-     
-    return mix(
-        pow(color, vec3(1.0f / 2.4f)) * 1.055f - 0.055f,
-        color * 12.92f,
-        less_than(color, 0.0031308f)
-    );
-}
- 
-vec3 srgb_to_linear(vec3 color)
-{
-    color = clamp(color, 0.0f, 1.0f);
-     
-    return mix(
-        pow(((color + 0.055f) / 1.055f), vec3(2.4f)),
-        color / 12.92f,
-        less_than(color, 0.04045f)
-    );
-}
-
-vec3 sample_hemisphere(inout uint seed) {
-    float r = rand(seed);
-    float radius  = sqrt(r);
-    float theta = 2.0 * PI * rand(seed);
-
-    return vec3(cos(theta) * radius, sin(theta) * radius, sqrt(1 - r));
-}
-
-vec2 disk_vec(inout uint seed) {
-    float z  = rand(seed) * 2.0 - 1.0;
-    float a = 2.0 * PI * rand(seed);
-    float r = sqrt(1.0 - z * z);
-
-    return vec2(cos(a) * r, sin(a) * r);
-}
-
-// Calculates rotation quaternion from axis vector to the vector (0, 0, 1)
-// Input vector must be normalized!
-vec4 rotation_to_z_axis(vec3 axis) {
-    // Handle special case when axis is exact or near opposite of (0, 0, 1)
-    if (axis.z < -0.99999f) return vec4(1.0f, 0.0f, 0.0f, 0.0f);
-
-    return normalize(vec4(axis.y, -axis.x, 0.0f, 1.0f + axis.z));
-}
-
-vec4 invert_rotation(vec4 q) {
-    return vec4(-q.xyz, q.w);
-}
-
-// Optimized point rotation using quaternion
-// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-vec3 rotate_point(vec4 q, vec3 v) {
-    const vec3 q_axis = q.xyz;
-    return 2.0f * dot(q_axis, v) * q_axis + (q.w * q.w - dot(q_axis, q_axis)) * v + 2.0f * q.w * cross(q_axis, v);
-}
-
-vec3 at(ray r, float t) {
-    return r.origin + r.direction * t;
-}
-
-float luminance(vec3 rgb)
-{
-    return dot(rgb, vec3(0.2126f, 0.7152f, 0.0722f));
-}
-
-bool hit_aabb(vec3 minimum, vec3 maximum, ray r) {
-    const vec3 invdir = 1.0 / r.direction;
-    const vec3 f = (maximum.xyz - r.origin.xyz) * invdir;
-    const vec3 n = (minimum.xyz - r.origin.xyz) * invdir;
-
-    const vec3 tmax = max(f, n);
-    const vec3 tmin = min(f, n);
-
-    const float t1 = min(min(tmax.x, min(tmax.y, tmax.z)), r.max_t);
-    const float t0 = max(max(max(tmin.x, max(tmin.y, tmin.z)), r.min_t), 0.0f);
-
-    return t1 >= t0;
-}
-
-uint hit_aabbs(ray r) {
-    uint hit_count = 0;
-    int id = 0;
-
-    while(id != -1) {
-        if (bufs.bvh.nodes[id].primitive_id != -1) {
-            // triangle tri = bufs.geometry.triangles[bufs.bvh.nodes[id].primitive_id];
-            // vec3 minimum = min(tri.v1.position, min(tri.v2.position, tri.v3.position)).xyz;
-            // vec3 maximum = max(tri.v1.position, max(tri.v2.position, tri.v3.position)).xyz;
-
-            // if (hit_aabb(minimum, maximum, r)) {
-            //     hit_count++;
-            // }
-            id = bufs.bvh.nodes[id].next_id;
-        } else if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r)) {
-                hit_count++;
-                id++;
-        } else {
-            id = bufs.bvh.nodes[id].next_id;
-        }
-    }
-
-    return hit_count;
-}
-
-bool hit_sphere(sphere s, ray r, out hit_info info) {
-    vec3 origin_center = r.origin - s.position.xyz;
-
-    float a = dot(r.direction, r.direction);
-    float half_b = dot(r.direction, origin_center);
-    float c = dot(origin_center, origin_center) - s.radius * s.radius;
-    float discriminant = half_b * half_b - a * c;
-
-    if (discriminant < 0) {
-        return false;
-    }
-
-    float sqrt_discriminant = sqrt(discriminant);
-    float root = (-half_b - sqrt_discriminant) / a;
-    if (root < r.min_t || root > r.max_t) {
-        root = (-half_b + sqrt_discriminant) / a;
-
-        if (root < r.min_t || root > r.max_t) {
-            return false;
-        }
-    }
-
-    info.t = root;
-    // info.point = at(r, info.t);
-
-    // vec3 outward_normal = (info.point - s.position.xyz) / s.radius;
-    // bool front_face = dot(outward_normal, r.direction) < 0.0;
-    // info.normal = front_face ? outward_normal : -outward_normal;
-    // info.mat = s.mat;
-
-    return true;
-}
-
-bool hit_triangle(uint id, ray r, out hit_info info) {
-    triangle tri = bufs.geometry.triangles[id];
-    vec3 v2v1 = tri.v2.position.xyz - tri.v1.position.xyz;
-    vec3 v3v1 = tri.v3.position.xyz - tri.v1.position.xyz;
-
-    vec3 originv1 = r.origin - tri.v1.position.xyz;
-    vec3 normal = cross(v2v1, v3v1);
-    vec3 q = cross(originv1, r.direction);
-    float d = 1.0 / dot(r.direction, normal);
-    float u = d * dot(-q, v3v1);
-    float v = d * dot(q, v2v1);
-    float t = d * dot(-normal, originv1);
-
-    if (u < 0.0 || u > 1.0 || v < 0.0 || u + v > 1.0 || t < r.min_t || t > r.max_t) {
-        return false;
-    }
-
-    info.t = t;
-    info.barycentrics = vec3(1 - u - v, u, v);
-    info.geometry_normal = normalize(normal);
-    info.id = id;
-    info.mat = tri.mat;
-
-    return true;
-}
-
-bool hit_node(ray r, out hit_info info) {
-    hit_info temp_info;
-    bool hit = false;
-    int id = 0;
-
-    while(id != -1) {
-        // Leafs
-        if (bufs.bvh.nodes[id].primitive_id != -1) {
-            // if (hit_sphere(bufs.geometry.spheres[bufs.bvh.nodes[id].primitive_id], r, temp_info)) {
-            //     info = temp_info;
-            //     r.max_t = temp_info.t;
-            //     hit = true;
-            // }
-            if (hit_triangle(bufs.bvh.nodes[id].primitive_id, r, temp_info)) {
-                info = temp_info;
-                r.max_t = temp_info.t;
-                hit = true;
-            }
-            id = bufs.bvh.nodes[id].next_id;
-        } else if (hit_aabb(bufs.bvh.nodes[id].min, bufs.bvh.nodes[id].max, r)) {
-                id++;
-        } else {
-            id = bufs.bvh.nodes[id].next_id;
-        }
-    }
-
-    info.point = at(r, info.t);
-    return hit;
-}
-
-
-
-// Samples a microfacet normal for the GGX distribution using VNDF method.
-// Source: "Sampling the GGX Distribution of Visible Normals" by Heitz
-// See also https://hal.inria.fr/hal-00996995v1/document and http://jcgt.org/published/0007/04/01/
-// Random variables 'u' must be in <0;1) interval
-// PDF is 'G1(NdotV) * D'
-vec3 sample_GGXVNDF(vec3 Ve, vec2 alpha2D, uint seed) {
-    // Section 3.2: transforming the view direction to the hemisphere configuration
-    vec3 Vh = normalize(vec3(alpha2D.x * Ve.x, alpha2D.y * Ve.y, Ve.z));
-
-    // Section 4.1: orthonormal basis (with special case if cross product is zero)
-    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-    vec3 T1 = lensq > 0.0f ? vec3(-Vh.y, Vh.x, 0.0f) * inversesqrt(lensq) : vec3(1.0f, 0.0f, 0.0f);
-    vec3 T2 = cross(Vh, T1);
-
-    // Section 4.2: parameterization of the projected area
-    float r = sqrt(rand(seed));
-    float phi = TWO_PI * rand(seed);
-    float t1 = r * cos(phi);
-    float t2 = r * sin(phi);
-    float s = 0.5f * (1.0f + Vh.z);
-    t2 = mix(sqrt(1.0f - t1 * t1), t2, s);
-
-    // Section 4.3: reprojection onto hemisphere
-    vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
-
-    // Section 3.4: transforming the normal back to the ellipsoid configuration
-    return normalize(vec3(alpha2D.x * Nh.x, alpha2D.y * Nh.y, max(0.0f, Nh.z)));
-}
-
-// Smith G1 term (masking function) further optimized for GGX distribution (by substituting G_a into G1_GGX)
-float Smith_G1_GGX(float alpha, float NdotS, float alpha_squared, float NdotS_squared) {
-    return 2.0f / (sqrt(((alpha_squared * (1.0f - NdotS_squared)) + NdotS_squared) / NdotS_squared) + 1.0f);
-}
-
-// Weight for the reflection ray sampled from GGX distribution using VNDF method
-float specular_sample_weight_GGXVNDF(float alpha, float alpha_squared, float NdotL, float NdotV, float HdotL, float NdotH) {
-#if USE_HEIGHT_CORRELATED_G2
-    return Smith_G2_Over_G1_Height_Correlated(alpha, alpha_squared, NdotL, NdotV);
-#else 
-    return Smith_G1_GGX(alpha, NdotL, alpha_squared, NdotL * NdotL);
-#endif
-}
-
-vec3 base_color_to_specular_F0(vec3 base_color, float metalness) {
-    return mix(vec3(MIN_DIELECTRICS_F0), base_color, metalness);
-}
-
-vec3 base_color_to_diffuse_reflectance(vec3 base_color, float metalness) {
-    return base_color * (1.0f - metalness);
-}
-
-// Schlick's approximation to Fresnel term
-// f90 should be 1.0, except for the trick used by Schuler (see 'shadowed_F90' function)
-vec3 eval_fresnel_schlick(vec3 f0, float f90, float NdotS) {
-    return f0 + (f90 - f0) * pow(1.0f - NdotS, 5.0f);
-}
-
-vec3 eval_fresnel(vec3 f0, float f90, float NdotS) {
-    // Default is Schlick's approximation
-    return eval_fresnel_schlick(f0, f90, NdotS);
-}
-
-// Attenuates F90 for very low F0 values
-// Source: "An efficient and Physically Plausible Real-Time Shading Model" in ShaderX7 by Schuler
-// Also see section "Overbright highlights" in Hoffman's 2010 "Crafting Physically Motivated Shading Models for Game Development" for discussion
-// IMPORTANT: Note that when F0 is calculated using metalness, it's value is never less than MIN_DIELECTRICS_F0, and therefore,
-// this adjustment has no effect. To be effective, F0 must be authored separately, or calculated in different way. See main text for discussion.
-float shadowed_F90(vec3 F0) {
-    // This scaler value is somewhat arbitrary, Schuler used 60 in his article. In here, we derive it from MIN_DIELECTRICS_F0 so
-    // that it takes effect for any reflectance lower than least reflective dielectrics
-    //const float t = 60.0f;
-    const float t = (1.f / MIN_DIELECTRICS_F0);
-    return min(1.f, t * luminance(F0));
-}
-
-float get_brdf_probability(hit_info info, vec3 view, vec3 shading_normal) {
-    // Evaluate Fresnel term using the shading normal
-    // Note: we use the shading normal instead of the microfacet normal (half-vector) for Fresnel term here. That's suboptimal for rough surfaces at grazing angles, but half-vector is yet unknown at this point
-    vec3 specular_F0 = vec3(luminance(base_color_to_specular_F0(info.color, info.metalness_roughness.x)));
-    float diffuse_reflectance = luminance(base_color_to_diffuse_reflectance(info.color, info.metalness_roughness.x));
-    float fresnel = clamp(luminance(eval_fresnel(specular_F0, shadowed_F90(specular_F0), max(0.0f, dot(view, shading_normal)))), 0.0, 1.0);
-
-    // Approximate relative contribution of BRDFs using the Fresnel term
-    float specular = fresnel;
-    float diffuse = diffuse_reflectance * (1.0f - fresnel); //< If diffuse term is weighted by Fresnel, apply it here as well
-
-    // Return probability of selecting specular BRDF over diffuse BRDF
-    float p = (specular / max(0.0001f, (specular + diffuse)));
-
-    // Clamp probability to avoid undersampling of less prominent BRDF
-    return clamp(p, 0.1f, 0.9f);
-}
+#include "ray.h"
 
 vec3 ray_color(ray r, uint seed) {
     hit_info info;
@@ -461,18 +133,19 @@ vec3 ray_color(ray r, uint seed) {
         info.shading_normal = normalize(tri.v1.normal * info.barycentrics.x + tri.v2.normal * info.barycentrics.y + tri.v3.normal * info.barycentrics.z);
         info.uv = tri.v1.uv * info.barycentrics.x + tri.v2.uv * info.barycentrics.y + tri.v3.uv * info.barycentrics.z;
 
+        material mat = tri.mat;
         info.color = srgb_to_linear(texture(
             sampler2D(
-                textures[nonuniformEXT(info.mat.base_color_texture.texture_id)],
-                samplers[nonuniformEXT(info.mat.base_color_texture.sampler_id)]
+                textures[nonuniformEXT(mat.base_color_texture.texture_id)],
+                samplers[nonuniformEXT(mat.base_color_texture.sampler_id)]
             ), info.uv
-        ).xyz) * info.mat.base_color.xyz;
+        ).xyz) * mat.base_color.xyz;
         info.metalness_roughness = texture(
             sampler2D(
-                textures[nonuniformEXT(info.mat.metallic_roughness_texture.texture_id)],
-                samplers[nonuniformEXT(info.mat.metallic_roughness_texture.sampler_id)]
+                textures[nonuniformEXT(mat.metallic_roughness_texture.texture_id)],
+                samplers[nonuniformEXT(mat.metallic_roughness_texture.sampler_id)]
             ), info.uv
-        ).xy * vec2(info.mat.metalness, info.mat.roughness);
+        ).xy * vec2(mat.metalness, mat.roughness);
 
 
 
@@ -481,10 +154,10 @@ vec3 ray_color(ray r, uint seed) {
         if (dot(info.geometry_normal, info.shading_normal) < 0.0f) info.shading_normal = -info.shading_normal;
 
         uint brdf_type;
-        if (info.mat.metalness == 1.f && info.mat.metalness == 0.f) {
+        if (mat.metalness == 1.f && mat.metalness == 0.f) {
             brdf_type = SPECULAR;
         } else {
-            float brdf_probability = get_brdf_probability(info, -r.direction, info.shading_normal);
+            float brdf_probability = get_brdf_probability(info.color, info.metalness_roughness.x, -r.direction, info.shading_normal);
             if (rand(seed) < brdf_probability) {
                 brdf_type = SPECULAR;
                 throughput /= brdf_probability;
@@ -505,7 +178,8 @@ vec3 ray_color(ray r, uint seed) {
         vec3 sample_weight;
 
         if (brdf_type == DIFFUSE) { // Lambertian diffuse
-            ray_dir_local = sample_hemisphere(seed);
+            vec2 r = vec2(rand(seed), rand(seed));
+            ray_dir_local = sample_hemisphere(r);
             sample_weight = base_color_to_diffuse_reflectance(info.color, info.metalness_roughness.x);
         } else if (brdf_type == SPECULAR) {
             float alpha = info.metalness_roughness.y * info.metalness_roughness.y;
@@ -568,7 +242,7 @@ vec3 ray_color(ray r, uint seed) {
 ray generate_camera_ray(ivec2 coords, uint seed) {
     vec2 scene_size = vec2(bufs.scene.width - 1, bufs.scene.height - 1);
     vec2 uv = vec2(coords.x / scene_size.x, 1.0 - coords.y / scene_size.y);
-    vec2 rand_disk = disk_vec(seed);
+    vec2 rand_disk = disk_vec(vec2(rand(seed), rand(seed)));
     vec2 jittered_uvs = uv + vec2(rand(seed), rand(seed)) / scene_size;
     vec2 lens_disk = vec2(0.0);
 

@@ -13,7 +13,7 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
   set(SPIRV "${PROJECT_BINARY_DIR}/shaders/${FILE_NAME}.spv")
   add_custom_command(
     OUTPUT ${SPIRV}
-    COMMAND glslc --target-env=vulkan1.2 -std=460 ${GLSL} -o ${SPIRV} -I "../shaders/include" # relative to build directory
+    COMMAND glslc --target-env=vulkan1.2 -std=460 ${GLSL} -o ${SPIRV} -I "../../shaders/include" # relative to build directory
     DEPENDS ${GLSL})
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
