@@ -12,8 +12,8 @@ layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
 
 layout(push_constant) uniform constants {
     scene_metadata scene;
-    uint output_image_index;
-    uint accumulation_image_index;
+    layout(offset = 56) uint output_image_index;
+    layout(offset = 60) uint accumulation_image_index;
 } consts;
 
 void main() {

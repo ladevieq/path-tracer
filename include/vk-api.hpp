@@ -49,7 +49,6 @@ struct global_descriptor {
     VkPipelineLayout        pipeline_layout;
     VkDescriptorSet         set;
 
-    // TODO: Use constant here
     std::vector<uint32_t>   index_pool[3];
 
     global_descriptor() {

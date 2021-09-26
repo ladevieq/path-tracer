@@ -66,6 +66,9 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
     // auto sponza_filename = std::string("Sponza.gltf");
     // auto root_node = gltf::load(sponza_path, sponza_filename, renderer);
 
+    std::vector<triangle> triangles;
+    auto triangles_offset = 0;
+    auto vertices_offset = 0;
     std::queue<node> nodes_to_load {};
     nodes_to_load.push(root_node);
 
@@ -74,18 +77,37 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
 
         if (node.mesh) {
             auto &mesh = node.mesh.value();
+
+            indices.resize(indices.size()       + mesh.triangles_count * 3);
+            positions.resize(positions.size()   + mesh.vertices_count * 3);
+            normals.resize(normals.size()       + mesh.vertices_count * 3);
+            uvs.resize(uvs.size()               + mesh.vertices_count * 2);
+
+
             for (auto& mesh_part: mesh.parts) {
+                std::memcpy(positions.data()    + vertices_offset * 3, mesh_part.positions.data(), mesh_part.positions.size() * sizeof(float));
+                std::memcpy(normals.data()      + vertices_offset * 3, mesh_part.normals.data(),   mesh_part.normals.size() * sizeof(float));
+                std::memcpy(uvs.data()          + vertices_offset * 2, mesh_part.uvs.data(),       mesh_part.uvs.size() * sizeof(float));
+
                 for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
                     auto i1 = mesh_part.indices[i];
                     auto i2 = mesh_part.indices[i + 1];
                     auto i3 = mesh_part.indices[i + 2];
 
-                    auto v1 = vertex { .position = mesh_part.positions[i1], .normal = mesh_part.normals[i1], .uv = mesh_part.uvs[i1] };
-                    auto v2 = vertex { .position = mesh_part.positions[i2], .normal = mesh_part.normals[i2], .uv = mesh_part.uvs[i2] };
-                    auto v3 = vertex { .position = mesh_part.positions[i3], .normal = mesh_part.normals[i3], .uv = mesh_part.uvs[i3] };
+                    auto p1 = vec3(mesh_part.positions[i1 * 3], mesh_part.positions[i1 * 3 + 1], mesh_part.positions[i1 * 3 + 2]);
+                    auto p2 = vec3(mesh_part.positions[i2 * 3], mesh_part.positions[i2 * 3 + 1], mesh_part.positions[i2 * 3 + 2]);
+                    auto p3 = vec3(mesh_part.positions[i3 * 3], mesh_part.positions[i3 * 3 + 1], mesh_part.positions[i3 * 3 + 2]);
 
-                    triangles.emplace_back(v1, v2, v3, mesh_part.mat);
+                    indices[triangles_offset * 3 + i]        = (i1 + vertices_offset) | (0xff000000 & (materials.size() << 8));
+                    indices[triangles_offset * 3 + i + 1]    = (i2 + vertices_offset) | (0xff000000 & (materials.size() << 16));
+                    indices[triangles_offset * 3 + i + 2]    = (i3 + vertices_offset) | (0xff000000 & (materials.size() << 24));
+
+                    triangles.emplace_back(p1, p2, p3);
+                    materials.push_back(mesh_part.mat);
                 }
+
+                triangles_offset += mesh_part.triangles_count;
+                vertices_offset += mesh_part.vertices_count;
             }
         }
 
@@ -100,4 +122,25 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
 
     bvh builder(triangles, packed_nodes);
     // bvh builder(spheres, packed_nodes);
+
+    scene_buffer = renderer.api.create_buffer(sizeof(meta), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(scene_buffer.alloc_info.pMappedData, &meta, sizeof(meta));
+
+    indices_buffer = renderer.api.create_buffer(indices.size() * sizeof(indices[0]), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(indices_buffer.alloc_info.pMappedData, indices.data(), indices.size() * sizeof(indices[0]));
+
+    positions_buffer = renderer.api.create_buffer(positions.size() * sizeof(positions[0]), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(positions_buffer.alloc_info.pMappedData, positions.data(), positions.size() * sizeof(positions[0]));
+
+    normals_buffer = renderer.api.create_buffer(normals.size() * sizeof(normals[0]), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(normals_buffer.alloc_info.pMappedData, normals.data(), normals.size() * sizeof(normals[0]));
+
+    uvs_buffer = renderer.api.create_buffer(uvs.size() * sizeof(uvs[0]), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(uvs_buffer.alloc_info.pMappedData, uvs.data(), uvs.size() * sizeof(uvs[0]));
+
+    bvh_buffer = renderer.api.create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(bvh_buffer.alloc_info.pMappedData, packed_nodes.data(), packed_nodes.size() * sizeof(packed_nodes[0]));
+
+    materials_buffer = renderer.api.create_buffer(materials.size() * sizeof(materials[0]), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    std::memcpy(materials_buffer.alloc_info.pMappedData, materials.data(), materials.size() * sizeof(materials[0]));
 }

@@ -12,21 +12,14 @@ class aabb {
         aabb(vec3 &min_point, vec3 &max_point): minimum(min_point), maximum(max_point) {}
         aabb(vec3 &position, float radius): minimum(position - vec3(radius)), maximum(position + vec3(radius)) {}
         aabb(triangle &tri) {
-            auto &v1 = tri.v1.position;
-            auto &v2 = tri.v2.position;
-            auto &v3 = tri.v3.position;
+            auto &v1 = tri.p1;
+            auto &v2 = tri.p2;
+            auto &v3 = tri.p3;
 
-            // minimum.x = fmin(fmin(v1.x, v2.x), v3.x);
-            // minimum.y = fmin(fmin(v1.y, v2.y), v3.y);
-            // minimum.z = fmin(fmin(v1.z, v2.z), v3.z);
-
+            // TODO: Use vector 3 functions
             minimum.v[0] = fmin(fmin(v1.v[0], v2.v[0]), v3.v[0]);
             minimum.v[1] = fmin(fmin(v1.v[1], v2.v[1]), v3.v[1]);
             minimum.v[2] = fmin(fmin(v1.v[2], v2.v[2]), v3.v[2]);
-
-            // maximum.x = fmax(fmax(v1.x, v2.x), v3.x);
-            // maximum.y = fmax(fmax(v1.y, v2.y), v3.y);
-            // maximum.z = fmax(fmax(v1.z, v2.z), v3.z);
 
             maximum.v[0] = fmax(fmax(v1.v[0], v2.v[0]), v3.v[0]);
             maximum.v[1] = fmax(fmax(v1.v[1], v2.v[1]), v3.v[1]);
@@ -45,14 +38,6 @@ class aabb {
 
         int32_t maximum_axis() {
             vec3 diag = diagonal();
-
-            // if (diag.x > diag.y && diag.x > diag.z) {
-            //     return 0;
-            // } else if (diag.y > diag.z) {
-            //     return 1;
-            // } else {
-            //     return 2;
-            // }
 
             if (diag.v[0] > diag.v[1] && diag.v[0] > diag.v[2]) {
                 return 0;
@@ -73,7 +58,6 @@ class aabb {
 
         float surface_area() {
             auto diag = diagonal();
-            // return 2.f * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
             return 2.f * (diag.v[0] * diag.v[1] + diag.v[0] * diag.v[2] + diag.v[1] * diag.v[2]);
         }
 

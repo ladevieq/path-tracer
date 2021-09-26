@@ -16,14 +16,18 @@ using json = nlohmann::json;
 
 struct mesh_part {
     std::vector<uint16_t>   indices;
-    std::vector<vec3>       positions;
-    std::vector<vec3>       normals;
-    std::vector<vec3>       uvs;
+    std::vector<float>      positions;
+    std::vector<float>      normals;
+    std::vector<float>      uvs;
     material                mat;
+    uint32_t triangles_count = 0;
+    uint32_t vertices_count = 0;
 };
 
 struct mesh {
     std::vector<mesh_part> parts;
+    uint32_t triangles_count = 0;
+    uint32_t vertices_count = 0;
 };
 
 struct node {
