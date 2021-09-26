@@ -27,23 +27,17 @@ class vkrenderer {
 
         void recreate_swapchain();
 
-        void create_scene_buffer(size_t size);
-
-        void create_geometry_buffer(size_t size);
-
-        void create_bvh_buffer(size_t size);
-
-        inline void* scene_buffer_ptr() {
-            return scene_buffer.alloc_info.pMappedData;
-        }
-
-        void update_geometry_buffer(void* data);
-
-        void update_bvh_buffer(void* data);
-
         void update_image(image img, void* data, size_t size);
 
         vkapi                           api;
+
+        VkDeviceAddress                 scene_buffer_addr;
+        VkDeviceAddress                 indices_buffer_addr;
+        VkDeviceAddress                 positions_buffer_addr;
+        VkDeviceAddress                 normals_buffer_addr;
+        VkDeviceAddress                 uvs_buffer_addr;
+        VkDeviceAddress                 bvh_buffer_addr;
+        VkDeviceAddress                 materials_buffer_addr;
 
     private:
 
@@ -62,9 +56,6 @@ class vkrenderer {
 
         Pipeline                        compute_pipeline;
 
-        Buffer                          scene_buffer;
-        Buffer                          geometry_buffer;
-        Buffer                          bvh_buffer;
         Buffer                          staging_buffer;
 
 

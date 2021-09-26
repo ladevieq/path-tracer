@@ -11,7 +11,7 @@ layout(set = 0, binding = 0) uniform sampler samplers[];
 layout(set = 0, binding = 1) uniform texture2D textures[];
 
 layout(push_constant) uniform constants {
-    layout(offset = 56) uint texture_index;
+    layout(offset = 96) uint texture_index;
     uint sampler_index;
 } consts;
 

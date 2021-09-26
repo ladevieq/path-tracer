@@ -1,28 +1,21 @@
 #ifndef __TRIANGLE_HPP_
 #define __TRIANGLE_HPP_
 
-#include "material.hpp"
-
-struct vertex {
-    vec3 position;
-    vec3 normal;
-    vec3 uv;
-};
+#include "vec3.hpp"
 
 struct triangle {
     triangle() = default;
-    triangle(vertex v1, vertex v2, vertex v3, material mat)
-        : v1(v1), v2(v2), v3(v3), mat(mat)
+    triangle(vec3 p1, vec3 p2, vec3 p3)
+        : p1(p1), p2(p2), p3(p3)
     {}
 
     vec3 center() {
-        return (v1.position + v2.position + v3.position) / 3.f;
+        return (p1 + p2 + p3) / 3.f;
     }
 
-    vertex v1;
-    vertex v2;
-    vertex v3;
-    material mat;
+    vec3 p1;
+    vec3 p2;
+    vec3 p3;
 };
 
 #endif // !__TRIANGLE_HPP_

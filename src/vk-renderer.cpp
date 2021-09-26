@@ -143,9 +143,6 @@ vkrenderer::vkrenderer(window& wnd) {
 vkrenderer::~vkrenderer() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
-    api.destroy_buffer(scene_buffer);
-    api.destroy_buffer(geometry_buffer);
-    api.destroy_buffer(bvh_buffer);
     api.destroy_buffer(staging_buffer);
     api.destroy_fences(submission_fences);
     api.destroy_semaphores(execution_semaphores);
@@ -267,12 +264,12 @@ void vkrenderer::ui() {
         -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
         -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
     };
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 32, 8, (void*)&ui_vertex_buffers[virtual_frame_index].device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 40, 8, (void*)&scale);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 48, 8, (void*)&translate);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 64, 8, (void*)&ui_vertex_buffers[virtual_frame_index].device_address);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 72, 8, (void*)&scale);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 80, 8, (void*)&translate);
 
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 56, 4, (void*)&ui_texture.bindless_sampled_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 60, 4, (void*)&ui_texture_sampler.bindless_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 96, 4, (void*)&ui_texture.bindless_sampled_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 100, 4, (void*)&ui_texture_sampler.bindless_index);
 
     off_t vertex_buffer_offset = 0;
     off_t index_buffer_offset = 0;
@@ -304,19 +301,23 @@ void vkrenderer::ui() {
 void vkrenderer::compute(uint32_t width, uint32_t height) {
     auto cmd_buf = command_buffers[virtual_frame_index];
 
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer.device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 8, (void*)&geometry_buffer.device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 16, 8, (void*)&bvh_buffer.device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 24, 4, (void*)&accumulation_images[0].bindless_storage_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 28, 4, (void*)&accumulation_images[1].bindless_storage_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 8, (void*)&bvh_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 16, 8, (void*)&indices_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 24, 8, (void*)&positions_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 32, 8, (void*)&normals_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 40, 8, (void*)&uvs_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 48, 8, (void*)&materials_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 56, 4, (void*)&accumulation_images[0].bindless_storage_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 60, 4, (void*)&accumulation_images[1].bindless_storage_index);
     api.run_compute_pipeline(cmd_buf, compute_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
 
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, swapchain.images[swapchain_image_index]);
 
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer.device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 4, (void*)&swapchain.images[swapchain_image_index].bindless_storage_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 12, 4, (void*)&accumulation_images[0].bindless_storage_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer_addr);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 56, 4, (void*)&swapchain.images[swapchain_image_index].bindless_storage_index);
+    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 60, 4, (void*)&accumulation_images[0].bindless_storage_index);
 
     api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
 }
@@ -403,62 +404,6 @@ void vkrenderer::handle_swapchain_result(VkResult function_result) {
         default:
             return;
     }
-}
-
-
-void vkrenderer::create_scene_buffer(size_t size) {
-    scene_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-}
-
-void vkrenderer::create_geometry_buffer(size_t size) {
-    geometry_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-}
-
-void vkrenderer::create_bvh_buffer(size_t size) {
-    bvh_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-}
-
-// TODO: Integrate into the API so that we no longer have to wait for the fence
-void vkrenderer::update_geometry_buffer(void* data) {
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
-    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
-
-    auto cmd_buf = command_buffers[virtual_frame_index];
-    api.start_record(cmd_buf);
-
-    auto staging_buffer = api.create_buffer(geometry_buffer.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-    std::memcpy(staging_buffer.alloc_info.pMappedData, data, staging_buffer.size);
-
-    api.copy_buffer(cmd_buf, staging_buffer, geometry_buffer, staging_buffer.size);
-
-    api.end_record(cmd_buf);
-
-    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
-
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
-
-    api.destroy_buffer(staging_buffer);
-}
-
-void vkrenderer::update_bvh_buffer(void* data) {
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
-    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
-
-    auto cmd_buf = command_buffers[virtual_frame_index];
-    api.start_record(cmd_buf);
-
-    auto staging_buffer = api.create_buffer(bvh_buffer.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-    std::memcpy(staging_buffer.alloc_info.pMappedData, data, staging_buffer.size);
-
-    api.copy_buffer(cmd_buf, staging_buffer, bvh_buffer, staging_buffer.size);
-
-    api.end_record(cmd_buf);
-
-    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
-
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
-
-    api.destroy_buffer(staging_buffer);
 }
 
 void vkrenderer::update_image(image img, void* data, size_t size) {

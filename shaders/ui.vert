@@ -12,7 +12,7 @@ layout(buffer_reference) readonly buffer vertices {
 };
 
 layout(push_constant) uniform constants {
-    layout(offset = 32) vertices vertex_buffer;
+    layout(offset = 64) vertices vertex_buffer;
     vec2 scale;
     vec2 translate;
 } consts;

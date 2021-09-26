@@ -8,8 +8,6 @@
 
 #include "utils.hpp"
 
-const vec3 scale (0.00800000037997961);
-
 node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer) {
     std::fstream f(path / filename);
     json gltf_json;
@@ -73,7 +71,10 @@ std::vector<mesh> gltf::load_meshes(json &gltf_json, std::vector<std::vector<uin
         auto &mesh = meshes[mesh_index];
 
         for (auto& primitive: primitives) {
-            mesh.parts.emplace_back(load_primitive(gltf_json, primitive, buffers_content, materials));
+            auto &&part = load_primitive(gltf_json, primitive, buffers_content, materials);
+            mesh.vertices_count += part.vertices_count;
+            mesh.triangles_count += part.triangles_count;
+            mesh.parts.emplace_back(std::move(part));
         }
     }
 
@@ -204,7 +205,6 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         uint16_t* indices_start = (uint16_t*)(indices_buffer.data() + indices_offset);
 
         part.indices.resize(indices_length / sizeof(uint16_t));
-
         std::memcpy(part.indices.data(), indices_start, indices_length);
     }
 
@@ -220,12 +220,8 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto &positions_buffer = buffers_content[positions_buffer_index];
         float* positions_start = (float*)(positions_buffer.data() + positions_offset);
 
-        size_t positions_count = positions_length / (sizeof(float) * 3);
-        part.positions.resize(positions_count);
-
-        for (size_t i = 0; i < positions_count; i++) {
-            part.positions[i] = vec3(positions_start[i * 3], positions_start[i * 3 + 1], positions_start[i * 3 + 2]) * scale;
-        }
+        part.positions.resize(positions_length /  sizeof(float));
+        std::memcpy(part.positions.data(), positions_start, positions_length);
     }
 
     {
@@ -240,12 +236,8 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto &normals_buffer = buffers_content[normals_buffer_index];
         float* normals_start = (float*)(normals_buffer.data() + normals_offset);
 
-        size_t normals_count = normals_length / (sizeof(float) * 3);
-        part.normals.resize(normals_count);
-
-        for (size_t i = 0; i < normals_count; i++) {
-            part.normals[i] = vec3(normals_start[i * 3], normals_start[i * 3 + 1], normals_start[i * 3 + 2]);
-        }
+        part.normals.resize(normals_length /  sizeof(float));
+        std::memcpy(part.normals.data(), normals_start, normals_length);
     }
 
     {
@@ -260,15 +252,13 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto &uvs_buffer = buffers_content[uvs_buffer_index];
         float* uvs_start = (float*)(uvs_buffer.data() + uvs_offset);
 
-        size_t uvs_count = uvs_length / (sizeof(float) * 2);
-        part.uvs.resize(uvs_count);
-
-        for (size_t i = 0; i < uvs_count; i++) {
-            part.uvs[i] = vec3(uvs_start[i * 2], uvs_start[i * 2 + 1], 0.0);
-        }
+        part.uvs.resize(uvs_length /  sizeof(float));
+        std::memcpy(part.uvs.data(), uvs_start, uvs_length);
     }
 
     part.mat = materials[primitive["material"].get<uint32_t>()];
+    part.vertices_count = part.positions.size() / 3;
+    part.triangles_count = part.indices.size() / 3;
 
     return std::move(part);
 }

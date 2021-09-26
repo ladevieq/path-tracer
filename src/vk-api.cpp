@@ -98,17 +98,17 @@ vkapi::vkapi() {
         {
             .stageFlags                        = VK_SHADER_STAGE_COMPUTE_BIT,
             .offset                            = 0,
-            .size                              = 32,
+            .size                              = 64,
         },
         {
             .stageFlags                        = VK_SHADER_STAGE_VERTEX_BIT,
-            .offset                            = 32,
-            .size                              = 24,
+            .offset                            = 64,
+            .size                              = 32,
         },
         {
             .stageFlags                        = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .offset                            = 56,
-            .size                              = 8,
+            .offset                            = 96,
+            .size                              = 32,
         },
     };
 
@@ -159,12 +159,12 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
 
     VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, &buffer.alloc_info))
 
-    buffer.size = data_size;
-
     VkBufferDeviceAddressInfo buffer_device_address_info = {};
     buffer_device_address_info.sType    = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     buffer_device_address_info.pNext    = VK_NULL_HANDLE;
     buffer_device_address_info.buffer   = buffer.handle;
+
+    buffer.size = data_size;
 
     buffer.device_address = vkGetBufferDeviceAddress(context.device, &buffer_device_address_info);
 

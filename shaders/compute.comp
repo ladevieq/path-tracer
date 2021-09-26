@@ -6,12 +6,6 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-const float PI = 3.141592653589793f;
-const float TWO_PI = PI * 2.0f;
-
-const uint DIFFUSE = 1;
-const uint SPECULAR = 2;
-
 #include "math.h"
 #include "color_utils.h"
 #include "rand.h"
@@ -52,7 +46,6 @@ struct triangle {
     vertex v1;
     vertex v2;
     vertex v3;
-    material mat;
 };
 
 struct camera {
@@ -91,9 +84,24 @@ layout(buffer_reference) readonly buffer scene_metadata {
     int downscale_factor;
 };
 
-layout(buffer_reference) readonly buffer primitives_array {
-    // sphere[] spheres;
-    triangle triangles[];
+layout(buffer_reference) readonly buffer indices_array {
+    uint indices[];
+};
+
+layout(buffer_reference) readonly buffer positions_array {
+    float positions[];
+};
+
+layout(buffer_reference) readonly buffer normals_array {
+    float normals[];
+};
+
+layout(buffer_reference) readonly buffer uvs_array {
+    float uvs[];
+};
+
+layout(buffer_reference) readonly buffer materials_array {
+    material materials[];
 };
 
 layout(buffer_reference) readonly buffer nodes_array {
@@ -106,8 +114,12 @@ layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
 
 layout(push_constant) uniform buffers {
     scene_metadata scene;
-    primitives_array geometry;
     nodes_array bvh;
+    indices_array indices_arr;
+    positions_array positions_arr;
+    normals_array normals_arr;
+    uvs_array uvs_arr;
+    materials_array materials_arr;
     uint output_image_index;
     uint accumulation_image_index;
     uint padding[2];
@@ -128,12 +140,36 @@ vec3 ray_color(ray r, uint seed) {
 
 
 
-        // TODO: Interpolation function
-        triangle tri = bufs.geometry.triangles[info.id];
+        // TODO: Interpolation function & indices decoding function
+        uint id1 = bufs.indices_arr.indices[info.id * 3]        & 0x00ffffff;
+        uint id2 = bufs.indices_arr.indices[info.id * 3 + 1]    & 0x00ffffff;
+        uint id3 = bufs.indices_arr.indices[info.id * 3 + 2]    & 0x00ffffff;
+        uint mat_id = (bufs.indices_arr.indices[info.id * 3]        & 0xff000000) >> 8
+                    | (bufs.indices_arr.indices[info.id * 3 + 1]    & 0xff000000) >> 16
+                    | (bufs.indices_arr.indices[info.id * 3 + 2]    & 0xff000000) >> 24;
+
+        vec3 p1 = vec3(bufs.positions_arr.positions[id1 * 3], bufs.positions_arr.positions[id1 * 3 + 1], bufs.positions_arr.positions[id1 * 3 + 2]);
+        vec3 p2 = vec3(bufs.positions_arr.positions[id2 * 3], bufs.positions_arr.positions[id2 * 3 + 1], bufs.positions_arr.positions[id2 * 3 + 2]);
+        vec3 p3 = vec3(bufs.positions_arr.positions[id3 * 3], bufs.positions_arr.positions[id3 * 3 + 1], bufs.positions_arr.positions[id3 * 3 + 2]);
+
+        vec3 n1 = vec3(bufs.normals_arr.normals[id1 * 3], bufs.normals_arr.normals[id1 * 3 + 1], bufs.normals_arr.normals[id1 * 3 + 2]);
+        vec3 n2 = vec3(bufs.normals_arr.normals[id2 * 3], bufs.normals_arr.normals[id2 * 3 + 1], bufs.normals_arr.normals[id2 * 3 + 2]);
+        vec3 n3 = vec3(bufs.normals_arr.normals[id3 * 3], bufs.normals_arr.normals[id3 * 3 + 1], bufs.normals_arr.normals[id3 * 3 + 2]);
+
+        vec2 uv1 = vec2(bufs.uvs_arr.uvs[id1 * 2], bufs.uvs_arr.uvs[id1 * 2 + 1]);
+        vec2 uv2 = vec2(bufs.uvs_arr.uvs[id2 * 2], bufs.uvs_arr.uvs[id2 * 2 + 1]);
+        vec2 uv3 = vec2(bufs.uvs_arr.uvs[id3 * 2], bufs.uvs_arr.uvs[id3 * 2 + 1]);
+
+        vertex v1 = vertex(p1, n1, uv1);
+        vertex v2 = vertex(p2, n2, uv2);
+        vertex v3 = vertex(p3, n3, uv3);
+
+        triangle tri = triangle(v1, v2, v3);
+
         info.shading_normal = normalize(tri.v1.normal * info.barycentrics.x + tri.v2.normal * info.barycentrics.y + tri.v3.normal * info.barycentrics.z);
         info.uv = tri.v1.uv * info.barycentrics.x + tri.v2.uv * info.barycentrics.y + tri.v3.uv * info.barycentrics.z;
 
-        material mat = tri.mat;
+        material mat = bufs.materials_arr.materials[mat_id];
         info.color = srgb_to_linear(texture(
             sampler2D(
                 textures[nonuniformEXT(mat.base_color_texture.texture_id)],
@@ -149,12 +185,13 @@ vec3 ray_color(ray r, uint seed) {
 
 
 
+
         if (dot(info.geometry_normal, v) < 0.f) info.geometry_normal = -info.geometry_normal;
 
         if (dot(info.geometry_normal, info.shading_normal) < 0.0f) info.shading_normal = -info.shading_normal;
 
         uint brdf_type;
-        if (mat.metalness == 1.f && mat.metalness == 0.f) {
+        if (info.metalness_roughness.x == 1.f && info.metalness_roughness.y == 0.f) {
             brdf_type = SPECULAR;
         } else {
             float brdf_probability = get_brdf_probability(info.color, info.metalness_roughness.x, -r.direction, info.shading_normal);
