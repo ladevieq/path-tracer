@@ -135,6 +135,16 @@ vkapi::vkapi() {
 }
 
 vkapi::~vkapi() {
+    // Free resources
+    while (buffers.size())
+        destroy_buffer(buffers.begin()->second);
+
+    while (images.size())
+        destroy_image(images.begin()->second);
+
+    while (samplers.size())
+        destroy_sampler(samplers.begin()->second);
+
     // Free bindless descriptor stuff
     vkDestroyDescriptorSetLayout(context.device, bindless_descriptor.set_layout, nullptr);
     vkDestroyPipelineLayout(context.device, bindless_descriptor.pipeline_layout, nullptr);
@@ -145,8 +155,8 @@ vkapi::~vkapi() {
 }
 
 
-Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
-    Buffer buffer = {};
+buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
+    buffer buffer = {};
 
     VkBufferCreateInfo buffer_info  = {};
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -168,10 +178,12 @@ Buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
 
     buffer.device_address = vkGetBufferDeviceAddress(context.device, &buffer_device_address_info);
 
+    buffers.insert({ buffer.handle, buffer });
+
     return std::move(buffer);
 }
 
-void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Buffer dst, size_t size) {
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, buffer src, buffer dst, size_t size) {
     VkBufferCopy buffer_copy = {};
     buffer_copy.srcOffset = 0;
     buffer_copy.dstOffset = 0;
@@ -180,7 +192,7 @@ void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Buffer dst, size_t 
     vkCmdCopyBuffer(cmd_buf, src.handle, dst.handle, 1, &buffer_copy);
 }
 
-void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, image dst) {
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, buffer src, image dst) {
     VkImageSubresourceLayers image_subresource_layers   = {};
     image_subresource_layers.aspectMask                 = dst.subresource_range.aspectMask;
     image_subresource_layers.mipLevel                   = 0;
@@ -198,8 +210,10 @@ void vkapi::copy_buffer(VkCommandBuffer cmd_buf, Buffer src, image dst) {
     vkCmdCopyBufferToImage(cmd_buf, src.handle, dst.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
 }
 
-void vkapi::destroy_buffer(Buffer& buffer) {
+void vkapi::destroy_buffer(buffer& buffer) {
     vmaDestroyBuffer(context.allocator, buffer.handle, buffer.alloc);
+
+    buffers.erase(buffer.handle);
 }
 
 
@@ -256,6 +270,8 @@ image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
     image.bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     image.bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 
+    images.insert({ image.handle, image });
+
     return std::move(image);
 }
 void vkapi::destroy_image(image &image) {
@@ -264,6 +280,9 @@ void vkapi::destroy_image(image &image) {
 
     vmaDestroyImage(context.allocator, image.handle, image.alloc);
     vkDestroyImageView(context.device, image.view, nullptr);
+
+    images.erase(image.handle);
+
 }
 
 std::vector<image> vkapi::create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count) {
@@ -374,6 +393,8 @@ sampler vkapi::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode
 
     sampler.bindless_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLER);
 
+    samplers.insert({ sampler.handle, sampler });
+
     return std::move(sampler);
 }
 
@@ -381,6 +402,8 @@ void vkapi::destroy_sampler(sampler sampler) {
     bindless_descriptor.free(sampler.bindless_index, VK_DESCRIPTOR_TYPE_SAMPLER);
 
     vkDestroySampler(context.device, sampler.handle, VK_NULL_HANDLE);
+
+    samplers.erase(sampler.handle);
 }
 
 
@@ -753,8 +776,8 @@ void vkapi::destroy_surface(VkSurfaceKHR surface) {
 }
 
 
-Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain) {
-    Swapchain swapchain;
+swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain) {
+    swapchain swapchain;
     VkBool32 queue_support_presentation = VK_FALSE;
     VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.queue_index, surface, &queue_support_presentation))
 
@@ -864,7 +887,7 @@ Swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     return std::move(swapchain);
 }
 
-void vkapi::destroy_swapchain(Swapchain& swapchain) {
+void vkapi::destroy_swapchain(swapchain& swapchain) {
     for(auto &image: swapchain.images) {
         bindless_descriptor.free(image.bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
         bindless_descriptor.free(image.bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
@@ -1006,7 +1029,7 @@ void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, uint32_t ver
     vkCmdDraw(command_buffer, vertex_count, 1, vertex_offset, 0);
 }
 
-void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, Buffer index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
+void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, buffer index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
     vkCmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, VK_INDEX_TYPE_UINT16);
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
 
@@ -1063,7 +1086,7 @@ VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphor
     return vkQueueSubmit(context.queue, 1, &submit_info, submission_fence);
 }
 
-VkResult vkapi::present(Swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) {
+VkResult vkapi::present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) {
     VkPresentInfoKHR present_info   = {};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.pNext              = nullptr;
