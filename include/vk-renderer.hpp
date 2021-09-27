@@ -56,13 +56,13 @@ class vkrenderer {
 
         Pipeline                        compute_pipeline;
 
-        Buffer                          staging_buffer;
+        buffer                          staging_buffer;
 
 
         Pipeline                        tonemapping_pipeline;
 
-        std::vector<Buffer>             ui_vertex_buffers;
-        std::vector<Buffer>             ui_index_buffers;
+        std::vector<buffer>             ui_vertex_buffers;
+        std::vector<buffer>             ui_index_buffers;
         Pipeline                        ui_pipeline;
         VkRenderPass                    render_pass;
         std::vector<VkFramebuffer>      framebuffers;
@@ -72,7 +72,7 @@ class vkrenderer {
         std::vector<VkSemaphore>        acquire_semaphores;
 
         VkSurfaceKHR                    platform_surface;
-        Swapchain                       swapchain;
+        swapchain                       swapchain;
 
         const uint32_t                  min_swapchain_image_count = 3;
         const uint32_t                  virtual_frames_count = 2;

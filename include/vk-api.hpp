@@ -2,10 +2,11 @@
 #define __VK_API_HPP_
 
 #include <vector>
+#include <map>
 
 #include "vk-context.hpp"
 
-struct Buffer {
+struct buffer {
     VmaAllocation       alloc;
     VmaAllocationInfo   alloc_info;
     VkBuffer            handle;
@@ -31,7 +32,7 @@ struct image {
     uint32_t                bindless_sampled_index;
 };
 
-struct Swapchain {
+struct swapchain {
     size_t                  image_count;
     std::vector<image>      images;
     VkSwapchainKHR          handle;
@@ -88,16 +89,15 @@ struct global_descriptor {
 
 class window;
 
-// TODO: Make the api manage ressources
 class vkapi {
     public:
         vkapi();
         ~vkapi();
 
-        Buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
-        void copy_buffer(VkCommandBuffer cmd_buf, Buffer src, Buffer dst, size_t size);
-        void copy_buffer(VkCommandBuffer cmd_buf, Buffer src, image dst);
-        void destroy_buffer(Buffer& buffer);
+        buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
+        void copy_buffer(VkCommandBuffer cmd_buf, buffer src, buffer dst, size_t size);
+        void copy_buffer(VkCommandBuffer cmd_buf, buffer src, image dst);
+        void destroy_buffer(buffer& buffer);
 
 
         image create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages);
@@ -149,8 +149,8 @@ class vkapi {
         void destroy_surface(VkSurfaceKHR surface);
 
 
-        Swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain);
-        void destroy_swapchain(Swapchain& swapchain);
+        swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain);
+        void destroy_swapchain(swapchain& swapchain);
 
         void update_descriptor_images(std::vector<image> &images, VkDescriptorType type);
         void update_descriptor_samplers(std::vector<sampler> &samplers);
@@ -166,7 +166,7 @@ class vkapi {
         void run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
 
         void draw(VkCommandBuffer command_buffer, Pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset);
-        void draw(VkCommandBuffer command_buffer, Pipeline pipeline, Buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
+        void draw(VkCommandBuffer command_buffer, Pipeline pipeline, buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
 
         void blit_full(VkCommandBuffer command_buffer, image src_image, image dst_image);
 
@@ -174,7 +174,7 @@ class vkapi {
 
         VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence);
 
-        VkResult present(Swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
+        VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
     // private:
 
         vkcontext           context;
@@ -184,6 +184,10 @@ class vkapi {
     private:
 
         const char* shader_stage_extension(VkShaderStageFlags shader_stage);
+
+        std::map<VkBuffer, buffer>  buffers;
+        std::map<VkImage, image>    images;
+        std::map<VkSampler, sampler>samplers;
 
         VkCommandPool               command_pool;
         VkDescriptorPool            descriptor_pool;

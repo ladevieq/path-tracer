@@ -143,29 +143,16 @@ vkrenderer::vkrenderer(window& wnd) {
 vkrenderer::~vkrenderer() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
-    api.destroy_buffer(staging_buffer);
     api.destroy_fences(submission_fences);
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);
-
-    api.destroy_images(accumulation_images);
 
     api.destroy_render_pass(render_pass);
 
     api.destroy_sampler(ui_texture_sampler);
 
-    api.destroy_image(ui_texture);
-
     for (auto& framebuffer: framebuffers) {
         api.destroy_framebuffer(framebuffer);
-    }
-
-    for (auto& vertex_buffer: ui_vertex_buffers) {
-        api.destroy_buffer(vertex_buffer);
-    }
-
-    for (auto& index_buffer: ui_index_buffers) {
-        api.destroy_buffer(index_buffer);
     }
 
     api.destroy_command_buffers(command_buffers);
@@ -340,7 +327,7 @@ void vkrenderer::finish_frame() {
 void vkrenderer::recreate_swapchain() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
-    Swapchain old_swapchain = swapchain;
+    struct swapchain old_swapchain = swapchain;
     swapchain = api.create_swapchain(
         platform_surface,
         min_swapchain_image_count,

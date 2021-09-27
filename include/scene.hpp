@@ -47,13 +47,13 @@ public:
     std::vector<float>      uvs;
     std::vector<material>   materials;
 
-    Buffer                  scene_buffer;
-    Buffer                  indices_buffer;
-    Buffer                  positions_buffer;
-    Buffer                  normals_buffer;
-    Buffer                  uvs_buffer;
-    Buffer                  bvh_buffer;
-    Buffer                  materials_buffer;
+    buffer                  scene_buffer;
+    buffer                  indices_buffer;
+    buffer                  positions_buffer;
+    buffer                  normals_buffer;
+    buffer                  uvs_buffer;
+    buffer                  bvh_buffer;
+    buffer                  materials_buffer;
 
     std::vector<packed_bvh_node> packed_nodes;
 };

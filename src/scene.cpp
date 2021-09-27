@@ -58,13 +58,13 @@
 scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
     :meta(cam, width, height){
 
-    auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
-    auto bistro_interior_filename = std::string("BistroInterior.gltf");
-    auto root_node = gltf::load(bistro_interior_path, bistro_interior_filename, renderer);
+    // auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
+    // auto bistro_interior_filename = std::string("BistroInterior.gltf");
+    // auto root_node = gltf::load(bistro_interior_path, bistro_interior_filename, renderer);
 
-    // auto sponza_path = std::filesystem::path("../models/sponza");
-    // auto sponza_filename = std::string("Sponza.gltf");
-    // auto root_node = gltf::load(sponza_path, sponza_filename, renderer);
+    auto sponza_path = std::filesystem::path("../models/sponza");
+    auto sponza_filename = std::string("Sponza.gltf");
+    auto root_node = gltf::load(sponza_path, sponza_filename, renderer);
 
     std::vector<triangle> triangles;
     auto triangles_offset = 0;
