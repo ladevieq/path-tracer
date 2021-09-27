@@ -1,4 +1,4 @@
-# Vulkan monte carol path tracer
+# Vulkan monte carlo path tracer
 Initially a CPU path tracer based on [_Ray Tracing in One Weekend_](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
 
 Rewritten using Vulkan API compute shaders to make it lighting fast.
