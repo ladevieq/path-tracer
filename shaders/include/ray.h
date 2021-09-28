@@ -13,13 +13,60 @@ struct hit_info {
     vec3 point;
     vec3 barycentrics;
     vec3 geometry_normal;
-    vec3 shading_normal;
-    vec3 color;
-    vec2 metalness_roughness;
-    vec2 uv;
     float t;
-    uint id;
+    uint primitive_id;
 };
+
+uvec4 decode_triangle_indices(uint triangle_id) {
+    uint id1 = bufs.indices_arr.indices[triangle_id * 3]        & 0x00ffffff;
+    uint id2 = bufs.indices_arr.indices[triangle_id * 3 + 1]    & 0x00ffffff;
+    uint id3 = bufs.indices_arr.indices[triangle_id * 3 + 2]    & 0x00ffffff;
+
+    uint mat_id = (bufs.indices_arr.indices[triangle_id * 3]        & 0xff000000) >> 8
+                | (bufs.indices_arr.indices[triangle_id * 3 + 1]    & 0xff000000) >> 16
+                | (bufs.indices_arr.indices[triangle_id * 3 + 2]    & 0xff000000) >> 24;
+
+    return uvec4(id1, id2, id3, mat_id);
+}
+
+vec3[3] get_triangle_positions(uvec3 indices) {
+    return vec3[3](
+        vec3(bufs.positions_arr.positions[indices[0] * 3], bufs.positions_arr.positions[indices[0] * 3 + 1], bufs.positions_arr.positions[indices[0] * 3 + 2]),
+        vec3(bufs.positions_arr.positions[indices[1] * 3], bufs.positions_arr.positions[indices[1] * 3 + 1], bufs.positions_arr.positions[indices[1] * 3 + 2]),
+        vec3(bufs.positions_arr.positions[indices[2] * 3], bufs.positions_arr.positions[indices[2] * 3 + 1], bufs.positions_arr.positions[indices[2] * 3 + 2])
+    );
+}
+
+vec3[3] get_triangle_normals(uvec3 indices) {
+    return vec3[3](
+        vec3(bufs.normals_arr.normals[indices[0] * 3], bufs.normals_arr.normals[indices[0] * 3 + 1], bufs.normals_arr.normals[indices[0] * 3 + 2]),
+        vec3(bufs.normals_arr.normals[indices[1] * 3], bufs.normals_arr.normals[indices[1] * 3 + 1], bufs.normals_arr.normals[indices[1] * 3 + 2]),
+        vec3(bufs.normals_arr.normals[indices[2] * 3], bufs.normals_arr.normals[indices[2] * 3 + 1], bufs.normals_arr.normals[indices[2] * 3 + 2])
+    );
+}
+
+vec2[3] get_triangle_uvs(uvec3 indices) {
+    return vec2[3](
+        vec2(bufs.uvs_arr.uvs[indices[0] * 2], bufs.uvs_arr.uvs[indices[0] * 2 + 1]),
+        vec2(bufs.uvs_arr.uvs[indices[1] * 2], bufs.uvs_arr.uvs[indices[1] * 2 + 1]),
+        vec2(bufs.uvs_arr.uvs[indices[2] * 2], bufs.uvs_arr.uvs[indices[2] * 2 + 1])
+    );
+}
+
+triangle get_triangle(uint triangle_id) {
+    uvec4 indices = decode_triangle_indices(triangle_id);
+    vec3 positions[3] = get_triangle_positions(indices.xyz);
+    vec3 normals[3] = get_triangle_normals(indices.xyz);
+    vec2 uvs[3] = get_triangle_uvs(indices.xyz);
+
+    vertex v1 = vertex(positions[0], normals[0], uvs[0]);
+    vertex v2 = vertex(positions[1], normals[1], uvs[1]);
+    vertex v3 = vertex(positions[2], normals[2], uvs[2]);
+    return triangle(
+        v1, v2, v3,
+        bufs.materials_arr.materials[indices.w]
+    );
+}
 
 bool hit_aabb(vec3 minimum, vec3 maximum, ray r) {
     const vec3 invdir = 1.0 / r.direction;
@@ -93,18 +140,14 @@ bool hit_sphere(sphere s, ray r, out hit_info info) {
 }
 
 bool hit_triangle(uint id, ray r, out hit_info info) {
-    uint id1 = bufs.indices_arr.indices[id * 3]        & 0x00ffffff;
-    uint id2 = bufs.indices_arr.indices[id * 3 + 1]    & 0x00ffffff;
-    uint id3 = bufs.indices_arr.indices[id * 3 + 2]    & 0x00ffffff;
+    uvec4 indices = decode_triangle_indices(id);
 
-    vec3 p1 = vec3(bufs.positions_arr.positions[id1 * 3], bufs.positions_arr.positions[id1 * 3 + 1], bufs.positions_arr.positions[id1 * 3 + 2]);
-    vec3 p2 = vec3(bufs.positions_arr.positions[id2 * 3], bufs.positions_arr.positions[id2 * 3 + 1], bufs.positions_arr.positions[id2 * 3 + 2]);
-    vec3 p3 = vec3(bufs.positions_arr.positions[id3 * 3], bufs.positions_arr.positions[id3 * 3 + 1], bufs.positions_arr.positions[id3 * 3 + 2]);
+    vec3 positions[3] = get_triangle_positions(indices.xyz);
 
-    vec3 v2v1 = p2 - p1;
-    vec3 v3v1 = p3 - p1;
+    vec3 v2v1 = positions[1] - positions[0];
+    vec3 v3v1 = positions[2] - positions[0];
 
-    vec3 originv1 = r.origin - p1;
+    vec3 originv1 = r.origin - positions[0];
     vec3 normal = cross(v2v1, v3v1);
     vec3 q = cross(originv1, r.direction);
     float d = 1.0 / dot(r.direction, normal);
@@ -119,7 +162,7 @@ bool hit_triangle(uint id, ray r, out hit_info info) {
     info.t = t;
     info.barycentrics = vec3(1 - u - v, u, v);
     info.geometry_normal = normalize(normal);
-    info.id = id;
+    info.primitive_id = id;
 
     return true;
 }
