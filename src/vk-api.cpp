@@ -442,7 +442,7 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
         attachment_description.stencilLoadOp                            = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment_description.stencilStoreOp                           = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachment_description.initialLayout                            = initial_layout;
-        attachment_description.finalLayout                              = final_layout;
+        attachment_description.finalLayout                              = initial_layout;
 
         attachments_description.push_back(attachment_description);
 
@@ -527,8 +527,8 @@ void vkapi::destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers) {
 }
 
 
-Pipeline vkapi::create_compute_pipeline(const char* shader_name) {
-    Pipeline pipeline {
+pipeline vkapi::create_compute_pipeline(const char* shader_name) {
+    pipeline pipeline {
         .bind_point = VK_PIPELINE_BIND_POINT_COMPUTE
     };
 
@@ -579,8 +579,8 @@ Pipeline vkapi::create_compute_pipeline(const char* shader_name) {
     return std::move(pipeline);
 }
 
-Pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states) {
-    Pipeline pipeline {
+pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states) {
+    pipeline pipeline {
         .bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS
     };
 
@@ -707,7 +707,7 @@ Pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageF
     return pipeline;
 }
 
-void vkapi::destroy_pipeline(Pipeline &pipeline) {
+void vkapi::destroy_pipeline(pipeline &pipeline) {
     for (auto& shader_module: pipeline.shader_modules) {
         vkDestroyShaderModule(context.device, shader_module, nullptr);
     }
@@ -986,7 +986,7 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layo
 }
 
 
-void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, Pipeline pipeline) {
+void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline pipeline) {
     VkRect2D render_area = {
         {
             0,
@@ -1014,7 +1014,7 @@ void vkapi::end_render_pass(VkCommandBuffer command_buffer) {
 }
 
 
-void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
+void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle);
@@ -1022,14 +1022,14 @@ void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeli
     vkCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
 }
 
-void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset) {
+void vkapi::draw(VkCommandBuffer command_buffer, pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset) {
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
     vkCmdDraw(command_buffer, vertex_count, 1, vertex_offset, 0);
 }
 
-void vkapi::draw(VkCommandBuffer command_buffer, Pipeline pipeline, buffer index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
+void vkapi::draw(VkCommandBuffer command_buffer, pipeline pipeline, buffer index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
     vkCmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, VK_INDEX_TYPE_UINT16);
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
 
