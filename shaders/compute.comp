@@ -270,6 +270,9 @@ ray generate_camera_ray(ivec2 coords, uint seed) {
 }
 
 void main() {
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(bufs.scene.width, bufs.scene.height))))
+        return;
+
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * bufs.scene.downscale_factor;
 
     uint seed = uint(coords.x * uint(1973) + coords.y * uint(9277) + bufs.scene.sample_index * uint(26699)) | uint(1);

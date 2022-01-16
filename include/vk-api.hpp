@@ -14,7 +14,7 @@ struct buffer {
     VkDeviceAddress     device_address;
 };
 
-struct Pipeline {
+struct pipeline {
     std::vector<VkShaderModule> shader_modules;
     VkPipeline                  handle;
     VkPipelineBindPoint         bind_point;
@@ -136,9 +136,9 @@ class vkapi {
         void destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers);
 
 
-        Pipeline create_compute_pipeline(const char* shader_name);
-        Pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states);
-        void destroy_pipeline(Pipeline &pipeline);
+        pipeline create_compute_pipeline(const char* shader_name);
+        pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states);
+        void destroy_pipeline(pipeline &pipeline);
 
 
         std::vector<VkDescriptorSet> create_descriptor_sets(VkDescriptorSetLayout descriptor_sets_layout, size_t descriptor_sets_count);
@@ -160,13 +160,13 @@ class vkapi {
 
         void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, image image);
 
-        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, Pipeline pipeline);
+        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline pipeline);
         void end_render_pass(VkCommandBuffer command_buffer);
 
-        void run_compute_pipeline(VkCommandBuffer command_buffer, Pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+        void run_compute_pipeline(VkCommandBuffer command_buffer, pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
 
-        void draw(VkCommandBuffer command_buffer, Pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset);
-        void draw(VkCommandBuffer command_buffer, Pipeline pipeline, buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
+        void draw(VkCommandBuffer command_buffer, pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset);
+        void draw(VkCommandBuffer command_buffer, pipeline pipeline, buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
 
         void blit_full(VkCommandBuffer command_buffer, image src_image, image dst_image);
 

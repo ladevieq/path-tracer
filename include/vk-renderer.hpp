@@ -54,16 +54,16 @@ class vkrenderer {
 
         std::vector<VkCommandBuffer>    command_buffers;
 
-        Pipeline                        compute_pipeline;
+        pipeline                        compute_pipeline;
 
         buffer                          staging_buffer;
 
 
-        Pipeline                        tonemapping_pipeline;
+        pipeline                        tonemapping_pipeline;
 
         std::vector<buffer>             ui_vertex_buffers;
         std::vector<buffer>             ui_index_buffers;
-        Pipeline                        ui_pipeline;
+        pipeline                        ui_pipeline;
         VkRenderPass                    render_pass;
         std::vector<VkFramebuffer>      framebuffers;
 
@@ -75,7 +75,7 @@ class vkrenderer {
         swapchain                       swapchain;
 
         const uint32_t                  min_swapchain_image_count = 3;
-        const uint32_t                  virtual_frames_count = 2;
+        static constexpr uint32_t       virtual_frames_count = 2;
 };
 
 #endif // !__VK_RENDERER_HPP_
