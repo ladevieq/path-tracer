@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "vk-api.hpp"
+#include "vulkan/vulkan_core.h"
 #include "window.hpp"
 #include "utils.hpp"
 
@@ -472,6 +473,9 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
     create_info.pAttachments                                            = attachments_description.data();
     create_info.subpassCount                                            = 1;
     create_info.pSubpasses                                              = &subpass_description;
+    // TODO: Use this to chain renderpasses
+    create_info.dependencyCount                                         = 0;
+    create_info.pDependencies                                           = VK_NULL_HANDLE;
 
     VKRESULT(vkCreateRenderPass(context.device, &create_info, VK_NULL_HANDLE, &render_pass))
 
@@ -897,6 +901,28 @@ void vkapi::destroy_swapchain(swapchain& swapchain) {
     vkDestroySwapchainKHR(context.device, swapchain.handle, nullptr);
 }
 
+
+void vkapi::update_descriptor_image(image &img, VkDescriptorType type) {
+    VkDescriptorImageInfo descriptor_images_info;
+    VkWriteDescriptorSet writes_descriptor;
+
+    descriptor_images_info.sampler         = VK_NULL_HANDLE;
+    descriptor_images_info.imageView       = img.view;
+    descriptor_images_info.imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
+
+    writes_descriptor.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes_descriptor.pNext                = nullptr;
+    writes_descriptor.dstSet               = bindless_descriptor.set;
+    writes_descriptor.dstBinding           = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? 2 : 1;
+    writes_descriptor.dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? img.bindless_storage_index : img.bindless_sampled_index;
+    writes_descriptor.descriptorCount      = 1;
+    writes_descriptor.descriptorType       = type;
+    writes_descriptor.pImageInfo           = &descriptor_images_info;
+    writes_descriptor.pBufferInfo          = VK_NULL_HANDLE;
+    writes_descriptor.pTexelBufferView     = VK_NULL_HANDLE;
+
+    vkUpdateDescriptorSets(context.device, 1, &writes_descriptor, 0, nullptr);
+}
 
 void vkapi::update_descriptor_images(std::vector<image> &images, VkDescriptorType type) {
     std::vector<VkDescriptorImageInfo> descriptor_images_info   { images.size() };

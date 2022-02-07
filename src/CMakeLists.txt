@@ -23,6 +23,7 @@ add_executable(
     window.cpp
     scene.cpp
     gltf.cpp
+    compute-renderpass.cpp
 )
 
 if(UNIX AND NOT APPLE)

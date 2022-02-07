@@ -2,12 +2,14 @@
 #include <cstring>
 #include <cassert>
 
+#include "compute-renderpass.hpp"
 #include "imgui.h"
 #include "vk-renderer.hpp"
 #include "thirdparty/vk_mem_alloc.h"
 
 #include "defines.hpp"
 #include "scene.hpp"
+#include "vulkan/vulkan_core.h"
 #include "window.hpp"
 
 #ifdef _DEBUG
@@ -39,17 +41,9 @@ vkrenderer::vkrenderer(window& wnd) {
         VK_NULL_HANDLE
     );
 
-    compute_pipeline = api.create_compute_pipeline("compute");
     tonemapping_pipeline = api.create_compute_pipeline("tonemapping");
 
     command_buffers = api.create_command_buffers(virtual_frames_count);
-
-    VkExtent3D image_size = {
-        .width = swapchain.extent.width,
-        .height = swapchain.extent.height,
-        .depth = 1,
-    };
-    accumulation_images = api.create_images(image_size, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
 
     submission_fences = api.create_fences(virtual_frames_count);
     execution_semaphores = api.create_semaphores(virtual_frames_count);
@@ -95,9 +89,6 @@ vkrenderer::vkrenderer(window& wnd) {
     auto cmd_buf = command_buffers[virtual_frame_index];
     api.start_record(cmd_buf);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[0]);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[1]);
-
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
 
     api.copy_buffer(cmd_buf, staging_buffer, ui_texture);
@@ -112,9 +103,6 @@ vkrenderer::vkrenderer(window& wnd) {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
 
     std::vector<image> images = {
-        accumulation_images[0],
-        accumulation_images[1],
-
         swapchain.images[0],
         swapchain.images[1],
         swapchain.images[2]
@@ -143,6 +131,10 @@ vkrenderer::vkrenderer(window& wnd) {
 vkrenderer::~vkrenderer() {
     VKRESULT(vkWaitForFences(api.context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
 
+    for (auto& renderpass : renderpasses) {
+        delete renderpass;
+    }
+
     api.destroy_fences(submission_fences);
     api.destroy_semaphores(execution_semaphores);
     api.destroy_semaphores(acquire_semaphores);
@@ -157,7 +149,6 @@ vkrenderer::~vkrenderer() {
 
     api.destroy_command_buffers(command_buffers);
 
-    api.destroy_pipeline(compute_pipeline);
     api.destroy_pipeline(tonemapping_pipeline);
     api.destroy_pipeline(ui_pipeline);
 
@@ -207,23 +198,6 @@ void vkrenderer::begin_frame() {
 
     api.start_record(command_buffers[virtual_frame_index]);
 
-}
-
-void vkrenderer::reset_accumulation() {
-    auto cmd_buf = command_buffers[virtual_frame_index];
-    VkClearColorValue clear_color = { 0.f, 0.f, 0.f, 1.f };
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, accumulation_images[0]);
-
-    vkCmdClearColorImage(cmd_buf, accumulation_images[0].handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &accumulation_images[0].subresource_range);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, accumulation_images[0]);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, accumulation_images[1]);
-
-    vkCmdClearColorImage(cmd_buf, accumulation_images[1].handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &accumulation_images[1].subresource_range);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, accumulation_images[1]);
 }
 
 void vkrenderer::ui() {
@@ -286,39 +260,17 @@ void vkrenderer::ui() {
 }
 
 void vkrenderer::compute(uint32_t width, uint32_t height) {
-    auto cmd_buf = command_buffers[virtual_frame_index];
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer_addr);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 56, 4, (void*)&swapchain.images[swapchain_image_index].bindless_storage_index);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 60, 4, (void*)&accumulation_images[0].bindless_storage_index);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, swapchain.images[swapchain_image_index]);
-    
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, accumulation_images[1]);
-
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 8, 8, (void*)&bvh_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 16, 8, (void*)&indices_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 24, 8, (void*)&positions_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 32, 8, (void*)&normals_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 40, 8, (void*)&uvs_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 48, 8, (void*)&materials_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 56, 4, (void*)&accumulation_images[0].bindless_storage_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 60, 4, (void*)&accumulation_images[1].bindless_storage_index);
-
-    api.run_compute_pipeline(cmd_buf, compute_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, swapchain.images[swapchain_image_index]);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, accumulation_images[0]);
-
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 8, (void*)&scene_buffer_addr);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 56, 4, (void*)&swapchain.images[swapchain_image_index].bindless_storage_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 60, 4, (void*)&accumulation_images[0].bindless_storage_index);
-
-    api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
+    // api.run_compute_pipeline(cmd_buf, tonemapping_pipeline, (width / 8) + 1, (height / 8) + 1, 1);
 }
 
 void vkrenderer::finish_frame() {
     auto cmd_buf = command_buffers[virtual_frame_index];
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_SHADER_WRITE_BIT, 0, swapchain.images[swapchain_image_index]);
+    // api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_SHADER_WRITE_BIT, 0, swapchain.images[swapchain_image_index]);
 
     api.end_record(cmd_buf);
 
@@ -326,8 +278,6 @@ void vkrenderer::finish_frame() {
 
     auto present_result = api.present(swapchain, swapchain_image_index, execution_semaphores[virtual_frame_index]);
     handle_swapchain_result(present_result);
-
-    std::swap(accumulation_images[0], accumulation_images[1]);
 
     virtual_frame_index = ++virtual_frame_index % virtual_frames_count;
 }
@@ -345,20 +295,14 @@ void vkrenderer::recreate_swapchain() {
 
     api.destroy_swapchain(old_swapchain);
 
-    api.destroy_images(accumulation_images);
     VkExtent3D image_size = {
         .width = swapchain.extent.width,
         .height = swapchain.extent.height,
         .depth = 1,
     };
 
-    accumulation_images = api.create_images(image_size, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
-
     auto cmd_buf = command_buffers[virtual_frame_index];
     api.start_record(cmd_buf);
-
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[0]);
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, accumulation_images[1]);
 
     api.end_record(cmd_buf);
 
@@ -369,9 +313,6 @@ void vkrenderer::recreate_swapchain() {
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[0], VK_TRUE, UINT64_MAX))
 
     std::vector<image> images = {
-        accumulation_images[0],
-        accumulation_images[1],
-
         swapchain.images[0],
         swapchain.images[1],
         swapchain.images[2]
@@ -429,4 +370,44 @@ void vkrenderer::update_image(image img, void* data, size_t size) {
 
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
 
+}
+
+Texture* vkrenderer::create_2d_texture(size_t width, size_t height) {
+     auto texture = new Texture();
+    texture->device_image = api.create_image(
+        { .width = (uint32_t)width, .height = (uint32_t)height, .depth = 1 },
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    );
+
+    api.update_descriptor_image(texture->device_image, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+    return texture;
+}
+
+void vkrenderer::new_renderpass(Renderpass* renderpass) {
+    renderpasses.push_back(renderpass);
+}
+
+void vkrenderer::render() {
+    begin_frame();
+
+    auto cmd_buf = command_buffers[virtual_frame_index];
+
+    for (auto& renderpass: renderpasses) {
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT, ((ComputeRenderpass*)renderpass)->output_texture->device_image);
+
+        renderpass->execute(cmd_buf);
+
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, ((ComputeRenderpass*)renderpass)->output_texture->device_image);
+
+
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, swapchain.images[swapchain_image_index]);
+
+        api.blit_full(cmd_buf, ((ComputeRenderpass*)renderpass)->output_texture->device_image, swapchain.images[swapchain_image_index]);
+
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, swapchain.images[swapchain_image_index]);
+    }
+
+    finish_frame();
 }
