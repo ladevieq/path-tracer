@@ -4,10 +4,12 @@
 #include <cstdio>
 #include <cassert>
 
+#include "compute-renderpass.hpp"
 #include "thirdparty/renderdoc.h"
 #include "imgui.h"
 
 #include "vk-renderer.hpp"
+#include "vulkan-loader.hpp"
 #include "window.hpp"
 #include "scene.hpp"
 #include "defines.hpp"
@@ -62,15 +64,24 @@ int main() {
     auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);
 
     vkrenderer renderer { wnd };
+
     auto main_scene = scene(cam, width, height, renderer);
 
-    renderer.scene_buffer_addr = main_scene.scene_buffer.device_address;
-    renderer.indices_buffer_addr = main_scene.indices_buffer.device_address;
-    renderer.positions_buffer_addr = main_scene.positions_buffer.device_address;
-    renderer.normals_buffer_addr = main_scene.normals_buffer.device_address;
-    renderer.uvs_buffer_addr = main_scene.uvs_buffer.device_address;
-    renderer.materials_buffer_addr = main_scene.materials_buffer.device_address;
-    renderer.bvh_buffer_addr = main_scene.bvh_buffer.device_address;
+    auto* raytracing_pass = new ComputeRenderpass(renderer.api);
+    raytracing_pass->set_pipeline(renderer.api.create_compute_pipeline("compute"));
+
+    auto* accumulation_texture = renderer.create_2d_texture(width, height);
+    auto* output_texture = renderer.create_2d_texture(width, height);
+    raytracing_pass->set_constant(0, &main_scene.scene_buffer.device_address);
+    raytracing_pass->set_constant(8, &main_scene.bvh_buffer.device_address);
+    raytracing_pass->set_constant(16, &main_scene.indices_buffer.device_address);
+    raytracing_pass->set_constant(24, &main_scene.positions_buffer.device_address);
+    raytracing_pass->set_constant(32, &main_scene.normals_buffer.device_address);
+    raytracing_pass->set_constant(40, &main_scene.uvs_buffer.device_address);
+    raytracing_pass->set_constant(48, &main_scene.materials_buffer.device_address);
+
+    renderer.new_renderpass(raytracing_pass);
+
 
     auto can_render = true;
 
@@ -111,6 +122,10 @@ int main() {
                         renderer.recreate_swapchain();
                         ((scene*) main_scene.scene_buffer_ptr())->meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
                         ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
+
+                        accumulation_texture = renderer.create_2d_texture(width, height);
+                        output_texture = renderer.create_2d_texture(width, height);
+                        raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
                     }
 
                     reset_accumulation = true;
@@ -239,22 +254,31 @@ int main() {
         // See the documentation below for a longer explanation
         // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
+        // if (can_render) {
+        //     renderer.begin_frame();
+
+        //     if (reset_accumulation) {
+        //         ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
+        //         renderer.reset_accumulation();
+        //     }
+
+        //     float scale = (float)((scene*) main_scene.scene_buffer_ptr())->meta.downscale_factor;
+        //     renderer.compute(width / scale, height / scale);
+
+        //     ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index++;
+
+        //     renderer.ui();
+
+        //     renderer.finish_frame();
+        // }
+
         if (can_render) {
-            renderer.begin_frame();
+            raytracing_pass->set_ouput_texture(output_texture);
+            raytracing_pass->set_constant(60, accumulation_texture);
 
-            if (reset_accumulation) {
-                ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
-                renderer.reset_accumulation();
-            }
+            renderer.render();
 
-            float scale = (float)((scene*) main_scene.scene_buffer_ptr())->meta.downscale_factor;
-            renderer.compute(width / scale, height / scale);
-
-            ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index++;
-
-            renderer.ui();
-
-            renderer.finish_frame();
+            // std::swap(output_texture, accumulation_texture);
         }
 
         // stop the capture

@@ -286,8 +286,9 @@ void main() {
     }
 
     float spp_scale = (1.0 / bufs.scene.sample_index);
-    vec3 acc_color = srgb_to_linear(imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], coords).xyz);
-    out_color = linear_to_srgb(mix(acc_color, out_color, spp_scale));
+    // vec3 acc_color = srgb_to_linear(imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], coords).xyz);
+    // out_color = linear_to_srgb(mix(acc_color, out_color, spp_scale));
+    out_color = linear_to_srgb(out_color);
 
     for (uint i = 0; i < bufs.scene.downscale_factor; i++) {
         for (uint j = 0; j < bufs.scene.downscale_factor; j++) {

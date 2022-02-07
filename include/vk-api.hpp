@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <map>
+#include <iostream>
 
 #include "vk-context.hpp"
 
@@ -152,6 +153,7 @@ class vkapi {
         swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain);
         void destroy_swapchain(swapchain& swapchain);
 
+        void update_descriptor_image(image &img, VkDescriptorType type);
         void update_descriptor_images(std::vector<image> &images, VkDescriptorType type);
         void update_descriptor_samplers(std::vector<sampler> &samplers);
 
