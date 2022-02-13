@@ -80,27 +80,27 @@ vkrenderer::vkrenderer(window& wnd) {
     staging_buffer = api.create_buffer(4096 * 4096 * 4 * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     std::memcpy(staging_buffer.alloc_info.pMappedData, pixels, atlas_width * atlas_height * sizeof(uint32_t));
 
-    ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-    io.Fonts->SetTexID((void*)&ui_texture);
+    // ui_texture = api.create_image(atlas_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    // io.Fonts->SetTexID((void*)&ui_texture);
 
-    VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
+    // VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
 
     // Initialization frame
-    auto cmd_buf = command_buffers[virtual_frame_index];
-    api.start_record(cmd_buf);
+    // auto cmd_buf = command_buffers[virtual_frame_index];
+    // api.start_record(cmd_buf);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
+    // api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, ui_texture);
 
-    api.copy_buffer(cmd_buf, staging_buffer, ui_texture);
+    // api.copy_buffer(cmd_buf, staging_buffer, ui_texture);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, ui_texture);
+    // api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, ui_texture);
 
-    api.end_record(cmd_buf);
+    // api.end_record(cmd_buf);
 
 
-    api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
+    // api.submit(cmd_buf, VK_NULL_HANDLE, VK_NULL_HANDLE, submission_fences[virtual_frame_index]);
 
-    VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+    // VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
 
     std::vector<image> images = {
         swapchain.images[0],
@@ -110,17 +110,17 @@ vkrenderer::vkrenderer(window& wnd) {
 
     api.update_descriptor_images(images, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
-    std::vector<image> sampled_images = {
-        ui_texture
-    };
-    api.update_descriptor_images(sampled_images, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    // std::vector<image> sampled_images = {
+    //     ui_texture
+    // };
+    // api.update_descriptor_images(sampled_images, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 
-    ui_texture_sampler = api.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+    // ui_texture_sampler = api.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
-    std::vector<sampler> samplers = {
-        ui_texture_sampler,
-    };
-    api.update_descriptor_samplers(samplers);
+    // std::vector<sampler> samplers = {
+    //     ui_texture_sampler,
+    // };
+    // api.update_descriptor_samplers(samplers);
 
     virtual_frame_index++;
 
@@ -141,7 +141,7 @@ vkrenderer::~vkrenderer() {
 
     api.destroy_render_pass(render_pass);
 
-    api.destroy_sampler(ui_texture_sampler);
+    // api.destroy_sampler(ui_texture_sampler);
 
     for (auto& framebuffer: framebuffers) {
         api.destroy_framebuffer(framebuffer);
@@ -158,39 +158,39 @@ vkrenderer::~vkrenderer() {
 
 void vkrenderer::begin_frame() {
     ImGui::Render();
-    ImDrawData* draw_data = ImGui::GetDrawData();
+    // ImDrawData* draw_data = ImGui::GetDrawData();
 
     VKRESULT(vkWaitForFences(api.context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(api.context.device, 1, &submission_fences[virtual_frame_index]))
 
-    if (ui_vertex_buffers[virtual_frame_index].size < draw_data->TotalVtxCount * sizeof(VkVertex)) {
-        api.destroy_buffer(ui_vertex_buffers[virtual_frame_index]);
+    // if (ui_vertex_buffers[virtual_frame_index].size < draw_data->TotalVtxCount * sizeof(VkVertex)) {
+    //     api.destroy_buffer(ui_vertex_buffers[virtual_frame_index]);
 
-        ui_vertex_buffers[virtual_frame_index] = api.create_buffer(draw_data->TotalVtxCount * sizeof(VkVertex), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    }
-    if (ui_index_buffers[virtual_frame_index].size < draw_data->TotalIdxCount * sizeof(ImDrawIdx)) {
-        api.destroy_buffer(ui_index_buffers[virtual_frame_index]);
+    //     ui_vertex_buffers[virtual_frame_index] = api.create_buffer(draw_data->TotalVtxCount * sizeof(VkVertex), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    // }
+    // if (ui_index_buffers[virtual_frame_index].size < draw_data->TotalIdxCount * sizeof(ImDrawIdx)) {
+    //     api.destroy_buffer(ui_index_buffers[virtual_frame_index]);
 
-        ui_index_buffers[virtual_frame_index] = api.create_buffer(draw_data->TotalIdxCount * sizeof(ImDrawIdx), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    }
+    //     ui_index_buffers[virtual_frame_index] = api.create_buffer(draw_data->TotalIdxCount * sizeof(ImDrawIdx), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    // }
 
-    off_t vertex_buffer_offset = 0;
-    off_t index_buffer_offset = 0;
-    for (uint32_t draw_list_index = 0; draw_list_index < draw_data->CmdListsCount; draw_list_index++) {
-        auto vertex_buffer = draw_data->CmdLists[draw_list_index]->VtxBuffer;
-        auto index_buffer = draw_data->CmdLists[draw_list_index]->IdxBuffer;
-        std::vector<VkVertex> vertices;
+    // off_t vertex_buffer_offset = 0;
+    // off_t index_buffer_offset = 0;
+    // for (uint32_t draw_list_index = 0; draw_list_index < draw_data->CmdListsCount; draw_list_index++) {
+    //     auto vertex_buffer = draw_data->CmdLists[draw_list_index]->VtxBuffer;
+    //     auto index_buffer = draw_data->CmdLists[draw_list_index]->IdxBuffer;
+    //     std::vector<VkVertex> vertices;
 
-        for (auto& imVertex: vertex_buffer) {
-            vertices.push_back(*((VkVertex*)&imVertex));
-        }
+    //     for (auto& imVertex: vertex_buffer) {
+    //         vertices.push_back(*((VkVertex*)&imVertex));
+    //     }
 
-        std::memcpy((void*) ((uint64_t)ui_vertex_buffers[virtual_frame_index].alloc_info.pMappedData + (vertex_buffer_offset * sizeof(VkVertex))), vertices.data(), vertex_buffer.Size * sizeof(VkVertex));
-        std::memcpy((void*) ((uint64_t)ui_index_buffers[virtual_frame_index].alloc_info.pMappedData + (index_buffer_offset * sizeof(ImDrawIdx))), index_buffer.Data, index_buffer.Size * sizeof(ImDrawIdx));
+    //     std::memcpy((void*) ((uint64_t)ui_vertex_buffers[virtual_frame_index].alloc_info.pMappedData + (vertex_buffer_offset * sizeof(VkVertex))), vertices.data(), vertex_buffer.Size * sizeof(VkVertex));
+    //     std::memcpy((void*) ((uint64_t)ui_index_buffers[virtual_frame_index].alloc_info.pMappedData + (index_buffer_offset * sizeof(ImDrawIdx))), index_buffer.Data, index_buffer.Size * sizeof(ImDrawIdx));
 
-        vertex_buffer_offset += vertex_buffer.Size;
-        index_buffer_offset += index_buffer.Size;
-    }
+    //     vertex_buffer_offset += vertex_buffer.Size;
+    //     index_buffer_offset += index_buffer.Size;
+    // }
 
     swapchain_image_index = 0;
     auto acquire_result = vkAcquireNextImageKHR(api.context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[virtual_frame_index], VK_NULL_HANDLE, &swapchain_image_index);
@@ -357,11 +357,11 @@ void vkrenderer::update_image(image img, void* data, size_t size) {
     auto cmd_buf = command_buffers[virtual_frame_index];
     api.start_record(cmd_buf);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, img);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, img);
 
     api.copy_buffer(cmd_buf, staging_buffer, img);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, img);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, img);
 
     api.end_record(cmd_buf);
 
@@ -385,8 +385,10 @@ Texture* vkrenderer::create_2d_texture(size_t width, size_t height) {
     return texture;
 }
 
-void vkrenderer::new_renderpass(Renderpass* renderpass) {
-    renderpasses.push_back(renderpass);
+ComputeRenderpass* vkrenderer::create_compute_renderpass() {
+    renderpasses.push_back(new ComputeRenderpass(api));
+
+    return (ComputeRenderpass*)renderpasses.back();
 }
 
 void vkrenderer::render() {
@@ -395,18 +397,15 @@ void vkrenderer::render() {
     auto cmd_buf = command_buffers[virtual_frame_index];
 
     for (auto& renderpass: renderpasses) {
-        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT, ((ComputeRenderpass*)renderpass)->output_texture->device_image);
-
         renderpass->execute(cmd_buf);
 
-        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, ((ComputeRenderpass*)renderpass)->output_texture->device_image);
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, ((ComputeRenderpass*)renderpass)->output_texture->device_image);
 
-
-        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT, swapchain.images[swapchain_image_index]);
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, swapchain.images[swapchain_image_index]);
 
         api.blit_full(cmd_buf, ((ComputeRenderpass*)renderpass)->output_texture->device_image, swapchain.images[swapchain_image_index]);
 
-        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 0, swapchain.images[swapchain_image_index]);
+        api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, swapchain.images[swapchain_image_index]);
     }
 
     finish_frame();

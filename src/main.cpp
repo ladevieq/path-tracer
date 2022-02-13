@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <cassert>
 
-#include "compute-renderpass.hpp"
 #include "thirdparty/renderdoc.h"
 #include "imgui.h"
 
@@ -67,7 +66,7 @@ int main() {
 
     auto main_scene = scene(cam, width, height, renderer);
 
-    auto* raytracing_pass = new ComputeRenderpass(renderer.api);
+    auto raytracing_pass = renderer.create_compute_renderpass();
     raytracing_pass->set_pipeline(renderer.api.create_compute_pipeline("compute"));
 
     auto* accumulation_texture = renderer.create_2d_texture(width, height);
@@ -79,8 +78,6 @@ int main() {
     raytracing_pass->set_constant(32, &main_scene.normals_buffer.device_address);
     raytracing_pass->set_constant(40, &main_scene.uvs_buffer.device_address);
     raytracing_pass->set_constant(48, &main_scene.materials_buffer.device_address);
-
-    renderer.new_renderpass(raytracing_pass);
 
 
     auto can_render = true;
@@ -254,14 +251,6 @@ int main() {
         // See the documentation below for a longer explanation
         // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-        // if (can_render) {
-        //     renderer.begin_frame();
-
-        //     if (reset_accumulation) {
-        //         ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
-        //         renderer.reset_accumulation();
-        //     }
-
         //     float scale = (float)((scene*) main_scene.scene_buffer_ptr())->meta.downscale_factor;
         //     renderer.compute(width / scale, height / scale);
 
@@ -269,16 +258,19 @@ int main() {
 
         //     renderer.ui();
 
-        //     renderer.finish_frame();
-        // }
-
         if (can_render) {
             raytracing_pass->set_ouput_texture(output_texture);
             raytracing_pass->set_constant(60, accumulation_texture);
 
+            if (reset_accumulation) {
+                ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
+            }
+
+            ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index++;
+
             renderer.render();
 
-            // std::swap(output_texture, accumulation_texture);
+            std::swap(output_texture, accumulation_texture);
         }
 
         // stop the capture

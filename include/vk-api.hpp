@@ -31,6 +31,10 @@ struct image {
     VkExtent3D              size;
     uint32_t                bindless_storage_index;
     uint32_t                bindless_sampled_index;
+
+    VkImageLayout           previous_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkPipelineStageFlags    previous_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    VkAccessFlags           previous_access = 0;
 };
 
 struct swapchain {
@@ -160,17 +164,17 @@ class vkapi {
 
         void start_record(VkCommandBuffer command_buffer);
 
-        void image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, image image);
+        void image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, image& image);
 
-        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline pipeline);
+        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline& pipeline);
         void end_render_pass(VkCommandBuffer command_buffer);
 
-        void run_compute_pipeline(VkCommandBuffer command_buffer, pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
+        void run_compute_pipeline(VkCommandBuffer command_buffer, pipeline& pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
 
-        void draw(VkCommandBuffer command_buffer, pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset);
-        void draw(VkCommandBuffer command_buffer, pipeline pipeline, buffer index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
+        void draw(VkCommandBuffer command_buffer, pipeline& pipeline, uint32_t vertex_count, uint32_t vertex_offset);
+        void draw(VkCommandBuffer command_buffer, pipeline& pipeline, buffer& index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
 
-        void blit_full(VkCommandBuffer command_buffer, image src_image, image dst_image);
+        void blit_full(VkCommandBuffer command_buffer, image& src_image, image& dst_image);
 
         void end_record(VkCommandBuffer command_buffer);
 

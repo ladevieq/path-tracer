@@ -22,11 +22,21 @@ void ComputeRenderpass::set_constant(off_t offset, uint64_t* constant) {
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Texture* texture) {
-    memcpy(constants.data() + offset, (void*)&texture->device_image.bindless_sampled_index, 4);
+    memcpy(constants.data() + offset, (void*)&texture->device_image.bindless_storage_index, 4);
+
+    input_textures.push_back(texture);
 }
 
 void ComputeRenderpass::execute(VkCommandBuffer command_buffer) {
     vkCmdPushConstants(command_buffer, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64, (void*)&constants);
 
+    for (auto& texture: input_textures) {
+        api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, texture->device_image);
+    }
+
+    api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, output_texture->device_image);
+
     api.run_compute_pipeline(command_buffer, pipeline, group_count_x, group_count_y, group_count_z);
+
+    input_textures.clear();
 }

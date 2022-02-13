@@ -37,7 +37,7 @@ class vkrenderer {
 
         Texture* create_2d_texture(size_t width, size_t height);
 
-        void new_renderpass(Renderpass* renderpass);
+        ComputeRenderpass* create_compute_renderpass();
 
         void render();
 
