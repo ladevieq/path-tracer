@@ -3,7 +3,6 @@
 #include <iostream>
 
 #include "vk-api.hpp"
-#include "vulkan/vulkan_core.h"
 #include "window.hpp"
 #include "utils.hpp"
 
@@ -984,13 +983,13 @@ void vkapi::start_record(VkCommandBuffer command_buffer) {
     vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
 }
 
-void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layout, VkImageLayout dst_layout, VkPipelineStageFlagBits src_stage, VkPipelineStageFlagBits dst_stage, VkAccessFlags src_access, VkAccessFlags dst_access, image image) {
+void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, image& image) {
     VkImageMemoryBarrier undefined_to_general_barrier   = {};
     undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     undefined_to_general_barrier.pNext                  = nullptr;
-    undefined_to_general_barrier.srcAccessMask          = src_access;
+    undefined_to_general_barrier.srcAccessMask          = image.previous_access;
     undefined_to_general_barrier.dstAccessMask          = dst_access;
-    undefined_to_general_barrier.oldLayout              = src_layout;
+    undefined_to_general_barrier.oldLayout              = image.previous_layout;
     undefined_to_general_barrier.newLayout              = dst_layout;
     undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
     undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
@@ -999,7 +998,7 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layo
 
     vkCmdPipelineBarrier(
         command_buffer,
-        src_stage,
+        image.previous_stage,
         dst_stage,
         0,
         0,
@@ -1009,10 +1008,14 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout src_layo
         1,
         &undefined_to_general_barrier
     );
+
+    image.previous_layout = dst_layout;
+    image.previous_access = dst_access;
+    image.previous_stage = dst_stage;
 }
 
 
-void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline pipeline) {
+void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline& pipeline) {
     VkRect2D render_area = {
         {
             0,
@@ -1040,7 +1043,7 @@ void vkapi::end_render_pass(VkCommandBuffer command_buffer) {
 }
 
 
-void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, pipeline pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
+void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, pipeline& pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z) {
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle);
@@ -1048,21 +1051,21 @@ void vkapi::run_compute_pipeline(VkCommandBuffer command_buffer, pipeline pipeli
     vkCmdDispatch(command_buffer, group_count_x, group_count_y, group_count_z);
 }
 
-void vkapi::draw(VkCommandBuffer command_buffer, pipeline pipeline, uint32_t vertex_count, uint32_t vertex_offset) {
+void vkapi::draw(VkCommandBuffer command_buffer, pipeline& pipeline, uint32_t vertex_count, uint32_t vertex_offset) {
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
     vkCmdDraw(command_buffer, vertex_count, 1, vertex_offset, 0);
 }
 
-void vkapi::draw(VkCommandBuffer command_buffer, pipeline pipeline, buffer index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
+void vkapi::draw(VkCommandBuffer command_buffer, pipeline& pipeline, buffer& index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
     vkCmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, VK_INDEX_TYPE_UINT16);
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
 
     vkCmdDrawIndexed(command_buffer, index_count, 1, index_offset, vertex_offset, 0);
 }
 
-void vkapi::blit_full(VkCommandBuffer command_buffer, image src_image, image dst_image) {
+void vkapi::blit_full(VkCommandBuffer command_buffer, image& src_image, image& dst_image) {
     VkImageSubresourceLayers images_subres_layers {
         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
         .mipLevel       = 0,

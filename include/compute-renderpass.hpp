@@ -49,6 +49,8 @@ class ComputeRenderpass : public Renderpass {
 
     private:
 
+    std::vector<Texture*> input_textures;
+
     std::array<uint8_t, 64> constants;
 
     size_t group_count_x;
