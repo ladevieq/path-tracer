@@ -8,8 +8,6 @@
 #include "thirdparty/vk_mem_alloc.h"
 
 #include "defines.hpp"
-#include "scene.hpp"
-#include "vulkan/vulkan_core.h"
 #include "window.hpp"
 
 #ifdef _DEBUG
@@ -342,7 +340,7 @@ void vkrenderer::handle_swapchain_result(VkResult function_result) {
     }
 }
 
-void vkrenderer::update_image(image img, void* data, size_t size) {
+void vkrenderer::update_image(Texture* texture, void* data, size_t size) {
     if (staging_buffer.size < size) {
         api.destroy_buffer(staging_buffer);
 
@@ -357,11 +355,11 @@ void vkrenderer::update_image(image img, void* data, size_t size) {
     auto cmd_buf = command_buffers[virtual_frame_index];
     api.start_record(cmd_buf);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, img);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, texture->device_image);
 
-    api.copy_buffer(cmd_buf, staging_buffer, img);
+    api.copy_buffer(cmd_buf, staging_buffer, texture->device_image);
 
-    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, img);
+    api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, texture->device_image);
 
     api.end_record(cmd_buf);
 
@@ -372,17 +370,37 @@ void vkrenderer::update_image(image img, void* data, size_t size) {
 
 }
 
-Texture* vkrenderer::create_2d_texture(size_t width, size_t height) {
+Buffer* vkrenderer::create_buffer(size_t size, bool isStatic) {
+    auto buffer = new Buffer(this, size, isStatic);
+
+    buffer->device_buffer = api.create_buffer(isStatic ? size : size * virtual_frames_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    return buffer;
+}
+
+Texture* vkrenderer::create_2d_texture(size_t width, size_t height, VkFormat format) {
      auto texture = new Texture();
     texture->device_image = api.create_image(
         { .width = (uint32_t)width, .height = (uint32_t)height, .depth = 1 },
-        VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        format,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
     );
 
     api.update_descriptor_image(texture->device_image, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    api.update_descriptor_image(texture->device_image, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 
     return texture;
+}
+
+// TODO: Check if a similar sampler has been allocated
+Sampler* vkrenderer::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode) {
+    auto sampler = new Sampler();
+
+    sampler->device_sampler = api.create_sampler(filter, address_mode);
+
+    api.update_descriptor_sampler(sampler->device_sampler);
+
+    return sampler;
 }
 
 ComputeRenderpass* vkrenderer::create_compute_renderpass() {

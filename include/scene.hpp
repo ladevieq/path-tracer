@@ -34,10 +34,6 @@ class scene {
 public:
     scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer);
 
-    void* scene_buffer_ptr() {
-        return scene_buffer.alloc_info.pMappedData;
-    }
-
     metadata meta;
 
     // Geometry & BVH
@@ -47,13 +43,13 @@ public:
     std::vector<float>      uvs;
     std::vector<material>   materials;
 
-    buffer                  scene_buffer;
-    buffer                  indices_buffer;
-    buffer                  positions_buffer;
-    buffer                  normals_buffer;
-    buffer                  uvs_buffer;
-    buffer                  bvh_buffer;
-    buffer                  materials_buffer;
+    Buffer*                 scene_buffer;
+    Buffer*                 indices_buffer;
+    Buffer*                 positions_buffer;
+    Buffer*                 normals_buffer;
+    Buffer*                 uvs_buffer;
+    Buffer*                 bvh_buffer;
+    Buffer*                 materials_buffer;
 
     std::vector<packed_bvh_node> packed_nodes;
 };

@@ -7,8 +7,8 @@
 #include "thirdparty/renderdoc.h"
 #include "imgui.h"
 
+#include "compute-renderpass.hpp"
 #include "vk-renderer.hpp"
-#include "vulkan-loader.hpp"
 #include "window.hpp"
 #include "scene.hpp"
 #include "defines.hpp"
@@ -66,18 +66,18 @@ int main() {
 
     auto main_scene = scene(cam, width, height, renderer);
 
+    std::string raytracing_shader_name = "compute";
     auto raytracing_pass = renderer.create_compute_renderpass();
-    raytracing_pass->set_pipeline(renderer.api.create_compute_pipeline("compute"));
+    raytracing_pass->set_pipeline(raytracing_shader_name);
 
-    auto* accumulation_texture = renderer.create_2d_texture(width, height);
-    auto* output_texture = renderer.create_2d_texture(width, height);
-    raytracing_pass->set_constant(0, &main_scene.scene_buffer.device_address);
-    raytracing_pass->set_constant(8, &main_scene.bvh_buffer.device_address);
-    raytracing_pass->set_constant(16, &main_scene.indices_buffer.device_address);
-    raytracing_pass->set_constant(24, &main_scene.positions_buffer.device_address);
-    raytracing_pass->set_constant(32, &main_scene.normals_buffer.device_address);
-    raytracing_pass->set_constant(40, &main_scene.uvs_buffer.device_address);
-    raytracing_pass->set_constant(48, &main_scene.materials_buffer.device_address);
+    auto* accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+    auto* output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+    raytracing_pass->set_constant(8, main_scene.bvh_buffer);
+    raytracing_pass->set_constant(16, main_scene.indices_buffer);
+    raytracing_pass->set_constant(24, main_scene.positions_buffer);
+    raytracing_pass->set_constant(32, main_scene.normals_buffer);
+    raytracing_pass->set_constant(40, main_scene.uvs_buffer);
+    raytracing_pass->set_constant(48, main_scene.materials_buffer);
 
 
     auto can_render = true;
@@ -87,8 +87,6 @@ int main() {
     io.DisplaySize.y = (float)height;
 
     while(wnd.isOpen) {
-        auto reset_accumulation = false;
-
         end = std::chrono::high_resolution_clock::now();
 
         delta_time = std::chrono::duration<float, std::milli>(end - start).count();
@@ -106,8 +104,8 @@ int main() {
                     width = event.width;
                     height = event.height;
 
-                    ((scene*) main_scene.scene_buffer_ptr())->meta.width = width;
-                    ((scene*) main_scene.scene_buffer_ptr())->meta.height = height;
+                    main_scene.meta.width = width;
+                    main_scene.meta.height = height;
 
                     io.DisplaySize.x = (float)width;
                     io.DisplaySize.y = (float)height;
@@ -117,15 +115,15 @@ int main() {
                     } else {
                         can_render = true;
                         renderer.recreate_swapchain();
-                        ((scene*) main_scene.scene_buffer_ptr())->meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
-                        ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
+                        main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
+                        main_scene.meta.sample_index = 0;
 
-                        accumulation_texture = renderer.create_2d_texture(width, height);
-                        output_texture = renderer.create_2d_texture(width, height);
+                        accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+                        output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
                         raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
                     }
 
-                    reset_accumulation = true;
+                    main_scene.meta.sample_index = 0;
 
                     break;
                 }
@@ -139,47 +137,47 @@ int main() {
 
                     switch (event.key) {
                         case KEYS::W: {
-                            move_vec = ((scene*) main_scene.scene_buffer_ptr())->meta.cam.forward * move_speed;
+                            move_vec = main_scene.meta.cam.forward * move_speed;
                             break;
                         }
                         case KEYS::S: {
-                            move_vec = -((scene*) main_scene.scene_buffer_ptr())->meta.cam.forward * move_speed;
+                            move_vec = -main_scene.meta.cam.forward * move_speed;
                             break;
                         }
                         case KEYS::D: {
-                            move_vec = ((scene*) main_scene.scene_buffer_ptr())->meta.cam.right * move_speed;
+                            move_vec = main_scene.meta.cam.right * move_speed;
                             break;
                         }
                         case KEYS::A: {
-                            move_vec = -((scene*) main_scene.scene_buffer_ptr())->meta.cam.right * move_speed;
+                            move_vec = -main_scene.meta.cam.right * move_speed;
                             break;
                         }
                         case KEYS::E: {
-                            ((scene*) main_scene.scene_buffer_ptr())->meta.cam.rotate_y(0.001f * delta_time);
-                            reset_accumulation = true;
+                            main_scene.meta.cam.rotate_y(0.001f * delta_time);
+                            main_scene.meta.sample_index = 0;
                             break;
                         }
                         case KEYS::Q: {
-                            ((scene*) main_scene.scene_buffer_ptr())->meta.cam.rotate_y(-0.001f * delta_time);
-                            reset_accumulation = true;
+                            main_scene.meta.cam.rotate_y(-0.001f * delta_time);
+                            main_scene.meta.sample_index = 0;
                             break;
                         }
                         case KEYS::SPACE: {
-                            move_vec = ((scene*) main_scene.scene_buffer_ptr())->meta.cam.up * move_speed;
+                            move_vec = main_scene.meta.cam.up * move_speed;
                             break;
                         }
                         case KEYS::LCTRL: {
-                            move_vec = -((scene*) main_scene.scene_buffer_ptr())->meta.cam.up * move_speed;
+                            move_vec = -main_scene.meta.cam.up * move_speed;
                             break;
                         }
                         default:
                             break;
                     }
 
-                    ((scene*) main_scene.scene_buffer_ptr())->meta.cam.move(move_vec);
+                    main_scene.meta.cam.move(move_vec);
 
                     if (!move_vec.near_zero()) {
-                        reset_accumulation = true;
+                        main_scene.meta.sample_index = 0;
                     }
 
                     break;
@@ -225,20 +223,20 @@ int main() {
 
         ImGui::Text("frame per second %u\n", static_cast<uint32_t>(1000.f / delta_time));
         ImGui::Text("frame time %f ms\n", delta_time);
-        ImGui::Text("frame count %u\n", ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index);
+        ImGui::Text("frame count %u\n", main_scene.meta.sample_index);
 
-        if (ImGui::Checkbox("depth of field", (bool*)&((scene*) main_scene.scene_buffer_ptr())->meta.enable_dof)) {
-            reset_accumulation = true;
+        if (ImGui::Checkbox("depth of field", (bool*)&main_scene.meta.enable_dof)) {
+            main_scene.meta.sample_index = 0;
         }
 
-        ImGui::SliderInt("max bounces", (int32_t*)&((scene*) main_scene.scene_buffer_ptr())->meta.max_bounce, 1, 250);
-        ImGui::SliderInt("min bounces", (int32_t*)&((scene*) main_scene.scene_buffer_ptr())->meta.min_bounce, 1, ((scene*) main_scene.scene_buffer_ptr())->meta.max_bounce);
-        if (ImGui::SliderInt("downscale factor", (int32_t*)&((scene*) main_scene.scene_buffer_ptr())->meta.downscale_factor, 1, 32)) {
-            reset_accumulation = true;
+        ImGui::SliderInt("max bounces", (int32_t*)&main_scene.meta.max_bounce, 1, 250);
+        ImGui::SliderInt("min bounces", (int32_t*)&main_scene.meta.min_bounce, 1, main_scene.meta.max_bounce);
+        if (ImGui::SliderInt("downscale factor", (int32_t*)&main_scene.meta.downscale_factor, 1, 32)) {
+            main_scene.meta.sample_index = 0;
         }
 
-        if (ImGui::Checkbox("debug bvh", (bool*)&((scene*) main_scene.scene_buffer_ptr())->meta.debug_bvh)) {
-            reset_accumulation = true;
+        if (ImGui::Checkbox("debug bvh", (bool*)&main_scene.meta.debug_bvh)) {
+            main_scene.meta.sample_index = 0;
         }
 
         ImGui::End();
@@ -251,22 +249,17 @@ int main() {
         // See the documentation below for a longer explanation
         // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-        //     float scale = (float)((scene*) main_scene.scene_buffer_ptr())->meta.downscale_factor;
-        //     renderer.compute(width / scale, height / scale);
-
-        //     ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index++;
-
         //     renderer.ui();
 
         if (can_render) {
+            std::memcpy(main_scene.scene_buffer->ptr(), &main_scene.meta, sizeof(main_scene.meta));
+
             raytracing_pass->set_ouput_texture(output_texture);
+            raytracing_pass->set_constant(0, main_scene.scene_buffer);
             raytracing_pass->set_constant(60, accumulation_texture);
 
-            if (reset_accumulation) {
-                ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index = 0;
-            }
 
-            ((scene*) main_scene.scene_buffer_ptr())->meta.sample_index++;
+            main_scene.meta.sample_index++;
 
             renderer.render();
 

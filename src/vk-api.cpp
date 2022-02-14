@@ -1,6 +1,5 @@
 #include <cassert>
 #include <memory>
-#include <iostream>
 
 #include "vk-api.hpp"
 #include "window.hpp"
@@ -902,25 +901,25 @@ void vkapi::destroy_swapchain(swapchain& swapchain) {
 
 
 void vkapi::update_descriptor_image(image &img, VkDescriptorType type) {
-    VkDescriptorImageInfo descriptor_images_info;
-    VkWriteDescriptorSet writes_descriptor;
+    VkDescriptorImageInfo descriptor_image_info;
+    VkWriteDescriptorSet write_descriptor;
 
-    descriptor_images_info.sampler         = VK_NULL_HANDLE;
-    descriptor_images_info.imageView       = img.view;
-    descriptor_images_info.imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
+    descriptor_image_info.sampler         = VK_NULL_HANDLE;
+    descriptor_image_info.imageView       = img.view;
+    descriptor_image_info.imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
 
-    writes_descriptor.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes_descriptor.pNext                = nullptr;
-    writes_descriptor.dstSet               = bindless_descriptor.set;
-    writes_descriptor.dstBinding           = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? 2 : 1;
-    writes_descriptor.dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? img.bindless_storage_index : img.bindless_sampled_index;
-    writes_descriptor.descriptorCount      = 1;
-    writes_descriptor.descriptorType       = type;
-    writes_descriptor.pImageInfo           = &descriptor_images_info;
-    writes_descriptor.pBufferInfo          = VK_NULL_HANDLE;
-    writes_descriptor.pTexelBufferView     = VK_NULL_HANDLE;
+    write_descriptor.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor.pNext                = nullptr;
+    write_descriptor.dstSet               = bindless_descriptor.set;
+    write_descriptor.dstBinding           = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? 2 : 1;
+    write_descriptor.dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? img.bindless_storage_index : img.bindless_sampled_index;
+    write_descriptor.descriptorCount      = 1;
+    write_descriptor.descriptorType       = type;
+    write_descriptor.pImageInfo           = &descriptor_image_info;
+    write_descriptor.pBufferInfo          = VK_NULL_HANDLE;
+    write_descriptor.pTexelBufferView     = VK_NULL_HANDLE;
 
-    vkUpdateDescriptorSets(context.device, 1, &writes_descriptor, 0, nullptr);
+    vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
 }
 
 void vkapi::update_descriptor_images(std::vector<image> &images, VkDescriptorType type) {
@@ -946,6 +945,28 @@ void vkapi::update_descriptor_images(std::vector<image> &images, VkDescriptorTyp
     }
 
     vkUpdateDescriptorSets(context.device, writes_descriptor.size(), writes_descriptor.data(), 0, nullptr);
+}
+
+void vkapi::update_descriptor_sampler(sampler &sampler) {
+    VkDescriptorImageInfo descriptor_image_info;
+    VkWriteDescriptorSet write_descriptor;
+
+    descriptor_image_info.sampler         = sampler.handle;
+    descriptor_image_info.imageView       = VK_NULL_HANDLE;
+    descriptor_image_info.imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
+
+    write_descriptor.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor.pNext                = nullptr;
+    write_descriptor.dstSet               = bindless_descriptor.set;
+    write_descriptor.dstBinding           = 0;
+    write_descriptor.dstArrayElement      = sampler.bindless_index;
+    write_descriptor.descriptorCount      = 1;
+    write_descriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    write_descriptor.pImageInfo           = &descriptor_image_info;
+    write_descriptor.pBufferInfo          = VK_NULL_HANDLE;
+    write_descriptor.pTexelBufferView     = VK_NULL_HANDLE;
+
+    vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
 }
 
 void vkapi::update_descriptor_samplers(std::vector<sampler> &samplers) {
