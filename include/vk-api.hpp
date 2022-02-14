@@ -159,6 +159,7 @@ class vkapi {
 
         void update_descriptor_image(image &img, VkDescriptorType type);
         void update_descriptor_images(std::vector<image> &images, VkDescriptorType type);
+        void update_descriptor_sampler(sampler &sampler);
         void update_descriptor_samplers(std::vector<sampler> &samplers);
 
 

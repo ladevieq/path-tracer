@@ -1,21 +1,20 @@
 #ifndef __VK_RENDERER_HPP_
 #define __VK_RENDERER_HPP_
 
+#include <stdint.h>
 #include <vector>
 
 #include "vk-api.hpp"
-#include "vulkan-loader.hpp"
+#include "vulkan/vulkan_core.h"
 
-#include "compute-renderpass.hpp"
 
-class scene;
+class Renderpass;
+class ComputeRenderpass;
 class window;
 
-class Texture {
-    public:
-
-    image device_image;
-};
+class Texture;
+class Buffer;
+class Sampler;
 
 class vkrenderer {
     public:
@@ -33,19 +32,26 @@ class vkrenderer {
 
         void recreate_swapchain();
 
-        void update_image(image img, void* data, size_t size);
+        void update_image(Texture* texture, void* data, size_t size);
 
-        Texture* create_2d_texture(size_t width, size_t height);
+        Buffer* create_buffer(size_t size, bool isStatic);
+
+        Texture* create_2d_texture(size_t width, size_t height, VkFormat format);
+
+        Sampler* create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
 
         ComputeRenderpass* create_compute_renderpass();
 
         void render();
 
+        uint32_t frame_index() { return this->virtual_frame_index; }
+
+    private:
+
         vkapi                           api;
 
         std::vector<Renderpass*>        renderpasses;
 
-    private:
 
         void handle_swapchain_result(VkResult function_result);
 
@@ -79,6 +85,47 @@ class vkrenderer {
 
         const uint32_t                  min_swapchain_image_count = 3;
         static constexpr uint32_t       virtual_frames_count = 2;
+};
+
+// TODO: Move those to there own files
+class Texture {
+    public:
+
+    sampler sampler;
+
+    image device_image;
+};
+
+class Sampler {
+    public:
+    sampler device_sampler;
+};
+
+class Buffer {
+    public:
+
+    Buffer(vkrenderer* renderer, size_t size, bool isStatic)
+        : renderer(renderer), size(size), isStatic(isStatic) {}
+
+    void* ptr() {
+        size_t offset = isStatic ? 0 : size * renderer->frame_index();
+        return (uint8_t*)device_buffer.alloc_info.pMappedData + offset;
+    }
+
+    unsigned long long device_address() {
+        size_t offset = isStatic ? 0 : size * renderer->frame_index();
+        return device_buffer.device_address + offset;
+    }
+
+    buffer device_buffer;
+
+    private:
+
+    bool isStatic;
+
+    size_t size;
+
+    vkrenderer* renderer;
 };
 
 #endif // !__VK_RENDERER_HPP_

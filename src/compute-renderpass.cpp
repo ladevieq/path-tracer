@@ -4,6 +4,10 @@
 
 #include "vk-renderer.hpp"
 
+void ComputeRenderpass::set_pipeline(std::string& shader_name) {
+    this->pipeline = api.create_compute_pipeline(shader_name.c_str());
+}
+
 void ComputeRenderpass::set_ouput_texture(Texture* output_texture) {
     this->output_texture = output_texture;
 
@@ -25,6 +29,11 @@ void ComputeRenderpass::set_constant(off_t offset, Texture* texture) {
     memcpy(constants.data() + offset, (void*)&texture->device_image.bindless_storage_index, 4);
 
     input_textures.push_back(texture);
+}
+
+void ComputeRenderpass::set_constant(off_t offset, Buffer* buffer) {
+    auto address = buffer->device_address();
+    memcpy(constants.data() + offset, (void*)&address, 8);
 }
 
 void ComputeRenderpass::execute(VkCommandBuffer command_buffer) {
