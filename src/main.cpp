@@ -116,14 +116,14 @@ int main() {
                         can_render = true;
                         renderer.recreate_swapchain();
                         main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
-                        main_scene.meta.sample_index = 0;
+                        main_scene.meta.sample_index = 1;
 
                         accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
                         output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
                         raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
                     }
 
-                    main_scene.meta.sample_index = 0;
+                    main_scene.meta.sample_index = 1;
 
                     break;
                 }
@@ -154,12 +154,12 @@ int main() {
                         }
                         case KEYS::E: {
                             main_scene.meta.cam.rotate_y(0.001f * delta_time);
-                            main_scene.meta.sample_index = 0;
+                            main_scene.meta.sample_index = 1;
                             break;
                         }
                         case KEYS::Q: {
                             main_scene.meta.cam.rotate_y(-0.001f * delta_time);
-                            main_scene.meta.sample_index = 0;
+                            main_scene.meta.sample_index = 1;
                             break;
                         }
                         case KEYS::SPACE: {
@@ -177,7 +177,7 @@ int main() {
                     main_scene.meta.cam.move(move_vec);
 
                     if (!move_vec.near_zero()) {
-                        main_scene.meta.sample_index = 0;
+                        main_scene.meta.sample_index = 1;
                     }
 
                     break;
@@ -226,17 +226,17 @@ int main() {
         ImGui::Text("frame count %u\n", main_scene.meta.sample_index);
 
         if (ImGui::Checkbox("depth of field", (bool*)&main_scene.meta.enable_dof)) {
-            main_scene.meta.sample_index = 0;
+            main_scene.meta.sample_index = 1;
         }
 
         ImGui::SliderInt("max bounces", (int32_t*)&main_scene.meta.max_bounce, 1, 250);
         ImGui::SliderInt("min bounces", (int32_t*)&main_scene.meta.min_bounce, 1, main_scene.meta.max_bounce);
         if (ImGui::SliderInt("downscale factor", (int32_t*)&main_scene.meta.downscale_factor, 1, 32)) {
-            main_scene.meta.sample_index = 0;
+            main_scene.meta.sample_index = 1;
         }
 
         if (ImGui::Checkbox("debug bvh", (bool*)&main_scene.meta.debug_bvh)) {
-            main_scene.meta.sample_index = 0;
+            main_scene.meta.sample_index = 1;
         }
 
         ImGui::End();
@@ -259,9 +259,9 @@ int main() {
             raytracing_pass->set_constant(60, accumulation_texture);
 
 
-            main_scene.meta.sample_index++;
-
             renderer.render();
+
+            main_scene.meta.sample_index++;
 
             std::swap(output_texture, accumulation_texture);
         }
