@@ -12,7 +12,7 @@ void ComputeRenderpass::set_ouput_texture(Texture* output_texture) {
     this->output_texture = output_texture;
 
     // TODO: Remove hardcoded offset
-    memcpy(constants.data() + 56, &output_texture->device_image.bindless_storage_index, 4);
+    memcpy(constants.data() + 56, &output_texture->device_image.bindless_storage_index, sizeof(bindless_index));
 }
 
 void ComputeRenderpass::set_dispatch_size(size_t count_x, size_t count_y, size_t count_z) {
@@ -26,14 +26,14 @@ void ComputeRenderpass::set_constant(off_t offset, uint64_t* constant) {
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Texture* texture) {
-    memcpy(constants.data() + offset, (void*)&texture->device_image.bindless_storage_index, 4);
+    memcpy(constants.data() + offset, (void*)&texture->device_image.bindless_storage_index, sizeof(bindless_index));
 
     input_textures.push_back(texture);
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Buffer* buffer) {
     auto address = buffer->device_address();
-    memcpy(constants.data() + offset, (void*)&address, 8);
+    memcpy(constants.data() + offset, (void*)&address, sizeof(VkDeviceAddress));
 }
 
 void ComputeRenderpass::execute(VkCommandBuffer command_buffer) {

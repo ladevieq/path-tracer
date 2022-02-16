@@ -21,6 +21,8 @@ struct pipeline {
     VkPipelineBindPoint         bind_point;
 };
 
+using bindless_index = uint32_t;
+
 struct image {
     VkImage                 handle;
     VkImageView             view;
@@ -29,8 +31,8 @@ struct image {
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
     VkExtent3D              size;
-    uint32_t                bindless_storage_index;
-    uint32_t                bindless_sampled_index;
+    bindless_index          bindless_storage_index;
+    bindless_index          bindless_sampled_index;
 
     VkImageLayout           previous_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     VkPipelineStageFlags    previous_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -47,7 +49,7 @@ struct swapchain {
 
 struct sampler {
     VkSampler               handle;
-    uint32_t                bindless_index;
+    bindless_index          bindless_index;
 };
 
 struct global_descriptor {
