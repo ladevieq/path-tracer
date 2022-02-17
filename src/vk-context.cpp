@@ -1,8 +1,8 @@
-#include <vector>
 #include <iostream>
 #include <cassert>
 
 #include "vk-context.hpp"
+#include "vulkan-loader.hpp"
 
 #define VMA_IMPLEMENTATION
 #include "thirdparty/vk_mem_alloc.h"
@@ -28,6 +28,8 @@ vkcontext::vkcontext() {
 
     create_instance();
     create_device();
+    create_debugger();
+    create_memory_allocator();
 }
 
 vkcontext::~vkcontext() {
@@ -47,11 +49,15 @@ void vkcontext::create_instance() {
     app_info.engineVersion       = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion          = VK_API_VERSION_1_2;
 
-
-    std::vector<const char*> layers = {
+    std::vector<const char*> needed_layers = {
+#if defined(_DEBUG)
         "VK_LAYER_KHRONOS_validation",
+#endif
     };
-    std::vector<const char*> extensions = {
+
+    check_available_instance_layers(needed_layers);
+
+    std::vector<const char*> needed_extensions = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         "VK_KHR_surface",
 #if defined(LINUX)
@@ -63,19 +69,19 @@ void vkcontext::create_instance() {
 #endif
     };
 
+    check_available_instance_extensions(needed_layers, needed_extensions);
+
     VkInstanceCreateInfo instance_create_info       = {};
     instance_create_info.sType                      = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instance_create_info.pApplicationInfo           = &app_info;
-    instance_create_info.enabledLayerCount          = layers.size();
-    instance_create_info.ppEnabledLayerNames        = layers.data();
-    instance_create_info.enabledExtensionCount      = extensions.size();
-    instance_create_info.ppEnabledExtensionNames    = extensions.data();
+    instance_create_info.enabledLayerCount          = needed_layers.size();
+    instance_create_info.ppEnabledLayerNames        = needed_layers.data();
+    instance_create_info.enabledExtensionCount      = needed_extensions.size();
+    instance_create_info.ppEnabledExtensionNames    = needed_extensions.data();
 
     VKRESULT(vkCreateInstance(&instance_create_info, nullptr, &instance))
 
     load_instance_functions(instance);
-
-    create_debugger();
 
     std::cerr << "Instance ready" << std::endl;
 }
@@ -146,8 +152,6 @@ void vkcontext::create_device() {
 
     vkGetDeviceQueue(device, queue_index, 0, &queue);
 
-    create_memory_allocator();
-
     std::cerr << "Device ready" << std::endl;
 }
 
@@ -175,7 +179,14 @@ void vkcontext::select_physical_device() {
     std::vector<VkPhysicalDevice> physical_devices { physical_devices_count };
     vkEnumeratePhysicalDevices(instance, &physical_devices_count, physical_devices.data());
 
-    physical_device = physical_devices[0];
+
+    for (auto& physical_device: physical_devices) {
+        if (support_required_features(physical_device)) {
+            this->physical_device = physical_device;
+        }
+    }
+
+    assert(physical_device != VK_NULL_HANDLE);
 }
 
 void vkcontext::select_queue() {
@@ -194,5 +205,78 @@ void vkcontext::select_queue() {
 
     std::cerr << "No compute queue found !" << std::endl;
     exit(1);
+}
+
+void vkcontext::check_available_instance_layers(std::vector<const char*>& needed_layers) {
+    uint32_t property_count = 0;
+    vkEnumerateInstanceLayerProperties(&property_count, VK_NULL_HANDLE);
+
+    std::vector<VkLayerProperties> layer_properties { property_count };
+    vkEnumerateInstanceLayerProperties(&property_count, layer_properties.data());
+
+    uint32_t available_needed_layers_count = 0;
+
+    std::vector<const char*> available_layers;
+    for (auto& layer_property: layer_properties) {
+        for (auto& needed_layer: needed_layers) {
+            if (strcmp(layer_property.layerName, needed_layer) == 0) {
+                available_layers.push_back(needed_layer);
+                available_needed_layers_count++;
+            }
+        }
+    }
+
+    assert(available_needed_layers_count == needed_layers.size());
+}
+
+void vkcontext::check_available_instance_extensions(std::vector<const char*>& available_layers, std::vector<const char*>& needed_extensions) {
+    uint32_t vulkan_extensions_count = 0;
+    vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &vulkan_extensions_count, VK_NULL_HANDLE);
+
+    std::vector<VkExtensionProperties> vulkan_extensions_properties { vulkan_extensions_count };
+    vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &vulkan_extensions_count, vulkan_extensions_properties.data());
+
+    uint32_t available_needed_extensions_count = 0;
+
+    std::vector<const char*> available_extensions;
+    for (auto& extension: vulkan_extensions_properties) {
+        for (auto& needed_extension: needed_extensions) {
+            if (strcmp(extension.extensionName, needed_extension) == 0) {
+                available_extensions.push_back(needed_extension);
+                available_needed_extensions_count++;
+            }
+        }
+    }
+
+    assert(available_needed_extensions_count == needed_extensions.size());
+}
+
+bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {
+    VkPhysicalDeviceProperties physical_device_properties   = {};
+
+    vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
+
+    VkPhysicalDeviceVulkan12Features vulkan_12_features     = {};
+    vulkan_12_features.sType                                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+
+    VkPhysicalDeviceFeatures2 physical_device_features      = {};
+    physical_device_features.sType                          = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    physical_device_features.pNext                          = &vulkan_12_features;
+
+    vkGetPhysicalDeviceFeatures2(physical_device, &physical_device_features);
+
+    if (vulkan_12_features.bufferDeviceAddress == VK_TRUE &&
+        vulkan_12_features.runtimeDescriptorArray == VK_TRUE &&
+        vulkan_12_features.shaderStorageImageArrayNonUniformIndexing == VK_TRUE &&
+        vulkan_12_features.shaderSampledImageArrayNonUniformIndexing == VK_TRUE &&
+        vulkan_12_features.descriptorBindingPartiallyBound == VK_TRUE &&
+        vulkan_12_features.descriptorBindingPartiallyBound == VK_TRUE &&
+        vulkan_12_features.descriptorBindingUpdateUnusedWhilePending == VK_TRUE) {
+        std::cerr << "Using physical device " << physical_device_properties.deviceName << std::endl;
+        return true;
+    } else {
+        std::cerr << "Physical device " << physical_device_properties.deviceName << " is missing some features" << std::endl;
+        return false;
+    }
 }
 
