@@ -993,6 +993,9 @@ void vkapi::update_descriptor_samplers(std::vector<sampler> &samplers) {
     vkUpdateDescriptorSets(context.device, writes_descriptor.size(), writes_descriptor.data(), 0, nullptr);
 }
 
+void vkapi::update_constants(VkCommandBuffer command_buffer, VkShaderStageFlagBits shader_stage, off_t offset, size_t size, void* data) {
+    vkCmdPushConstants(command_buffer, bindless_descriptor.pipeline_layout, shader_stage, offset, size, data);
+}
 
 void vkapi::start_record(VkCommandBuffer command_buffer) {
     VkCommandBufferBeginInfo cmd_buf_begin_info = {};

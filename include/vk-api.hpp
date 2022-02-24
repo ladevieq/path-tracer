@@ -165,6 +165,8 @@ class vkapi {
         void update_descriptor_samplers(std::vector<sampler> &samplers);
 
 
+        void update_constants(VkCommandBuffer command_buffer, VkShaderStageFlagBits shader_stage, off_t offset, size_t size, void* data);
+
         void start_record(VkCommandBuffer command_buffer);
 
         void image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, image& image);
@@ -184,13 +186,12 @@ class vkapi {
         VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence);
 
         VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
-    // private:
 
         vkcontext           context;
 
-        global_descriptor   bindless_descriptor;
-
     private:
+
+        global_descriptor   bindless_descriptor;
 
         const char* shader_stage_extension(VkShaderStageFlags shader_stage);
 
