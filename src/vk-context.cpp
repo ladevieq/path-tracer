@@ -3,6 +3,7 @@
 
 #include "vk-context.hpp"
 #include "vulkan-loader.hpp"
+#include "vulkan/vulkan_core.h"
 
 #define VMA_IMPLEMENTATION
 #include "thirdparty/vk_mem_alloc.h"
@@ -108,7 +109,7 @@ void vkcontext::create_debugger() {
 
 void vkcontext::create_device() {
     select_physical_device();
-    select_queue();
+    select_queue(VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT);
 
     VkDeviceQueueCreateInfo queue_create_info   = {};
     queue_create_info.sType                     = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -189,7 +190,7 @@ void vkcontext::select_physical_device() {
     assert(physical_device != VK_NULL_HANDLE);
 }
 
-void vkcontext::select_queue() {
+void vkcontext::select_queue(VkQueueFlags queueUsage) {
     uint32_t queue_properties_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, nullptr);
 
@@ -197,7 +198,7 @@ void vkcontext::select_queue() {
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, queue_properties.data());
 
     for (uint32_t properties_index = 0; properties_index < queue_properties_count; properties_index++) {
-        if (queue_properties[properties_index].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+        if (queue_properties[properties_index].queueFlags & queueUsage) {
             queue_index = properties_index;
             return;
         }

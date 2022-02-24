@@ -33,7 +33,7 @@ class vkcontext {
 
         void select_physical_device();
 
-        void select_queue();
+        void select_queue(VkQueueFlags queueUsage);
 
         void check_available_instance_layers(std::vector<const char*>& needed_layers);
 
