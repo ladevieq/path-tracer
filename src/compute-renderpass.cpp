@@ -37,7 +37,7 @@ void ComputeRenderpass::set_constant(off_t offset, Buffer* buffer) {
 }
 
 void ComputeRenderpass::execute(VkCommandBuffer command_buffer) {
-    vkCmdPushConstants(command_buffer, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64, (void*)&constants);
+    api.update_constants(command_buffer, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64, (void*)&constants);
 
     for (auto& texture: input_textures) {
         api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, texture->device_image);

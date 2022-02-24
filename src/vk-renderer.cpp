@@ -223,12 +223,12 @@ void vkrenderer::ui() {
         -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
         -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
     };
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 64, 8, (void*)&ui_vertex_buffers[virtual_frame_index].device_address);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 72, 8, (void*)&scale);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 80, 8, (void*)&translate);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 64, 8, (void*)&ui_vertex_buffers[virtual_frame_index].device_address);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 72, 8, (void*)&scale);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 80, 8, (void*)&translate);
 
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 96, 4, (void*)&ui_texture.bindless_sampled_index);
-    vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 100, 4, (void*)&ui_texture_sampler.bindless_index);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 96, 4, (void*)&ui_texture.bindless_sampled_index);
+    // vkCmdPushConstants(cmd_buf, api.bindless_descriptor.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 100, 4, (void*)&ui_texture_sampler.bindless_index);
 
     off_t vertex_buffer_offset = 0;
     off_t index_buffer_offset = 0;
