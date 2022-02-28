@@ -1,0 +1,7 @@
+Diagnostics:
+#  UnusedIncludes: Strict // clangd 14
+  ClangTidy:
+    Add: [performance*, modernize*, readability*, bugprone*]
+    Remove: [modernize-avoir-c-arrays]
+# InlayHints: // clangd 14
+#  Enabled: Yes // clangd 14
