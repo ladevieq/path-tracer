@@ -135,13 +135,14 @@ vkapi::vkapi() {
 
 vkapi::~vkapi() {
     // Free resources
-    while (buffers.size())
+    while (buffers.empty()) {
         destroy_buffer(buffers.begin()->second);
+    }
 
-    while (images.size())
+    while (images.empty())
         destroy_image(images.begin()->second);
 
-    while (samplers.size())
+    while (samplers.empty())
         destroy_sampler(samplers.begin()->second);
 
     // Free bindless descriptor stuff
