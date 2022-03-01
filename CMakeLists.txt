@@ -22,9 +22,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
 
+
 find_package(imgui CONFIG REQUIRED)
-find_package(Vulkan REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(Vulkan REQUIRED)
 
 if(UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)
@@ -36,7 +37,6 @@ if (CMAKE_CXX_CPPCHECK)
 
     list(
         APPEND CMAKE_CXX_CPPCHECK
-            "-j 16"
             "--project=${CMAKE_BINARY_DIR}/compile_commands.json"
             "--cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck"
             "--enable=all"
