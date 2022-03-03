@@ -11,8 +11,10 @@ void ComputeRenderpass::set_pipeline(std::string& shader_name) {
 void ComputeRenderpass::set_ouput_texture(Texture* output_texture) {
     this->output_texture = output_texture;
 
+    auto image = api.get_image(output_texture->device_image);
+
     // TODO: Remove hardcoded offset
-    memcpy(constants.data() + 56, &output_texture->device_image.bindless_storage_index, sizeof(bindless_index));
+    memcpy(constants.data() + 56, &image.bindless_storage_index, sizeof(bindless_index));
 }
 
 void ComputeRenderpass::set_dispatch_size(size_t count_x, size_t count_y, size_t count_z) {
@@ -26,17 +28,19 @@ void ComputeRenderpass::set_constant(off_t offset, uint64_t* constant) {
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Texture* texture) {
-    memcpy(constants.data() + offset, (void*)&texture->device_image.bindless_storage_index, sizeof(bindless_index));
+    auto image = api.get_image(texture->device_image);
+
+    memcpy(constants.data() + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
 
     input_textures.push_back(texture);
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Buffer* buffer) {
-    auto address = buffer->device_address();
-    memcpy(constants.data() + offset, (void*)&address, sizeof(VkDeviceAddress));
+    auto device_buffer = api.get_buffer(buffer->device_buffer);
+    memcpy(constants.data() + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
 }
 
-void ComputeRenderpass::execute(VkCommandBuffer command_buffer) {
+void ComputeRenderpass::execute(vkrenderer& renderer, VkCommandBuffer command_buffer) {
     api.update_constants(command_buffer, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64, (void*)&constants);
 
     for (auto& texture: input_textures) {

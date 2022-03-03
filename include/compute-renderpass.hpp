@@ -14,8 +14,12 @@ class ComputeRenderpass : public Renderpass {
         : Renderpass(api)
     {}
 
+    ~ComputeRenderpass() {
+        api.destroy_pipeline(pipeline);
+    }
 
-    void set_pipeline(std::string& shader_name) override final;
+
+    void set_pipeline(std::string& shader_name);
 
     void set_dispatch_size(size_t count_x, size_t count_y, size_t count_z);
 
@@ -26,7 +30,7 @@ class ComputeRenderpass : public Renderpass {
     void set_constant(off_t offset, Buffer* buffer);
 
     // TODO: Do not use vulkan api type
-    void execute(VkCommandBuffer command_buffer) override final;
+    void execute(vkrenderer& renderer, VkCommandBuffer command_buffer) override final;
 
     Texture* output_texture;
 
@@ -39,4 +43,6 @@ class ComputeRenderpass : public Renderpass {
     size_t group_count_x;
     size_t group_count_y;
     size_t group_count_z;
+
+    pipeline pipeline;
 };

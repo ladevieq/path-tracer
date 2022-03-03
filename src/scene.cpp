@@ -124,23 +124,23 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
     // bvh builder(spheres, packed_nodes);
 
     scene_buffer = renderer.create_buffer(sizeof(meta), false);
-    std::memcpy(scene_buffer->ptr(), &meta, sizeof(meta));
+    renderer.update_buffer(scene_buffer, &meta, 0, sizeof(meta));
 
     indices_buffer = renderer.create_buffer(indices.size() * sizeof(indices[0]), true);
-    std::memcpy(indices_buffer->ptr(), indices.data(), indices.size() * sizeof(indices[0]));
+    renderer.update_buffer(indices_buffer, indices.data(), 0, indices.size() * sizeof(indices[0]));
 
     positions_buffer = renderer.create_buffer(positions.size() * sizeof(positions[0]), true);
-    std::memcpy(positions_buffer->ptr(), positions.data(), positions.size() * sizeof(positions[0]));
+    renderer.update_buffer(positions_buffer, positions.data(), 0, positions.size() * sizeof(positions[0]));
 
     normals_buffer = renderer.create_buffer(normals.size() * sizeof(normals[0]), true);
-    std::memcpy(normals_buffer->ptr(), normals.data(), normals.size() * sizeof(normals[0]));
+    renderer.update_buffer(normals_buffer, normals.data(), 0, normals.size() * sizeof(normals[0]));
 
     uvs_buffer = renderer.create_buffer(uvs.size() * sizeof(uvs[0]), true);
-    std::memcpy(uvs_buffer->ptr(), uvs.data(), uvs.size() * sizeof(uvs[0]));
+    renderer.update_buffer(uvs_buffer, uvs.data(), 0, uvs.size() * sizeof(uvs[0]));
 
     bvh_buffer = renderer.create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]), true);
-    std::memcpy(bvh_buffer->ptr(), packed_nodes.data(), packed_nodes.size() * sizeof(packed_nodes[0]));
+    renderer.update_buffer(bvh_buffer, packed_nodes.data(), 0, packed_nodes.size() * sizeof(packed_nodes[0]));
 
     materials_buffer = renderer.create_buffer(materials.size() * sizeof(materials[0]), true);
-    std::memcpy(materials_buffer->ptr(), materials.data(), materials.size() * sizeof(materials[0]));
+    renderer.update_buffer(materials_buffer, materials.data(), 0, materials.size() * sizeof(materials[0]));
 }

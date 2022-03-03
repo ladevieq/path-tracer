@@ -3,7 +3,6 @@
 
 #include "vk-context.hpp"
 #include "vulkan-loader.hpp"
-#include "vulkan/vulkan_core.h"
 
 #define VMA_IMPLEMENTATION
 #include "thirdparty/vk_mem_alloc.h"
@@ -129,6 +128,7 @@ void vkcontext::create_device() {
     physical_device_12_features.descriptorBindingPartiallyBound             = VK_TRUE;
     physical_device_12_features.descriptorBindingPartiallyBound             = VK_TRUE;
     physical_device_12_features.descriptorBindingUpdateUnusedWhilePending   = VK_TRUE;
+    physical_device_12_features.imagelessFramebuffer                        = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 device_features   = {};
     device_features.sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -249,7 +249,7 @@ void vkcontext::check_available_instance_extensions(std::vector<const char*>& av
         }
     }
 
-    assert(available_needed_extensions_count == needed_extensions.size());
+    // assert(available_needed_extensions_count == needed_extensions.size());
 }
 
 bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {
@@ -272,7 +272,8 @@ bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {
         vulkan_12_features.shaderSampledImageArrayNonUniformIndexing == VK_TRUE &&
         vulkan_12_features.descriptorBindingPartiallyBound == VK_TRUE &&
         vulkan_12_features.descriptorBindingPartiallyBound == VK_TRUE &&
-        vulkan_12_features.descriptorBindingUpdateUnusedWhilePending == VK_TRUE) {
+        vulkan_12_features.descriptorBindingUpdateUnusedWhilePending == VK_TRUE &&
+        vulkan_12_features.imagelessFramebuffer == VK_TRUE) {
         std::cerr << "Using physical device " << physical_device_properties.deviceName << std::endl;
         return true;
     } else {
