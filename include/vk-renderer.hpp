@@ -2,14 +2,16 @@
 #define __VK_RENDERER_HPP_
 
 #include <stdint.h>
+#include <sys/types.h>
 #include <vector>
 
 #include "vk-api.hpp"
-#include "vulkan/vulkan_core.h"
 
 
 class Renderpass;
 class ComputeRenderpass;
+class PrimitiveRenderpass;
+class Primitive;
 class window;
 
 class Texture;
@@ -24,17 +26,19 @@ class vkrenderer {
 
         void begin_frame();
 
-        void ui();
-
         void compute(uint32_t width, uint32_t height);
 
         void finish_frame();
 
         void recreate_swapchain();
 
-        void update_image(Texture* texture, void* data, size_t size);
+        void update_image(Texture* texture, void* data);
+
+        void update_buffer(Buffer* buffer, void* data, off_t offset, size_t size);
 
         Buffer* create_buffer(size_t size, bool isStatic);
+
+        Buffer* create_index_buffer(size_t size, bool isStatic);
 
         Texture* create_2d_texture(size_t width, size_t height, VkFormat format);
 
@@ -42,39 +46,37 @@ class vkrenderer {
 
         ComputeRenderpass* create_compute_renderpass();
 
+        PrimitiveRenderpass* create_primitive_renderpass();
+
+        Primitive* create_primitive(PrimitiveRenderpass& primitive_render_pass);
+
         void render();
 
         uint32_t frame_index() { return this->virtual_frame_index; }
 
+        Texture* back_buffer() { return swapchain_textures[swapchain_image_index]; }
+
+        VkFormat back_buffer_format() { return swapchain.surface_format.format; }
+
+        static constexpr uint32_t       virtual_frames_count = 2;
+
     private:
+
+        void handle_swapchain_result(VkResult function_result);
 
         vkapi                           api;
 
         std::vector<Renderpass*>        renderpasses;
 
-
-        void handle_swapchain_result(VkResult function_result);
-
-        // vkapi                           api;
-
         uint32_t                        virtual_frame_index = 0;
         uint32_t                        swapchain_image_index = 0;
 
-        sampler                         ui_texture_sampler;
-        image                           ui_texture;
-
         std::vector<VkCommandBuffer>    command_buffers;
 
-        buffer                          staging_buffer;
+        handle                          staging_buffer;
 
 
         pipeline                        tonemapping_pipeline;
-
-        std::vector<buffer>             ui_vertex_buffers;
-        std::vector<buffer>             ui_index_buffers;
-        pipeline                        ui_pipeline;
-        VkRenderPass                    render_pass;
-        std::vector<VkFramebuffer>      framebuffers;
 
         std::vector<VkFence>            submission_fences;
         std::vector<VkSemaphore>        execution_semaphores;
@@ -82,9 +84,9 @@ class vkrenderer {
 
         VkSurfaceKHR                    platform_surface;
         swapchain                       swapchain;
+        std::vector<Texture*>           swapchain_textures;
 
         const uint32_t                  min_swapchain_image_count = 3;
-        static constexpr uint32_t       virtual_frames_count = 2;
 };
 
 // TODO: Move those to there own files
@@ -93,39 +95,26 @@ class Texture {
 
     sampler sampler;
 
-    image device_image;
+    handle device_image;
 };
 
 class Sampler {
     public:
-    sampler device_sampler;
+
+    handle device_sampler;
 };
 
 class Buffer {
     public:
 
     Buffer(vkrenderer* renderer, size_t size, bool isStatic)
-        : renderer(renderer), size(size), isStatic(isStatic) {}
+        : size(size), isStatic(isStatic) {}
 
-    void* ptr() {
-        size_t offset = isStatic ? 0 : size * renderer->frame_index();
-        return (uint8_t*)device_buffer.alloc_info.pMappedData + offset;
-    }
-
-    unsigned long long device_address() {
-        size_t offset = isStatic ? 0 : size * renderer->frame_index();
-        return device_buffer.device_address + offset;
-    }
-
-    buffer device_buffer;
-
-    private:
-
-    bool isStatic;
+    handle device_buffer;
 
     size_t size;
 
-    vkrenderer* renderer;
+    bool isStatic;
 };
 
 #endif // !__VK_RENDERER_HPP_

@@ -93,7 +93,7 @@ std::vector<texture> gltf::load_textures(json &gltf_json, std::filesystem::path 
         unsigned char *data = stbi_load(filepath.c_str(), &x, &y, &n, 4);
         auto img = renderer.create_2d_texture(static_cast<uint32_t>(x), static_cast<uint32_t>(y), VK_FORMAT_R8G8B8A8_UNORM);
 
-        renderer.update_image(img, data, x * y * 4);
+        renderer.update_image(img, data);
 
         stbi_image_free(data);
 
@@ -119,16 +119,16 @@ std::vector<texture> gltf::load_textures(json &gltf_json, std::filesystem::path 
         auto &image = images[image_index];
 
         uint32_t sampler_id = 0;
-        if (gltf_texture.contains("sampler")) {
-            auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
-            auto &sampler = samplers[sampler_index];
-            sampler_id = sampler->device_sampler.bindless_index;
-        }
+        // if (gltf_texture.contains("sampler")) {
+        //     auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
+        //     auto &sampler = samplers[sampler_index];
+        //     sampler_id = sampler->device_sampler.bindless_index;
+        // }
 
-        textures[texture_index] = texture {
-            .image_id = image->device_image.bindless_sampled_index,
-            .sampler_id = sampler_id
-        };
+        // textures[texture_index] = texture {
+        //     .image_id = image->device_image.bindless_sampled_index,
+        //     .sampler_id = sampler_id
+        // };
     }
 
     return std::move(textures);

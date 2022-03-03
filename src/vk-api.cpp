@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "vk-api.hpp"
+#include "vulkan-loader.hpp"
 #include "window.hpp"
 #include "utils.hpp"
 
@@ -100,15 +101,20 @@ vkapi::vkapi() {
             .size                              = 64,
         },
         {
-            .stageFlags                        = VK_SHADER_STAGE_VERTEX_BIT,
+            .stageFlags                        = VK_SHADER_STAGE_ALL_GRAPHICS,
             .offset                            = 64,
-            .size                              = 32,
+            .size                              = 64,
         },
-        {
-            .stageFlags                        = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .offset                            = 96,
-            .size                              = 32,
-        },
+        // {
+        //     .stageFlags                        = VK_SHADER_STAGE_VERTEX_BIT,
+        //     .offset                            = 64,
+        //     .size                              = 32,
+        // },
+        // {
+        //     .stageFlags                        = VK_SHADER_STAGE_FRAGMENT_BIT,
+        //     .offset                            = 96,
+        //     .size                              = 32,
+        // },
     };
 
     VkPipelineLayoutCreateInfo layout_create_info   = {};
@@ -135,14 +141,17 @@ vkapi::vkapi() {
 
 vkapi::~vkapi() {
     // Free resources
-    while (buffers.size())
-        destroy_buffer(buffers.begin()->second);
+    for (handle buffer_handle = 0; buffer_handle < buffers.size(); buffer_handle++) {
+        destroy_buffer(buffer_handle);
+    }
 
-    while (images.size())
-        destroy_image(images.begin()->second);
+    for (handle image_handle = 0; image_handle < images.size(); image_handle++) {
+        destroy_image(image_handle);
+    }
 
-    while (samplers.size())
-        destroy_sampler(samplers.begin()->second);
+    for(handle sampler_handle = 0; sampler_handle < samplers.size(); sampler_handle++) {
+        destroy_sampler(sampler_handle);
+    }
 
     // Free bindless descriptor stuff
     vkDestroyDescriptorSetLayout(context.device, bindless_descriptor.set_layout, nullptr);
@@ -154,8 +163,8 @@ vkapi::~vkapi() {
 }
 
 
-buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
-    buffer buffer = {};
+handle vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
+    struct buffer* buffer = new struct buffer();
 
     VkBufferCreateInfo buffer_info  = {};
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -166,34 +175,36 @@ buffer vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     alloc_create_info.usage = mem_usage;
     alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer.handle, &buffer.alloc, &buffer.alloc_info))
+    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer->handle, &buffer->alloc, &buffer->alloc_info))
 
     VkBufferDeviceAddressInfo buffer_device_address_info = {};
     buffer_device_address_info.sType    = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     buffer_device_address_info.pNext    = VK_NULL_HANDLE;
-    buffer_device_address_info.buffer   = buffer.handle;
+    buffer_device_address_info.buffer   = buffer->handle;
 
-    buffer.size = data_size;
+    buffer->size = data_size;
 
-    buffer.device_address = vkGetBufferDeviceAddress(context.device, &buffer_device_address_info);
+    buffer->device_address = vkGetBufferDeviceAddress(context.device, &buffer_device_address_info);
 
-    buffers.insert({ buffer.handle, buffer });
+    buffers.push_back(buffer);
 
-    return std::move(buffer);
+    return buffers.size() - 1;
 }
 
-void vkapi::copy_buffer(VkCommandBuffer cmd_buf, buffer src, buffer dst, size_t size) {
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t size) {
     VkBufferCopy buffer_copy = {};
     buffer_copy.srcOffset = 0;
     buffer_copy.dstOffset = 0;
     buffer_copy.size = size;
 
-    vkCmdCopyBuffer(cmd_buf, src.handle, dst.handle, 1, &buffer_copy);
+    vkCmdCopyBuffer(cmd_buf, buffers[src]->handle, buffers[dst]->handle, 1, &buffer_copy);
 }
 
-void vkapi::copy_buffer(VkCommandBuffer cmd_buf, buffer src, image dst) {
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst) {
+    auto& dst_image = images[dst];
+
     VkImageSubresourceLayers image_subresource_layers   = {};
-    image_subresource_layers.aspectMask                 = dst.subresource_range.aspectMask;
+    image_subresource_layers.aspectMask                 = dst_image->subresource_range.aspectMask;
     image_subresource_layers.mipLevel                   = 0;
     image_subresource_layers.baseArrayLayer             = 0;
     image_subresource_layers.layerCount                 = 1;
@@ -204,28 +215,29 @@ void vkapi::copy_buffer(VkCommandBuffer cmd_buf, buffer src, image dst) {
     buffer_to_image_copy.bufferImageHeight  = 0;
     buffer_to_image_copy.imageSubresource   = image_subresource_layers;
     buffer_to_image_copy.imageOffset        = { 0, 0, 0 };
-    buffer_to_image_copy.imageExtent        = dst.size;
+    buffer_to_image_copy.imageExtent        = dst_image->size;
 
-    vkCmdCopyBufferToImage(cmd_buf, src.handle, dst.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
+    vkCmdCopyBufferToImage(cmd_buf, buffers[src]->handle, dst_image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
 }
 
-void vkapi::destroy_buffer(buffer& buffer) {
-    vmaDestroyBuffer(context.allocator, buffer.handle, buffer.alloc);
+void vkapi::destroy_buffer(handle buffer) {
+    vmaDestroyBuffer(context.allocator, buffers[buffer]->handle, buffers[buffer]->alloc);
 
-    buffers.erase(buffer.handle);
+    // TODO: Free the element once using freelists
+    // buffers.erase(buffer.handle);
 }
 
 
-image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages) {
-    image image;
+handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages) {
+    struct image* image = new struct image();
 
-    image.size = size;
+    image->size = size;
 
-    image.subresource_range.aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT;
-    image.subresource_range.baseMipLevel    = 0;
-    image.subresource_range.levelCount      = 1;
-    image.subresource_range.baseArrayLayer  = 0;
-    image.subresource_range.layerCount      = 1;
+    image->subresource_range.aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT;
+    image->subresource_range.baseMipLevel    = 0;
+    image->subresource_range.levelCount      = 1;
+    image->subresource_range.baseArrayLayer  = 0;
+    image->subresource_range.layerCount      = 1;
 
     VkImageCreateInfo img_create_info       = {};
     img_create_info.sType                   = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -247,13 +259,13 @@ image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image.handle, &image.alloc, &image.alloc_info))
+    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image->handle, &image->alloc, &image->alloc_info))
 
     VkImageViewCreateInfo image_view_create_info    = {};
     image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     image_view_create_info.pNext                    = nullptr;
     image_view_create_info.flags                    = 0;
-    image_view_create_info.image                    = image.handle;
+    image_view_create_info.image                    = image->handle;
     image_view_create_info.viewType                 = VK_IMAGE_VIEW_TYPE_2D;
     image_view_create_info.format                   = format;
     image_view_create_info.components               = {
@@ -262,41 +274,54 @@ image vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags us
         VK_COMPONENT_SWIZZLE_IDENTITY,
         VK_COMPONENT_SWIZZLE_IDENTITY
     };
-    image_view_create_info.subresourceRange        = image.subresource_range;
+    image_view_create_info.subresourceRange        = image->subresource_range;
 
-    VKRESULT(vkCreateImageView(context.device, &image_view_create_info, VK_NULL_HANDLE, &image.view))
+    VKRESULT(vkCreateImageView(context.device, &image_view_create_info, VK_NULL_HANDLE, &image->view))
 
-    image.bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    image.bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    image->usages = usages;
 
-    images.insert({ image.handle, image });
+    images.push_back(image);
 
-    return std::move(image);
-}
-void vkapi::destroy_image(image &image) {
-    bindless_descriptor.free(image.bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    bindless_descriptor.free(image.bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    auto image_handle = images.size() - 1;
 
-    vmaDestroyImage(context.allocator, image.handle, image.alloc);
-    vkDestroyImageView(context.device, image.view, nullptr);
-
-    images.erase(image.handle);
-
-}
-
-std::vector<image> vkapi::create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count) {
-    std::vector<image> images { image_count };
-
-    for (size_t image_index = 0; image_index < image_count; image_index++) {
-        images[image_index] = create_image(size, format, usages);
+    if (usages & VK_IMAGE_USAGE_STORAGE_BIT) {
+        image->bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        update_descriptor_image(image_handle, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     }
 
-    return std::move(images);
+    if (usages & VK_IMAGE_USAGE_SAMPLED_BIT) {
+        image->bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+        update_descriptor_image(image_handle, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    }
+
+    return image_handle;
+}
+void vkapi::destroy_image(handle image) {
+    auto current_image = images[image];
+    bindless_descriptor.free(current_image->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    bindless_descriptor.free(current_image->bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+
+    vmaDestroyImage(context.allocator, current_image->handle, current_image->alloc);
+    vkDestroyImageView(context.device, current_image->view, nullptr);
+
+    // TODO: Free once using freelist
+    // images.erase(image.handle);
+
 }
 
-void vkapi::destroy_images(std::vector<image> &images) {
-    for (auto &image: images) {
-        destroy_image(image);
+std::vector<handle> vkapi::create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count) {
+    std::vector<handle> images_handles(image_count);
+
+    for (size_t image_index = 0; image_index < image_count; image_index++) {
+        images_handles[image_index] = create_image(size, format, usages);
+    }
+
+    return std::move(images_handles);
+}
+
+void vkapi::destroy_images(std::vector<handle> &images) {
+    for (auto handle: images) {
+        destroy_image(handle);
     }
 }
 
@@ -367,7 +392,7 @@ void vkapi::destroy_semaphores(std::vector<VkSemaphore> &semaphores) {
 }
 
 
-sampler vkapi::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode) {
+handle vkapi::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode) {
     VkSamplerCreateInfo sampler_create_info     = {};
     sampler_create_info.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_create_info.pNext                   = VK_NULL_HANDLE;
@@ -387,22 +412,26 @@ sampler vkapi::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode
     sampler_create_info.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
     sampler_create_info.unnormalizedCoordinates = VK_FALSE;
 
-    sampler sampler;
-    VKRESULT(vkCreateSampler(context.device, &sampler_create_info, VK_NULL_HANDLE, &sampler.handle))
+    struct sampler* sampler = new struct sampler();
+    VKRESULT(vkCreateSampler(context.device, &sampler_create_info, VK_NULL_HANDLE, &sampler->handle))
 
-    sampler.bindless_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLER);
+    sampler->bindless_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLER);
 
-    samplers.insert({ sampler.handle, sampler });
 
-    return std::move(sampler);
+    samplers.push_back(sampler);
+
+    update_descriptor_sampler(samplers.size() - 1);
+
+    return samplers.size() - 1;
 }
 
-void vkapi::destroy_sampler(sampler sampler) {
-    bindless_descriptor.free(sampler.bindless_index, VK_DESCRIPTOR_TYPE_SAMPLER);
+void vkapi::destroy_sampler(handle sampler) {
+    auto current_sampler = samplers[sampler];
+    bindless_descriptor.free(current_sampler->bindless_index, VK_DESCRIPTOR_TYPE_SAMPLER);
 
-    vkDestroySampler(context.device, sampler.handle, VK_NULL_HANDLE);
+    vkDestroySampler(context.device, current_sampler->handle, VK_NULL_HANDLE);
 
-    samplers.erase(sampler.handle);
+    // samplers.erase(sampler.handle);
 }
 
 
@@ -436,12 +465,13 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
         attachment_description.flags                                    = 0;
         attachment_description.format                                   = format;
         attachment_description.samples                                  = VK_SAMPLE_COUNT_1_BIT;
-        attachment_description.loadOp                                   = VK_ATTACHMENT_LOAD_OP_LOAD;
-        attachment_description.storeOp                                  = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment_description.loadOp                                   = VK_ATTACHMENT_LOAD_OP_LOAD; // TODO: Set based on render pass usage
+        attachment_description.storeOp                                  = VK_ATTACHMENT_STORE_OP_STORE; // TODO: Set based on render pass usage
+
         attachment_description.stencilLoadOp                            = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment_description.stencilStoreOp                           = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachment_description.initialLayout                            = initial_layout;
-        attachment_description.finalLayout                              = initial_layout;
+        attachment_description.finalLayout                              = final_layout;
 
         attachments_description.push_back(attachment_description);
 
@@ -462,6 +492,29 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
     subpass_description.preserveAttachmentCount                         = 0;
     subpass_description.pPreserveAttachments                            = VK_NULL_HANDLE;
 
+
+
+    VkSubpassDependency subpass_dependency[2]   = {};
+    subpass_dependency[0].srcSubpass            = VK_SUBPASS_EXTERNAL;
+    subpass_dependency[0].dstSubpass            = 1; // First subpass attachment is used in
+    subpass_dependency[0].srcStageMask          = VK_PIPELINE_STAGE_NONE_KHR;
+    subpass_dependency[0].dstStageMask          = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+    subpass_dependency[0].srcAccessMask         = 0;
+    subpass_dependency[0].dstAccessMask         = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+                                                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    subpass_dependency[0].dependencyFlags       = 0;
+
+
+    subpass_dependency[1].srcSubpass                = 1; // Last subpass attachment is used in
+    subpass_dependency[1].dstSubpass                = VK_SUBPASS_EXTERNAL;
+    subpass_dependency[1].srcStageMask              = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+    subpass_dependency[1].dstStageMask              = VK_PIPELINE_STAGE_NONE_KHR;
+    subpass_dependency[1].srcAccessMask             = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    subpass_dependency[1].dstAccessMask             = 0;
+    subpass_dependency[1].dependencyFlags           = 0;
+
+
     VkRenderPass render_pass;
     VkRenderPassCreateInfo create_info                                  = {};
     create_info.sType                                                   = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -471,9 +524,8 @@ VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_
     create_info.pAttachments                                            = attachments_description.data();
     create_info.subpassCount                                            = 1;
     create_info.pSubpasses                                              = &subpass_description;
-    // TODO: Use this to chain renderpasses
-    create_info.dependencyCount                                         = 0;
-    create_info.pDependencies                                           = VK_NULL_HANDLE;
+    // create_info.dependencyCount                                         = sizeof(subpass_dependency) / sizeof(VkSubpassDependency);
+    // create_info.pDependencies                                           = subpass_dependency;
 
     VKRESULT(vkCreateRenderPass(context.device, &create_info, VK_NULL_HANDLE, &render_pass))
 
@@ -485,46 +537,68 @@ void vkapi::destroy_render_pass(VkRenderPass render_pass) {
 }
 
 
-VkFramebuffer vkapi::create_framebuffer(VkRenderPass render_pass, std::vector<image>& images, VkExtent2D size) {
-    VkFramebuffer framebuffer;
-    std::vector<VkImageView> attachements;
-    for (auto& image: images) {
-        attachements.push_back(image.view);
+framebuffer vkapi::create_framebuffer(VkRenderPass render_pass, std::vector<VkFormat>& formats, VkExtent2D size) {
+    VkFramebuffer framebuffer_handle;
+
+    std::vector<VkFramebufferAttachmentImageInfo> attachments_image_infos(formats.size());
+    for (size_t index = 0; index < formats.size(); index++) {
+        VkFramebufferAttachmentImageInfo attachments_image_info = {};
+        attachments_image_info.sType            = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO;
+        attachments_image_info.pNext            = VK_NULL_HANDLE;
+        attachments_image_info.flags            = 0;
+        attachments_image_info.usage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        attachments_image_info.width            = size.width;
+        attachments_image_info.height           = size.height;
+        attachments_image_info.layerCount       = 1;
+        attachments_image_info.viewFormatCount  = 1;
+        attachments_image_info.pViewFormats     = &formats[index];
+
+        attachments_image_infos[index] = attachments_image_info;
     }
+
+    VkFramebufferAttachmentsCreateInfo attachments_create_info = {};
+    attachments_create_info.sType                       = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO;
+    attachments_create_info.pNext                       = VK_NULL_HANDLE;
+    attachments_create_info.attachmentImageInfoCount    = attachments_image_infos.size();
+    attachments_create_info.pAttachmentImageInfos       = attachments_image_infos.data();
 
     VkFramebufferCreateInfo create_info = {};
     create_info.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    create_info.pNext                   = VK_NULL_HANDLE;
-    create_info.flags                   = 0;
+    create_info.pNext                   = &attachments_create_info;
+    create_info.flags                   = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT;
     create_info.renderPass              = render_pass;
-    create_info.attachmentCount         = attachements.size();
-    create_info.pAttachments            = attachements.data();
+    create_info.attachmentCount         = formats.size();
+    create_info.pAttachments            = VK_NULL_HANDLE;
     create_info.width                   = size.width;
     create_info.height                  = size.height;
     create_info.layers                  = 1;
 
-    VKRESULT(vkCreateFramebuffer(context.device, &create_info, VK_NULL_HANDLE, &framebuffer))
+    VKRESULT(vkCreateFramebuffer(context.device, &create_info, VK_NULL_HANDLE, &framebuffer_handle))
 
-    return framebuffer;
+    return { .handle = framebuffer_handle, .size = size };
 }
 
-std::vector<VkFramebuffer> vkapi::create_framebuffers(VkRenderPass render_pass, std::vector<image>& images, VkExtent2D size, uint32_t framebuffer_count) {
-    std::vector<VkFramebuffer> framebuffers { framebuffer_count };
+std::vector<framebuffer> vkapi::create_framebuffers(VkRenderPass render_pass, std::vector<VkFormat>& formats, VkExtent2D size, uint32_t framebuffer_count) {
+    std::vector<framebuffer> framebuffers { framebuffer_count };
 
     for (auto& framebuffer: framebuffers) {
-        framebuffer = create_framebuffer(render_pass, images, size);
+        framebuffer = create_framebuffer(render_pass, formats, size);
     }
 
     return std::move(framebuffers);
 }
 
-void vkapi::destroy_framebuffer(VkFramebuffer framebuffer) {
-    vkDestroyFramebuffer(context.device, framebuffer, VK_NULL_HANDLE);
+void vkapi::destroy_framebuffer(framebuffer framebuffer) {
+    VKRESULT(vkDeviceWaitIdle(context.device))
+
+    vkDestroyFramebuffer(context.device, framebuffer.handle, VK_NULL_HANDLE);
 }
 
-void vkapi::destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers) {
+void vkapi::destroy_framebuffers(std::vector<framebuffer>& framebuffers) {
+    VKRESULT(vkDeviceWaitIdle(context.device))
+
     for (auto& framebuffer: framebuffers) {
-        vkDestroyFramebuffer(context.device, framebuffer, VK_NULL_HANDLE);
+        vkDestroyFramebuffer(context.device, framebuffer.handle, VK_NULL_HANDLE);
     }
 }
 
@@ -780,10 +854,11 @@ void vkapi::destroy_surface(VkSurfaceKHR surface) {
 
 swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain) {
     swapchain swapchain;
+
     VkBool32 queue_support_presentation = VK_FALSE;
     VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.queue_index, surface, &queue_support_presentation))
 
-    assert(queue_support_presentation == true);
+    assert(queue_support_presentation == VK_TRUE);
 
     VkSurfaceCapabilitiesKHR caps;
     VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, surface, &caps))
@@ -802,17 +877,20 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
         swapchain.extent.height = caps.maxImageExtent.height;
     }
 
+
     uint32_t supported_formats_count = 0;
     VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device, surface, &supported_formats_count,  VK_NULL_HANDLE))
 
     std::vector<VkSurfaceFormatKHR> supported_formats { supported_formats_count };
     VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device, surface, &supported_formats_count,  supported_formats.data()))
 
+
     uint32_t supported_present_modes_count = 0;
     VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, surface, &supported_present_modes_count, VK_NULL_HANDLE))
 
     std::vector<VkPresentModeKHR> supported_present_modes { supported_present_modes_count };
     VKRESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, surface, &supported_present_modes_count, supported_present_modes.data()))
+
 
     swapchain.surface_format = supported_formats[0];
 
@@ -830,22 +908,20 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     create_info.imageSharingMode            = VK_SHARING_MODE_EXCLUSIVE;
     create_info.preTransform                = caps.currentTransform;
     create_info.compositeAlpha              = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode                 = VK_PRESENT_MODE_FIFO_KHR;
-    // create_info.presentMode                 = VK_PRESENT_MODE_MAILBOX_KHR;
+    create_info.presentMode                 = supported_present_modes[0];
     create_info.clipped                     = VK_TRUE;
     create_info.oldSwapchain                = old_swapchain;
 
     VKRESULT(vkCreateSwapchainKHR(context.device, &create_info, nullptr, &swapchain.handle))
 
-    uint32_t image_count = 0;
-    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, &image_count, VK_NULL_HANDLE))
 
-    swapchain.image_count = image_count;
-    swapchain.images = std::vector<image>{ swapchain.image_count };
-    auto images = std::vector<VkImage>{ swapchain.image_count };
-    auto views = std::vector<VkImageView>{ swapchain.image_count };
+    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, &swapchain.image_count, VK_NULL_HANDLE))
 
-    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, (uint32_t*)&swapchain.image_count, images.data()))
+    swapchain.images = std::vector<handle>(swapchain.image_count);
+    auto vk_images = std::vector<VkImage>(swapchain.image_count);
+
+    VKRESULT(vkGetSwapchainImagesKHR(context.device, swapchain.handle, &swapchain.image_count, vk_images.data()))
+
 
     VkImageSubresourceRange image_subresource_range = {};
     image_subresource_range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -861,18 +937,19 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     };
 
     for (size_t image_index = 0; image_index < swapchain.image_count; image_index++) {
-        swapchain.images[image_index].bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        swapchain.images[image_index].bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+        struct image* current_image = new struct image();
 
-        swapchain.images[image_index].handle = images[image_index];
-        swapchain.images[image_index].size = image_size;
-        swapchain.images[image_index].subresource_range = image_subresource_range;
+        current_image->handle = vk_images[image_index];
+        current_image->size = image_size;
+        current_image->subresource_range = image_subresource_range;
+        current_image->usages = usages;
+
 
         VkImageViewCreateInfo image_view_create_info    = {};
         image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         image_view_create_info.pNext                    = nullptr;
         image_view_create_info.flags                    = 0;
-        image_view_create_info.image                    = swapchain.images[image_index].handle;
+        image_view_create_info.image                    = current_image->handle;
         image_view_create_info.viewType                 = VK_IMAGE_VIEW_TYPE_2D;
         image_view_create_info.format                   = swapchain.surface_format.format;
         image_view_create_info.components               = {
@@ -881,38 +958,58 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
             VK_COMPONENT_SWIZZLE_IDENTITY,
             VK_COMPONENT_SWIZZLE_IDENTITY
         };
-        image_view_create_info.subresourceRange        = image_subresource_range;
+        image_view_create_info.subresourceRange         = image_subresource_range;
 
-        VKRESULT(vkCreateImageView(context.device, &image_view_create_info, nullptr, &swapchain.images[image_index].view))
+        VKRESULT(vkCreateImageView(context.device, &image_view_create_info, nullptr, &current_image->view))
+
+        images.push_back(current_image);
+
+        auto current_image_handle = images.size() - 1;
+
+        if (usages & VK_IMAGE_USAGE_STORAGE_BIT) {
+            current_image->bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            update_descriptor_image(current_image_handle, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        }
+
+        if (usages & VK_IMAGE_USAGE_SAMPLED_BIT) {
+            current_image->bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+            update_descriptor_image(current_image_handle, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+        }
+
+        swapchain.images[image_index] = current_image_handle;
     }
 
-    return std::move(swapchain);
+    return swapchain;
 }
 
 void vkapi::destroy_swapchain(swapchain& swapchain) {
-    for(auto &image: swapchain.images) {
-        bindless_descriptor.free(image.bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        bindless_descriptor.free(image.bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    VKRESULT(vkDeviceWaitIdle(context.device))
 
-        vkDestroyImageView(context.device, image.view, nullptr);
+    for(auto &image: swapchain.images) {
+        bindless_descriptor.free(images[image]->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        bindless_descriptor.free(images[image]->bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+
+        vkDestroyImageView(context.device, images[image]->view, nullptr);
     }
     vkDestroySwapchainKHR(context.device, swapchain.handle, nullptr);
 }
 
 
-void vkapi::update_descriptor_image(image &img, VkDescriptorType type) {
+void vkapi::update_descriptor_image(handle img, VkDescriptorType type) {
     VkDescriptorImageInfo descriptor_image_info;
     VkWriteDescriptorSet write_descriptor;
 
+    auto current_image = images[img];
+
     descriptor_image_info.sampler         = VK_NULL_HANDLE;
-    descriptor_image_info.imageView       = img.view;
+    descriptor_image_info.imageView       = current_image->view;
     descriptor_image_info.imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
 
     write_descriptor.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write_descriptor.pNext                = nullptr;
     write_descriptor.dstSet               = bindless_descriptor.set;
     write_descriptor.dstBinding           = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? 2 : 1;
-    write_descriptor.dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? img.bindless_storage_index : img.bindless_sampled_index;
+    write_descriptor.dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? current_image->bindless_storage_index : current_image->bindless_sampled_index;
     write_descriptor.descriptorCount      = 1;
     write_descriptor.descriptorType       = type;
     write_descriptor.pImageInfo           = &descriptor_image_info;
@@ -922,21 +1019,21 @@ void vkapi::update_descriptor_image(image &img, VkDescriptorType type) {
     vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
 }
 
-void vkapi::update_descriptor_images(std::vector<image> &images, VkDescriptorType type) {
+void vkapi::update_descriptor_images(std::vector<handle> &handles, VkDescriptorType type) {
     std::vector<VkDescriptorImageInfo> descriptor_images_info   { images.size() };
     std::vector<VkWriteDescriptorSet> writes_descriptor         { images.size() };
 
     for (size_t image_index = 0; image_index < images.size(); image_index++) {
-        auto &image = images[image_index];
+        auto image = images[handles[image_index]];
         descriptor_images_info[image_index].sampler         = VK_NULL_HANDLE;
-        descriptor_images_info[image_index].imageView       = image.view;
+        descriptor_images_info[image_index].imageView       = image->view;
         descriptor_images_info[image_index].imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
 
         writes_descriptor[image_index].sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes_descriptor[image_index].pNext                = nullptr;
         writes_descriptor[image_index].dstSet               = bindless_descriptor.set;
         writes_descriptor[image_index].dstBinding           = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? 2 : 1;
-        writes_descriptor[image_index].dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? image.bindless_storage_index : image.bindless_sampled_index;
+        writes_descriptor[image_index].dstArrayElement      = type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ? image->bindless_storage_index : image->bindless_sampled_index;
         writes_descriptor[image_index].descriptorCount      = 1;
         writes_descriptor[image_index].descriptorType       = type;
         writes_descriptor[image_index].pImageInfo           = &descriptor_images_info[image_index];
@@ -947,11 +1044,12 @@ void vkapi::update_descriptor_images(std::vector<image> &images, VkDescriptorTyp
     vkUpdateDescriptorSets(context.device, writes_descriptor.size(), writes_descriptor.data(), 0, nullptr);
 }
 
-void vkapi::update_descriptor_sampler(sampler &sampler) {
+void vkapi::update_descriptor_sampler(handle sampler) {
     VkDescriptorImageInfo descriptor_image_info;
     VkWriteDescriptorSet write_descriptor;
+    auto current_sampler = samplers[sampler];
 
-    descriptor_image_info.sampler         = sampler.handle;
+    descriptor_image_info.sampler         = current_sampler->handle;
     descriptor_image_info.imageView       = VK_NULL_HANDLE;
     descriptor_image_info.imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
 
@@ -959,7 +1057,7 @@ void vkapi::update_descriptor_sampler(sampler &sampler) {
     write_descriptor.pNext                = nullptr;
     write_descriptor.dstSet               = bindless_descriptor.set;
     write_descriptor.dstBinding           = 0;
-    write_descriptor.dstArrayElement      = sampler.bindless_index;
+    write_descriptor.dstArrayElement      = current_sampler->bindless_index;
     write_descriptor.descriptorCount      = 1;
     write_descriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
     write_descriptor.pImageInfo           = &descriptor_image_info;
@@ -969,12 +1067,13 @@ void vkapi::update_descriptor_sampler(sampler &sampler) {
     vkUpdateDescriptorSets(context.device, 1, &write_descriptor, 0, nullptr);
 }
 
-void vkapi::update_descriptor_samplers(std::vector<sampler> &samplers) {
+void vkapi::update_descriptor_samplers(std::vector<handle> &handles) {
     std::vector<VkDescriptorImageInfo> descriptor_images_info   { samplers.size() };
     std::vector<VkWriteDescriptorSet> writes_descriptor         { samplers.size() };
 
     for (size_t sampler_index = 0; sampler_index < samplers.size(); sampler_index++) {
-        descriptor_images_info[sampler_index].sampler         = samplers[sampler_index].handle;
+        auto sampler = samplers[handles[sampler_index]];
+        descriptor_images_info[sampler_index].sampler         = sampler->handle;
         descriptor_images_info[sampler_index].imageView       = VK_NULL_HANDLE;
         descriptor_images_info[sampler_index].imageLayout     = VK_IMAGE_LAYOUT_GENERAL;
 
@@ -982,7 +1081,7 @@ void vkapi::update_descriptor_samplers(std::vector<sampler> &samplers) {
         writes_descriptor[sampler_index].pNext                = nullptr;
         writes_descriptor[sampler_index].dstSet               = bindless_descriptor.set;
         writes_descriptor[sampler_index].dstBinding           = 0;
-        writes_descriptor[sampler_index].dstArrayElement      = samplers[sampler_index].bindless_index;
+        writes_descriptor[sampler_index].dstArrayElement      = sampler->bindless_index;
         writes_descriptor[sampler_index].descriptorCount      = 1;
         writes_descriptor[sampler_index].descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
         writes_descriptor[sampler_index].pImageInfo           = &descriptor_images_info[sampler_index];
@@ -1007,22 +1106,24 @@ void vkapi::start_record(VkCommandBuffer command_buffer) {
     vkBeginCommandBuffer(command_buffer, &cmd_buf_begin_info);
 }
 
-void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, image& image) {
+void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, handle image) {
+    auto current_image = images[image];
+
     VkImageMemoryBarrier undefined_to_general_barrier   = {};
     undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     undefined_to_general_barrier.pNext                  = nullptr;
-    undefined_to_general_barrier.srcAccessMask          = image.previous_access;
+    undefined_to_general_barrier.srcAccessMask          = current_image->previous_access;
     undefined_to_general_barrier.dstAccessMask          = dst_access;
-    undefined_to_general_barrier.oldLayout              = image.previous_layout;
+    undefined_to_general_barrier.oldLayout              = current_image->previous_layout;
     undefined_to_general_barrier.newLayout              = dst_layout;
     undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
     undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    undefined_to_general_barrier.image                  = image.handle;
-    undefined_to_general_barrier.subresourceRange       = image.subresource_range;
+    undefined_to_general_barrier.image                  = current_image->handle;
+    undefined_to_general_barrier.subresourceRange       = current_image->subresource_range;
 
     vkCmdPipelineBarrier(
         command_buffer,
-        image.previous_stage,
+        current_image->previous_stage,
         dst_stage,
         0,
         0,
@@ -1033,13 +1134,13 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layo
         &undefined_to_general_barrier
     );
 
-    image.previous_layout = dst_layout;
-    image.previous_access = dst_access;
-    image.previous_stage = dst_stage;
+    current_image->previous_layout = dst_layout;
+    current_image->previous_access = dst_access;
+    current_image->previous_stage = dst_stage;
 }
 
 
-void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline& pipeline) {
+void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, std::vector<VkImageView>& attachments, framebuffer framebuffer, VkExtent2D size) {
     VkRect2D render_area = {
         {
             0,
@@ -1048,18 +1149,23 @@ void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass rende
         size
     };
 
+    VkRenderPassAttachmentBeginInfo attachment_begin_info = {};
+    attachment_begin_info.sType                     = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO;
+    attachment_begin_info.pNext                     = VK_NULL_HANDLE;
+    attachment_begin_info.attachmentCount           = attachments.size();
+    attachment_begin_info.pAttachments              = attachments.data();
+
     VkClearValue clear_value = { 0.f, 0.f, 0.f, 1.f };
     VkRenderPassBeginInfo render_pass_begin_info    = {};
     render_pass_begin_info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_begin_info.pNext                    = VK_NULL_HANDLE;
+    render_pass_begin_info.pNext                    = &attachment_begin_info;
     render_pass_begin_info.renderPass               = render_pass;
-    render_pass_begin_info.framebuffer              = framebuffer;
+    render_pass_begin_info.framebuffer              = framebuffer.handle;
     render_pass_begin_info.renderArea               = render_area;
     render_pass_begin_info.clearValueCount          = 1;
     render_pass_begin_info.pClearValues             = &clear_value;
 
     vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(command_buffer, pipeline.bind_point, pipeline.handle);
 }
 
 void vkapi::end_render_pass(VkCommandBuffer command_buffer) {
@@ -1082,14 +1188,18 @@ void vkapi::draw(VkCommandBuffer command_buffer, pipeline& pipeline, uint32_t ve
     vkCmdDraw(command_buffer, vertex_count, 1, vertex_offset, 0);
 }
 
-void vkapi::draw(VkCommandBuffer command_buffer, pipeline& pipeline, buffer& index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
-    vkCmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, VK_INDEX_TYPE_UINT16);
+void vkapi::draw(VkCommandBuffer command_buffer, pipeline& pipeline, handle index_buffer, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset) {
+    vkCmdBindIndexBuffer(command_buffer, buffers[index_buffer]->handle, 0, VK_INDEX_TYPE_UINT16);
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_descriptor.pipeline_layout, 0, 1, &bindless_descriptor.set, 0, nullptr);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
     vkCmdDrawIndexed(command_buffer, index_count, 1, index_offset, vertex_offset, 0);
 }
 
-void vkapi::blit_full(VkCommandBuffer command_buffer, image& src_image, image& dst_image) {
+void vkapi::blit_full(VkCommandBuffer command_buffer, handle src, handle dst) {
+    auto src_image = images[src];
+    auto dst_image = images[dst];
+
     VkImageSubresourceLayers images_subres_layers {
         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
         .mipLevel       = 0,
@@ -1103,9 +1213,9 @@ void vkapi::blit_full(VkCommandBuffer command_buffer, image& src_image, image& d
         .z  = 0,
     };
     VkOffset3D end_offset {
-        .x  = (int32_t)src_image.size.width,
-        .y  = (int32_t)src_image.size.height,
-        .z  = (int32_t)src_image.size.depth,
+        .x  = (int32_t)src_image->size.width,
+        .y  = (int32_t)src_image->size.height,
+        .z  = (int32_t)src_image->size.depth,
     };
 
     VkImageBlit blit_region {
@@ -1115,7 +1225,7 @@ void vkapi::blit_full(VkCommandBuffer command_buffer, image& src_image, image& d
         .dstOffsets     = { start_offset, end_offset },
     };
 
-    vkCmdBlitImage(command_buffer, src_image.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit_region, VK_FILTER_NEAREST);
+    vkCmdBlitImage(command_buffer, src_image->handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit_region, VK_FILTER_NEAREST);
 }
 
 void vkapi::end_record(VkCommandBuffer command_buffer) {

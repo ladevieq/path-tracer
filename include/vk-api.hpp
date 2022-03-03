@@ -1,6 +1,7 @@
 #ifndef __VK_API_HPP_
 #define __VK_API_HPP_
 
+#include <stdint.h>
 #include <vector>
 #include <map>
 #include <iostream>
@@ -22,6 +23,7 @@ struct pipeline {
 };
 
 using bindless_index = uint32_t;
+using handle = uint32_t;
 
 struct image {
     VkImage                 handle;
@@ -31,6 +33,7 @@ struct image {
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
     VkExtent3D              size;
+    VkImageUsageFlags       usages;
     bindless_index          bindless_storage_index;
     bindless_index          bindless_sampled_index;
 
@@ -40,11 +43,16 @@ struct image {
 };
 
 struct swapchain {
-    size_t                  image_count;
-    std::vector<image>      images;
+    uint32_t                image_count;
+    std::vector<handle>     images;
     VkSwapchainKHR          handle;
     VkSurfaceFormatKHR      surface_format;
     VkExtent2D              extent;
+};
+
+struct framebuffer {
+    VkFramebuffer           handle;
+    VkExtent2D              size;
 };
 
 struct sampler {
@@ -101,16 +109,16 @@ class vkapi {
         vkapi();
         ~vkapi();
 
-        buffer create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
-        void copy_buffer(VkCommandBuffer cmd_buf, buffer src, buffer dst, size_t size);
-        void copy_buffer(VkCommandBuffer cmd_buf, buffer src, image dst);
-        void destroy_buffer(buffer& buffer);
+        handle create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
+        void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t size);
+        void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst);
+        void destroy_buffer(handle buffer);
 
 
-        image create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages);
-        void destroy_image(image &image);
-        std::vector<image> create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count);
-        void destroy_images(std::vector<image> &images);
+        handle create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages);
+        void destroy_image(handle image);
+        std::vector<handle> create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count);
+        void destroy_images(std::vector<handle>& images);
 
 
         VkFence create_fence();
@@ -124,8 +132,8 @@ class vkapi {
         std::vector<VkSemaphore> create_semaphores(size_t semaphores_count);
         void destroy_semaphores(std::vector<VkSemaphore> &semaphores);
 
-        sampler create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
-        void destroy_sampler(sampler sampler);
+        handle create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
+        void destroy_sampler(handle sampler);
 
 
         std::vector<VkCommandBuffer> create_command_buffers(size_t command_buffers_count);
@@ -137,10 +145,10 @@ class vkapi {
         void destroy_render_pass(VkRenderPass render_pass);
 
 
-        VkFramebuffer create_framebuffer(VkRenderPass render_pass, std::vector<image>& images, VkExtent2D size);
-        std::vector<VkFramebuffer> create_framebuffers(VkRenderPass render_pass, std::vector<image>& images, VkExtent2D size, uint32_t framebuffer_count);
-        void destroy_framebuffer(VkFramebuffer framebuffer);
-        void destroy_framebuffers(std::vector<VkFramebuffer>& framebuffers);
+        framebuffer create_framebuffer(VkRenderPass render_pass, std::vector<VkFormat>& formats, VkExtent2D size);
+        std::vector<framebuffer> create_framebuffers(VkRenderPass render_pass, std::vector<VkFormat>& formats, VkExtent2D size, uint32_t framebuffer_count);
+        void destroy_framebuffer(framebuffer framebuffer);
+        void destroy_framebuffers(std::vector<framebuffer>& framebuffers);
 
 
         pipeline create_compute_pipeline(const char* shader_name);
@@ -159,33 +167,37 @@ class vkapi {
         swapchain create_swapchain(VkSurfaceKHR surface, size_t min_image_count, VkImageUsageFlags usages, VkSwapchainKHR old_swapchain);
         void destroy_swapchain(swapchain& swapchain);
 
-        void update_descriptor_image(image &img, VkDescriptorType type);
-        void update_descriptor_images(std::vector<image> &images, VkDescriptorType type);
-        void update_descriptor_sampler(sampler &sampler);
-        void update_descriptor_samplers(std::vector<sampler> &samplers);
+        void update_descriptor_image(handle img, VkDescriptorType type);
+        void update_descriptor_images(std::vector<handle> &images, VkDescriptorType type);
+        void update_descriptor_sampler(handle sampler);
+        void update_descriptor_samplers(std::vector<handle> &samplers);
 
 
         void update_constants(VkCommandBuffer command_buffer, VkShaderStageFlagBits shader_stage, off_t offset, size_t size, void* data);
 
         void start_record(VkCommandBuffer command_buffer);
 
-        void image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, image& image);
+        void image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, handle image);
 
-        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, VkFramebuffer framebuffer, VkExtent2D size, pipeline& pipeline);
+        void begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass render_pass, std::vector<VkImageView>& attachments, framebuffer framebuffer, VkExtent2D size);
         void end_render_pass(VkCommandBuffer command_buffer);
 
         void run_compute_pipeline(VkCommandBuffer command_buffer, pipeline& pipeline, size_t group_count_x, size_t group_count_y, size_t group_count_z);
 
         void draw(VkCommandBuffer command_buffer, pipeline& pipeline, uint32_t vertex_count, uint32_t vertex_offset);
-        void draw(VkCommandBuffer command_buffer, pipeline& pipeline, buffer& index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
+        void draw(VkCommandBuffer command_buffer, pipeline& pipeline, handle index_buffer, uint32_t primitive_count, uint32_t indices_offset, uint32_t vertices_offset);
 
-        void blit_full(VkCommandBuffer command_buffer, image& src_image, image& dst_image);
+        void blit_full(VkCommandBuffer command_buffer, handle src_image, handle dst_image);
 
         void end_record(VkCommandBuffer command_buffer);
 
         VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence);
 
         VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
+
+        const buffer& get_buffer(handle buffer_handle) { return *buffers[buffer_handle]; };
+        const image& get_image(handle image_handle) { return *images[image_handle]; };
+        const sampler& get_sampler(handle sampler_handle) { return *samplers[sampler_handle]; };
 
         vkcontext           context;
 
@@ -195,12 +207,13 @@ class vkapi {
 
         const char* shader_stage_extension(VkShaderStageFlags shader_stage);
 
-        std::map<VkBuffer, buffer>  buffers;
-        std::map<VkImage, image>    images;
-        std::map<VkSampler, sampler>samplers;
+        // TODO: Use freelists instead
+        std::vector<buffer*>     buffers;
+        std::vector<image*>      images;
+        std::vector<sampler*>    samplers;
 
-        VkCommandPool               command_pool;
-        VkDescriptorPool            descriptor_pool;
+        VkCommandPool           command_pool;
+        VkDescriptorPool        descriptor_pool;
 
 };
 

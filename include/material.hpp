@@ -13,7 +13,7 @@ struct material {
     color base_color;
     texture base_color_texture;
     texture metallic_roughness_texture;
-    float metalness = 0.f;
+    float metalness = 1.f;
     float roughness = 1.f;
 };
 
