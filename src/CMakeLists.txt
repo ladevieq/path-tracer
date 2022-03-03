@@ -7,7 +7,7 @@ if(UNIX AND NOT APPLE)
     include_directories(${X11_xcb_INCLUDE_PATH})
 endif()
 
-set(LIBRARIES imgui::imgui)
+set(LIBRARIES imgui::imgui nlohmann_json::nlohmann_json)
 
 add_executable(
     path-tracer
@@ -32,4 +32,3 @@ if(UNIX AND NOT APPLE)
 endif()
 
 target_link_libraries(path-tracer PRIVATE ${LIBRARIES})
-target_link_libraries(path-tracer PRIVATE nlohmann_json nlohmann_json::nlohmann_json)
