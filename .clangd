@@ -1,7 +1,7 @@
 Diagnostics:
-#  UnusedIncludes: Strict // clangd 14
+  UnusedIncludes: Strict
   ClangTidy:
     Add: [performance*, modernize*, readability*, bugprone*]
-    Remove: [modernize-avoir-c-arrays]
-# InlayHints: // clangd 14
-#  Enabled: Yes // clangd 14
+    Remove: [modernize-avoid-c-arrays, modernize-use-trailing-return-type, readability-identifier-length, readability-uppercase-literal-suffix]
+InlayHints:
+  Enabled: Yes
