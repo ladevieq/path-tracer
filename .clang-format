@@ -1,7 +1,7 @@
 AccessModifierOffset: 0
 AlignAfterOpenBracket: DontAlign
 AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
+AlignConsecutiveDeclarations: true
 AlignEscapedNewlines: Left
 AlignOperands: true
 AlignTrailingComments: false
