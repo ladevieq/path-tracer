@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -10,7 +10,8 @@ project(path-tracer VERSION 1.0 LANGUAGES CXX)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 add_compile_options(
-    -msse4.1 -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
+    -msse4.1
+    -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
     # https://github.com/cpp-best-practices/cppbestpractices/blob/master/02-Use_the_Tools_Available.md#gcc--clang
     -Wall
     -Wextra

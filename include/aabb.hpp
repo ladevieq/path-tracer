@@ -4,7 +4,7 @@
 #include "vec3.hpp"
 #include "triangle.hpp"
 #include <cmath>
-#include <limits.h>
+#include <climits>
 
 class aabb {
     public:
@@ -36,27 +36,27 @@ class aabb {
             maximum.max(point);
         }
 
-        int32_t maximum_axis() {
+        int32_t maximum_axis() const {
             vec3 diag = diagonal();
 
             if (diag.v[0] > diag.v[1] && diag.v[0] > diag.v[2]) {
                 return 0;
-            } else if (diag.v[1] > diag.v[2]) {
-                return 1;
-            } else {
-                return 2;
             }
+            if (diag.v[1] > diag.v[2]) {
+                return 1;
+            }
+            return 2;
         }
 
-        vec3 diagonal() {
+        vec3 diagonal() const {
             return maximum - minimum;
         }
 
-        vec3 center() {
+        vec3 center() const {
             return diagonal() / 2.f;
         }
 
-        float surface_area() {
+        float surface_area() const {
             auto diag = diagonal();
             return 2.f * (diag.v[0] * diag.v[1] + diag.v[0] * diag.v[2] + diag.v[1] * diag.v[2]);
         }
