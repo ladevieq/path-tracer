@@ -29,12 +29,12 @@ struct VkVertex {
 };
 
 int main() {
-    RENDERDOC_API_1_1_2 *rdoc_api = NULL;
+    RENDERDOC_API_1_1_2 *rdoc_api = nullptr;
 
 #ifdef WINDOWS
     // At init, on windows
     if (HMODULE mod = GetModuleHandleA("renderdoc.dll")) {
-      pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+      auto RENDERDOC_GetAPI =
           (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
       int ret =
           RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
@@ -44,11 +44,9 @@ int main() {
     // At init, on linux/android.
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
     if (void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD)) {
-      pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-          (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
-      int ret =
-          RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
-      assert(ret == 1);
+        pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
+        assert(ret == 1);
     }
 #endif
 
@@ -74,12 +72,12 @@ int main() {
     vkrenderer renderer{wnd};
 
     ImGui::CreateContext();
-    auto& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
 
     auto main_scene = scene(cam, width, height, renderer);
 
     std::string raytracing_shader_name = "compute";
-    auto raytracing_pass = renderer.create_compute_renderpass();
+    auto *raytracing_pass = renderer.create_compute_renderpass();
     raytracing_pass->set_pipeline(raytracing_shader_name);
 
     auto *accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
@@ -128,118 +126,141 @@ int main() {
 
         for (auto event : wnd.events) {
             switch (event.type) {
-                case EVENT_TYPES::RESIZE: {
-                    width = event.width;
-                    height = event.height;
+            case EVENT_TYPES::RESIZE: {
+                width = event.width;
+                height = event.height;
 
-                    main_scene.meta.width = width;
-                    main_scene.meta.height = height;
+                main_scene.meta.width = width;
+                main_scene.meta.height = height;
 
-                    io.DisplaySize.x = (float)width;
-                    io.DisplaySize.y = (float)height;
+                io.DisplaySize.x = (float)width;
+                io.DisplaySize.y = (float)height;
 
-                    if (event.width == 0 && event.height == 0) {
-                        can_render = false;
-                    } else {
-                        can_render = true;
-                        renderer.recreate_swapchain();
-                        main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
-                        main_scene.meta.sample_index = 1;
-
-                        accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
-                        output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
-                        raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
-                    }
-
+                if (event.width == 0 && event.height == 0) {
+                    can_render = false;
+                } else {
+                    can_render = true;
+                    renderer.recreate_swapchain();
+                    main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
                     main_scene.meta.sample_index = 1;
 
+                    accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+                    output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+                    raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
+                }
+
+                main_scene.meta.sample_index = 1;
+
+                break;
+            }
+            case EVENT_TYPES::KEY_PRESS: {
+                auto move_speed = 1.f * delta_time;
+                if (wnd.keyboard[KEYS::LSHIFT] || wnd.keyboard[KEYS::RSHIFT]) { move_speed *= 10.f; }
+
+                vec3 move_vec{};
+
+                switch (event.key) {
+                case KEYS::W: {
+                    move_vec = main_scene.meta.cam.forward * move_speed;
                     break;
                 }
-                case EVENT_TYPES::KEY_PRESS: {
-                    auto move_speed = 1.f * delta_time;
-                    if (wnd.keyboard[KEYS::LSHIFT] || wnd.keyboard[KEYS::RSHIFT]) {
-                        move_speed *= 10.f;
-                    }
 
-                    vec3 move_vec{};
-
-                    switch (event.key) {
-                        case KEYS::W: {
-                            move_vec = main_scene.meta.cam.forward * move_speed;
-                            break;
-                        }
-                        case KEYS::S: {
-                            move_vec = -main_scene.meta.cam.forward * move_speed;
-                            break;
-                        }
-                        case KEYS::D: {
-                            move_vec = main_scene.meta.cam.right * move_speed;
-                            break;
-                        }
-                        case KEYS::A: {
-                            move_vec = -main_scene.meta.cam.right * move_speed;
-                            break;
-                        }
-                        case KEYS::E: {
-                            main_scene.meta.cam.rotate_y(0.001f * delta_time);
-                            main_scene.meta.sample_index = 1;
-                            break;
-                        }
-                        case KEYS::Q: {
-                            main_scene.meta.cam.rotate_y(-0.001f * delta_time);
-                            main_scene.meta.sample_index = 1;
-                            break;
-                        }
-                        case KEYS::SPACE: {
-                            move_vec = main_scene.meta.cam.up * move_speed;
-                            break;
-                        }
-                        case KEYS::LCTRL: {
-                            move_vec = -main_scene.meta.cam.up * move_speed;
-                            break;
-                        }
-                        default:
-                            break;
-                    }
-
-                    main_scene.meta.cam.move(move_vec);
-
-                    if (!move_vec.near_zero()) {
-                        main_scene.meta.sample_index = 1;
-                    }
-
+                case KEYS::S: {
+                    move_vec = -main_scene.meta.cam.forward * move_speed;
                     break;
                 }
-                case EVENT_TYPES::BUTTON_PRESS: {
-                    if (event.button == BUTTONS::LEFT) {
-                        io.MouseDown[0] = true;
-                    }
-                    if (event.button == BUTTONS::RIGHT) {
-                        io.MouseDown[1] = true;
-                    }
+                case KEYS::D: {
+                    move_vec = main_scene.meta.cam.right * move_speed;
                     break;
                 }
-                case EVENT_TYPES::BUTTON_RELEASE: {
-                    if (event.button == BUTTONS::LEFT) {
-                        io.MouseDown[0] = false;
-                    }
-                    if (event.button == BUTTONS::RIGHT) {
-                        io.MouseDown[1] = false;
-                    }
+                case KEYS::A: {
+                    move_vec = -main_scene.meta.cam.right * move_speed;
                     break;
                 }
-                case EVENT_TYPES::MOUSE_MOVE: {
-                    io.MousePos = ImVec2{(float)event.x, (float)event.y};
+                case KEYS::E: {
+                    main_scene.meta.cam.rotate_y(0.001f * delta_time);
+                    main_scene.meta.sample_index = 1;
+                    break;
+                }
+                case KEYS::Q: {
+                    main_scene.meta.cam.rotate_y(-0.001f * delta_time);
+                    main_scene.meta.sample_index = 1;
+                    break;
+                }
+                case KEYS::SPACE: {
+                    move_vec = main_scene.meta.cam.up * move_speed;
+                    break;
+                }
+                case KEYS::LCTRL: {
+                    move_vec = -main_scene.meta.cam.up * move_speed;
                     break;
                 }
                 default:
                     break;
+                }
+
+                main_scene.meta.cam.move(move_vec);
+
+                if (!move_vec.near_zero()) { main_scene.meta.sample_index = 1; }
+
+                break;
+            }
+            case EVENT_TYPES::BUTTON_PRESS: {
+                if (event.button == BUTTONS::LEFT) { io.MouseDown[0] = true; }
+                if (event.button == BUTTONS::RIGHT) { io.MouseDown[1] = true; }
+                break;
+            }
+            case EVENT_TYPES::BUTTON_RELEASE: {
+                if (event.button == BUTTONS::LEFT) { io.MouseDown[0] = false; }
+                if (event.button == BUTTONS::RIGHT) { io.MouseDown[1] = false; }
+                break;
+            }
+            case EVENT_TYPES::MOUSE_MOVE: {
+                io.MousePos = ImVec2{(float)event.x, (float)event.y};
+                break;
+            }
+            default:
+                break;
             }
         }
 
         wnd.events.clear();
 
         // GUI
+        ImGui::NewFrame();
+
+        ImGui::SetNextWindowPos({0.f, 0.f});
+        ImGui::SetNextWindowSize({0.f, 0.f});
+        ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
+
+        ImGui::Text("frame per second %u\n", static_cast<uint32_t>(1000.f / delta_time));
+        ImGui::Text("frame time %f ms\n", delta_time);
+        ImGui::Text("frame count %u\n", main_scene.meta.sample_index);
+
+        if (ImGui::Checkbox("depth of field", (bool *)&main_scene.meta.enable_dof)) {
+            main_scene.meta.sample_index = 1;
+        }
+
+        ImGui::SliderInt("max bounces", (int32_t *)&main_scene.meta.max_bounce, 1, 250);
+        ImGui::SliderInt("min bounces", (int32_t *)&main_scene.meta.min_bounce, 1, main_scene.meta.max_bounce);
+        if (ImGui::SliderInt("downscale factor", (int32_t *)&main_scene.meta.downscale_factor, 1, 32)) {
+            main_scene.meta.sample_index = 1;
+        }
+
+        if (ImGui::Checkbox("debug bvh", (bool *)&main_scene.meta.debug_bvh)) { main_scene.meta.sample_index = 1; }
+
+        ImGui::End();
+
+        ImGui::EndFrame();
+
+        // To start a frame capture, call StartFrameCapture.
+        // You can specify NULL, NULL for the device to capture on if you have only one device and
+        // either no windows at all or only one window, and it will capture from that device.
+        // See the documentation below for a longer explanation
+        // if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+
+        //     renderer.ui();
+
         if (can_render) {
             ImGui::NewFrame();
 

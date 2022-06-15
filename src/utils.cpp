@@ -37,7 +37,7 @@ std::vector<uint8_t> read_file(const char* path) {
         return {};
     }
 
-    return std::move(file_content);
+    return file_content;
 }
 
 std::vector<uint8_t> read_file(std::string& path) {

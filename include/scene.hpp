@@ -1,9 +1,6 @@
 #ifndef __SCENE_HPP_
 #define __SCENE_HPP_
 
-#include "vec3.hpp"
-#include "sphere.hpp"
-#include "triangle.hpp"
 #include "camera.hpp"
 #include "bvh-node.hpp"
 
@@ -26,7 +23,7 @@ class scene {
         int32_t downscale_factor = 1;
 
         metadata(camera cam, uint32_t width, uint32_t height)
-            : cam(cam), width(width), height(height) {}
+            : cam(std::move(cam)), width(width), height(height) {}
     };
 
     // void random_scene();

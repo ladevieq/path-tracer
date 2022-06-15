@@ -56,7 +56,7 @@
 // }
 
 scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
-    :meta(cam, width, height){
+    :meta(std::move(cam), width, height){
 
     // auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
     // auto bistro_interior_filename = std::string("BistroInterior.gltf");
@@ -67,21 +67,21 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
     auto root_node = gltf::load(sponza_path, sponza_filename, renderer);
 
     std::vector<triangle> triangles;
-    auto triangles_offset = 0;
-    auto vertices_offset = 0;
+    size_t triangles_offset = 0;
+    size_t vertices_offset = 0;
     std::queue<node> nodes_to_load {};
     nodes_to_load.push(root_node);
 
-    while(nodes_to_load.size() != 0) {
+    while(!nodes_to_load.empty()) {
         auto &node = nodes_to_load.front();
 
         if (node.mesh) {
             auto &mesh = node.mesh.value();
 
-            indices.resize(indices.size()       + mesh.triangles_count * 3);
-            positions.resize(positions.size()   + mesh.vertices_count * 3);
-            normals.resize(normals.size()       + mesh.vertices_count * 3);
-            uvs.resize(uvs.size()               + mesh.vertices_count * 2);
+            indices.resize(indices.size()       + (size_t)mesh.triangles_count * 3);
+            positions.resize(positions.size()   + (size_t)mesh.vertices_count * 3);
+            normals.resize(normals.size()       + (size_t)mesh.vertices_count * 3);
+            uvs.resize(uvs.size()               + (size_t)mesh.vertices_count * 2);
 
 
             for (auto& mesh_part: mesh.parts) {
@@ -90,9 +90,9 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
                 std::memcpy(uvs.data()          + vertices_offset * 2, mesh_part.uvs.data(),       mesh_part.uvs.size() * sizeof(float));
 
                 for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
-                    auto i1 = mesh_part.indices[i];
-                    auto i2 = mesh_part.indices[i + 1];
-                    auto i3 = mesh_part.indices[i + 2];
+                    size_t i1 = mesh_part.indices[i];
+                    size_t i2 = mesh_part.indices[i + 1];
+                    size_t i3 = mesh_part.indices[i + 2];
 
                     auto p1 = vec3(mesh_part.positions[i1 * 3], mesh_part.positions[i1 * 3 + 1], mesh_part.positions[i1 * 3 + 2]);
                     auto p2 = vec3(mesh_part.positions[i2 * 3], mesh_part.positions[i2 * 3 + 1], mesh_part.positions[i2 * 3 + 2]);
@@ -111,8 +111,8 @@ scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
             }
         }
 
-        for (auto &node: node.children) {
-            nodes_to_load.push(node);
+        for (auto &new_node: node.children) {
+            nodes_to_load.push(new_node);
         }
 
         nodes_to_load.pop();

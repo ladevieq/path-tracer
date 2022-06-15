@@ -13,6 +13,7 @@ class vec3 {
     vec3(__m128& v);
     vec3(__m128&& v);
     vec3(const vec3& vec);
+    vec3(const vec3&& vec);
 
     vec3 operator-() const;
 
