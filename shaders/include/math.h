@@ -43,3 +43,11 @@ vec3 rotate_point(vec4 q, vec3 v) {
     const vec3 q_axis = q.xyz;
     return 2.0f * dot(q_axis, v) * q_axis + (q.w * q.w - dot(q_axis, q_axis)) * v + 2.0f * q.w * cross(q_axis, v);
 }
+
+vec3 interpolate_attribute(vec3 values[3], vec3 weights) {
+    return values[0] * weights.x + values[1] * weights.y + values[2] * weights.z;
+}
+
+vec2 interpolate_attribute(vec2 values[3], vec3 weights) {
+    return values[0] * weights.x + values[1] * weights.y + values[2] * weights.z;
+}
