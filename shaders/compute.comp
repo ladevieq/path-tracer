@@ -36,16 +36,10 @@ struct sphere {
     float[3] padding;
 };
 
-struct vertex {
-    vec3 position;
-    vec3 normal;
-    vec2 uv;
-};
-
 struct triangle {
-    vertex  v1;
-    vertex  v2;
-    vertex  v3;
+    vec3 positions[3];
+    vec3 normals[3];
+    vec2 uvs[3];
     material mat;
 };
 
@@ -141,11 +135,10 @@ vec3 ray_color(ray r, uint seed) {
 
 
 
-        // TODO: Interpolation function & indices decoding function
         triangle tri = get_triangle(info.primitive_id);
 
-        vec3 shading_normal = normalize(tri.v1.normal * info.barycentrics.x + tri.v2.normal * info.barycentrics.y + tri.v3.normal * info.barycentrics.z);
-        vec2 uv = tri.v1.uv * info.barycentrics.x + tri.v2.uv * info.barycentrics.y + tri.v3.uv * info.barycentrics.z;
+        vec2 uv = interpolate_attribute(tri.uvs, info.barycentrics);
+        vec3 shading_normal = normalize(interpolate_attribute(tri.normals, info.barycentrics));
 
         vec3 diffuse_color = srgb_to_linear(texture(
             sampler2D(

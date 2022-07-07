@@ -55,15 +55,10 @@ vec2[3] get_triangle_uvs(uvec3 indices) {
 
 triangle get_triangle(uint triangle_id) {
     uvec4 indices = decode_triangle_indices(triangle_id);
-    vec3 positions[3] = get_triangle_positions(indices.xyz);
-    vec3 normals[3] = get_triangle_normals(indices.xyz);
-    vec2 uvs[3] = get_triangle_uvs(indices.xyz);
-
-    vertex v1 = vertex(positions[0], normals[0], uvs[0]);
-    vertex v2 = vertex(positions[1], normals[1], uvs[1]);
-    vertex v3 = vertex(positions[2], normals[2], uvs[2]);
     return triangle(
-        v1, v2, v3,
+        get_triangle_positions(indices.xyz),
+        get_triangle_normals(indices.xyz),
+        get_triangle_uvs(indices.xyz),
         bufs.materials_arr.materials[indices.w]
     );
 }
