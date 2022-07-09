@@ -13,7 +13,8 @@
 #endif
 
 
-vkapi::vkapi() {
+vkapi::vkapi(vkcontext& context)
+    : context(context) {
     VkCommandPoolCreateInfo cmd_pool_create_info    = {};
     cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_create_info.pNext                      = nullptr;
@@ -316,7 +317,7 @@ std::vector<handle> vkapi::create_images(VkExtent3D size, VkFormat format, VkIma
         images_handles[image_index] = create_image(size, format, usages);
     }
 
-    return std::move(images_handles);
+    return images_handles;
 }
 
 void vkapi::destroy_images(std::vector<handle> &images) {
@@ -326,7 +327,7 @@ void vkapi::destroy_images(std::vector<handle> &images) {
 }
 
 
-VkFence vkapi::create_fence() {
+VkFence vkapi::create_fence() const {
     VkFence fence;
     VkFenceCreateInfo create_info   = {};
     create_info.sType               = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -338,28 +339,28 @@ VkFence vkapi::create_fence() {
     return fence;
 }
 
-void vkapi::destroy_fence(VkFence fence) {
+void vkapi::destroy_fence(VkFence fence) const {
     vkDestroyFence(context.device, fence, nullptr);
 }
 
-std::vector<VkFence> vkapi::create_fences(size_t fences_count) {
+std::vector<VkFence> vkapi::create_fences(size_t fences_count) const {
     std::vector<VkFence> fences { fences_count };
 
     for(size_t fence_index = 0; fence_index < fences_count; fence_index++) {
         fences[fence_index] = create_fence();
     }
 
-    return std::move(fences);
+    return fences;
 }
 
-void vkapi::destroy_fences(std::vector<VkFence> &fences) {
-    for(auto &fence: fences) {
-        vkDestroyFence(context.device, fence, nullptr);
+void vkapi::destroy_fences(VkFence fences[], size_t fences_count) const {
+    for(size_t index { 0 }; index < fences_count; index++) {
+        vkDestroyFence(context.device, fences[index], nullptr);
     }
 }
 
 
-VkSemaphore vkapi::create_semaphore() {
+VkSemaphore vkapi::create_semaphore() const {
     VkSemaphore semaphore;
     VkSemaphoreCreateInfo create_info   = {};
     create_info.sType                   = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -371,23 +372,23 @@ VkSemaphore vkapi::create_semaphore() {
     return semaphore;
 }
 
-void vkapi::destroy_semaphore(VkSemaphore semaphore) {
+void vkapi::destroy_semaphore(VkSemaphore semaphore) const {
     vkDestroySemaphore(context.device, semaphore, nullptr);
 }
 
-std::vector<VkSemaphore> vkapi::create_semaphores(size_t semaphores_count) {
+std::vector<VkSemaphore> vkapi::create_semaphores(size_t semaphores_count) const {
     std::vector<VkSemaphore> semaphores { semaphores_count };
 
-    for (size_t semaphore_index = 0; semaphore_index < semaphores_count; semaphore_index++) {
+    for (size_t semaphore_index { 0 }; semaphore_index < semaphores_count; semaphore_index++) {
         semaphores[semaphore_index] = create_semaphore();
     }
 
-    return std::move(semaphores);
+    return semaphores;
 }
 
-void vkapi::destroy_semaphores(std::vector<VkSemaphore> &semaphores) {
-    for (auto &semaphore: semaphores) {
-        vkDestroySemaphore(context.device, semaphore, nullptr);
+void vkapi::destroy_semaphores(VkSemaphore semaphores[], size_t semaphores_count) const {
+    for(auto index { 0 }; index < semaphores_count; index++) {
+        vkDestroySemaphore(context.device, semaphores[index], nullptr);
     }
 }
 
@@ -446,7 +447,7 @@ std::vector<VkCommandBuffer> vkapi::create_command_buffers(size_t command_buffer
     std::vector<VkCommandBuffer> command_buffers { command_buffers_count };
     vkAllocateCommandBuffers(context.device, &cmd_buf_allocate_info, command_buffers.data());
 
-    return std::move(command_buffers);
+    return command_buffers;
 }
 
 void vkapi::destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers) {
@@ -585,7 +586,7 @@ std::vector<framebuffer> vkapi::create_framebuffers(VkRenderPass render_pass, st
         framebuffer = create_framebuffer(render_pass, formats, size);
     }
 
-    return std::move(framebuffers);
+    return framebuffers;
 }
 
 void vkapi::destroy_framebuffer(framebuffer framebuffer) {
@@ -611,9 +612,7 @@ pipeline vkapi::create_compute_pipeline(const char* shader_name) {
     char shader_path[256] = {};
     sprintf(shader_path, "%s%s%s", "./shaders/", shader_name, ".comp.spv");
     std::vector<uint8_t> shader_code = read_file(shader_path);
-    if (shader_code.size() == 0) {
-        exit(1);
-    }
+    assert(!shader_code.empty());
 
     pipeline.shader_modules.resize(1);
 
@@ -652,10 +651,10 @@ pipeline vkapi::create_compute_pipeline(const char* shader_name) {
         &pipeline.handle
     ))
 
-    return std::move(pipeline);
+    return pipeline;
 }
 
-pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states) {
+pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states) {
     pipeline pipeline {
         .bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS
     };
@@ -805,7 +804,7 @@ std::vector<VkDescriptorSet> vkapi::create_descriptor_sets(VkDescriptorSetLayout
     std::vector<VkDescriptorSet> descriptor_sets { descriptor_sets_count };
     vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, descriptor_sets.data());
 
-    return std::move(descriptor_sets);
+    return descriptor_sets;
 }
 
 void vkapi::destroy_descriptor_sets(std::vector<VkDescriptorSet> &descriptor_sets) {
@@ -986,7 +985,10 @@ void vkapi::destroy_swapchain(swapchain& swapchain) {
     VKRESULT(vkDeviceWaitIdle(context.device))
 
     for(auto &image: swapchain.images) {
-        bindless_descriptor.free(images[image]->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        // TODO: Change this
+        if (images[image]->bindless_storage_index != 0)
+            bindless_descriptor.free(images[image]->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        if (images[image]->bindless_sampled_index != 0)
         bindless_descriptor.free(images[image]->bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 
         vkDestroyImageView(context.device, images[image]->view, nullptr);
@@ -999,7 +1001,7 @@ void vkapi::update_descriptor_image(handle img, VkDescriptorType type) {
     VkDescriptorImageInfo descriptor_image_info;
     VkWriteDescriptorSet write_descriptor;
 
-    auto current_image = images[img];
+    auto* current_image = images[img];
 
     descriptor_image_info.sampler         = VK_NULL_HANDLE;
     descriptor_image_info.imageView       = current_image->view;
@@ -1232,7 +1234,7 @@ void vkapi::end_record(VkCommandBuffer command_buffer) {
     VKRESULT(vkEndCommandBuffer(command_buffer))
 }
 
-VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) {
+VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const {
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     VkSubmitInfo submit_info            = {};
@@ -1249,7 +1251,7 @@ VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphor
     return vkQueueSubmit(context.queue, 1, &submit_info, submission_fence);
 }
 
-VkResult vkapi::present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) {
+VkResult vkapi::present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) const {
     VkPresentInfoKHR present_info   = {};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.pNext              = nullptr;
@@ -1276,7 +1278,7 @@ const char* vkapi::shader_stage_extension(VkShaderStageFlags shader_stage) {
             return ".comp";
         }
         default:
-            std::cerr << "Stage not supported" << std::endl;
+            assert(true && "Stage not supported");
             return "";
     }
 }

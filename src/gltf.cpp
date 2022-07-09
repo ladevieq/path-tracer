@@ -1,4 +1,3 @@
-
 #include "gltf.hpp"
 
 #include <fstream>
@@ -7,23 +6,23 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "thirdparty/stb_image.h"
 
+#include "vk-renderer.hpp"
 #include "utils.hpp"
 
 node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer) {
-    std::fstream f(path / filename);
+    std::fstream f{path / filename};
     json gltf_json;
 
     f >> gltf_json;
 
-    auto &scene = gltf_json["scenes"][0];
+    auto& scene = gltf_json["scenes"][0];
 
     auto &buffers = gltf_json["buffers"];
-    auto buffer_index = 0;
     auto buffers_content = std::vector<std::vector<uint8_t>>(buffers.size());
-    for (auto &buffer : buffers) {
+    for (size_t buffer_index{0}; buffer_index < buffers.size(); buffer_index++) {
+        auto& buffer = buffers[buffer_index];
         auto buffer_path = (path / buffer["uri"].get<std::string>()).string();
         buffers_content[buffer_index] = read_file(buffer_path);
-        buffer_index++;
     }
 
     auto textures = load_textures(gltf_json, path, renderer);
@@ -32,7 +31,7 @@ node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &
     auto meshes = load_meshes(gltf_json, buffers_content, materials);
 
     node root_node;
-    auto &root_children = scene["nodes"];
+    auto& root_children = scene["nodes"];
     uint32_t root_children_count = scene["nodes"].size();
     root_node.children.resize(root_children_count);
 
@@ -91,8 +90,7 @@ std::vector<texture> gltf::load_textures(json &gltf_json, std::filesystem::path 
         int x, y, n;
         auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
         unsigned char *data = stbi_load(filepath.c_str(), &x, &y, &n, 4);
-        auto *img =
-            renderer.create_2d_texture(static_cast<uint32_t>(x), static_cast<uint32_t>(y), VK_FORMAT_R8G8B8A8_UNORM);
+        auto *img = renderer.create_2d_texture(static_cast<uint32_t>(x), static_cast<uint32_t>(y), VK_FORMAT_R8G8B8A8_UNORM);
 
         renderer.update_image(img, data);
 
@@ -109,6 +107,7 @@ std::vector<texture> gltf::load_textures(json &gltf_json, std::filesystem::path 
         samplers[sampler_index] = renderer.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     }
 
+    auto& api = renderer.api;
     auto &gltf_textures = gltf_json["textures"];
     auto textures_count = gltf_textures.size();
     std::vector<texture> textures{textures_count};
@@ -119,15 +118,16 @@ std::vector<texture> gltf::load_textures(json &gltf_json, std::filesystem::path 
         auto image_index = gltf_texture["source"].get<uint32_t>();
         auto &image = images[image_index];
 
+        uint32_t image_id = api.get_image(image->device_image).bindless_sampled_index;
         uint32_t sampler_id = 0;
-        // if (gltf_texture.contains("sampler")) {
-        //     auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
-        //     auto &sampler = samplers[sampler_index];
-        //     sampler_id = sampler->device_sampler.bindless_index;
-        // }
+        if (gltf_texture.contains("sampler")) {
+            auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
+            auto &sampler = samplers[sampler_index];
+            sampler_id = api.get_sampler(sampler->device_sampler).bindless_index;
+        }
 
-        // textures[texture_index] =
-        //     texture{.image_id = image->device_image.bindless_sampled_index, .sampler_id = sampler_id};
+        textures[texture_index] =
+            texture{.image_id = image_id, .sampler_id = sampler_id};
     }
 
     return textures;

@@ -3,9 +3,10 @@
 
 #include <vector>
 #include <algorithm>
+#include <iostream>
 
 #include "aabb.hpp"
-#include "sphere.hpp"
+// #include "sphere.hpp"
 #include "triangle.hpp"
 
 struct bvh_node {

@@ -1,7 +1,7 @@
 #ifndef __VEC3_HPP_
 #define __VEC3_HPP_
 
-#include <iostream>
+#include <ostream>
 #include <xmmintrin.h>
 
 class vec3 {

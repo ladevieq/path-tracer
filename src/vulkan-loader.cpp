@@ -1,12 +1,10 @@
-#include <iostream>
-
 #include "vulkan-loader.hpp"
+
+#include <cassert>
+
 #include "defines.hpp"
 
 #if defined(WINDOWS)
-#include <Windows.h>
-#include <windowsx.h>
-
 HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 
 #define LoadProcAddress GetProcAddress
@@ -33,46 +31,30 @@ void *vulkanLibrary = dlopen("libvulkan.1.dylib", RTLD_NOW);
     VULKAN_DEVICE_FUNCTIONS
 #undef X
 
-#define X(name)                                                                 \
-void Load_##name()                                                              \
-{                                                                               \
-    name = reinterpret_cast<PFN_##name>(LoadProcAddress(vulkanLibrary, #name)); \
-    if (!name) {                                                                \
-        std::cerr << "Cannot load vulkan function " << #name << std::endl;      \
-    }                                                                           \
+#define X(name)                                                                     \
+void Load_##name()                                                                  \
+{                                                                                   \
+    (name) = reinterpret_cast<PFN_##name>(LoadProcAddress(vulkanLibrary, #name));   \
+    assert((name) && "Cannot load vulkan function " #name);                         \
 }
 VULKAN_EXPORTED_FUNCTIONS
-#undef X
-
-#define X(name)                                                                 \
-void Load_##name()                                                              \
-{                                                                               \
-    name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(nullptr, #name)); \
-    if (!name) {                                                                \
-        std::cerr << "Cannot load vulkan function " << #name << std::endl;      \
-    }                                                                           \
-}
 VULKAN_APPLICATION_FUNCTIONS
 #undef X
 
-#define X(name)                                                                   \
-void Load_##name(VkInstance instance)                                             \
-{                                                                                 \
-    name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(instance, #name));  \
-    if (!name) {                                                                  \
-        std::cerr << "Cannot load vulkan function " << #name << std::endl;        \
-    }                                                                             \
+#define X(name)                                                                     \
+void Load_##name(VkInstance instance)                                               \
+{                                                                                   \
+    (name) = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(instance, #name));  \
+    assert((name) && "Cannot load vulkan function " #name);                         \
 }
 VULKAN_INSTANCE_FUNCTIONS
 #undef X
 
-#define X(name)                                                               \
-void Load_##name(VkDevice device)                                             \
-{                                                                             \
-    name = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(device, #name)); \
-    if (!name) {                                                              \
-        std::cerr << "Cannot load vulkan function " << #name << std::endl;    \
-    }                                                                         \
+#define X(name)                                                                     \
+void Load_##name(VkDevice device)                                                   \
+{                                                                                   \
+    (name) = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(device, #name));      \
+    assert((name) && "Cannot load vulkan function " #name);                         \
 }
 VULKAN_DEVICE_FUNCTIONS
 #undef X

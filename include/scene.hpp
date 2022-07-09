@@ -3,9 +3,10 @@
 
 #include "camera.hpp"
 #include "bvh-node.hpp"
+#include "material.hpp"
 
-#include "vk-renderer.hpp"
-
+class vkrenderer;
+class Buffer;
 class scene {
     struct metadata {
         camera cam;
@@ -18,8 +19,8 @@ class scene {
 
         uint32_t sample_index = 0;
 
-        uint32_t enable_dof = false;
-        uint32_t debug_bvh  = false;
+        uint32_t enable_dof = (uint32_t)false;
+        uint32_t debug_bvh  = (uint32_t)false;
         int32_t downscale_factor = 1;
 
         metadata(camera cam, uint32_t width, uint32_t height)

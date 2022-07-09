@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <queue>
 
-#include "utils.hpp"
+#include "vk-renderer.hpp"
 #include "gltf.hpp"
 
 // void scene::random_scene() {

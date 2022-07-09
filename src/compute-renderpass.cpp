@@ -4,8 +4,14 @@
 
 #include "vk-renderer.hpp"
 
-void ComputeRenderpass::set_pipeline(std::string& shader_name) {
-    this->pipeline = api.create_compute_pipeline(shader_name.c_str());
+ComputeRenderpass::~ComputeRenderpass() {
+    api.destroy_pipeline(pipeline);
+}
+
+void ComputeRenderpass::set_pipeline(const char* shader_name) {
+    if (this->pipeline.handle != VK_NULL_HANDLE)
+        api.destroy_pipeline(this->pipeline);
+    this->pipeline = api.create_compute_pipeline(shader_name);
 }
 
 void ComputeRenderpass::set_ouput_texture(Texture* output_texture) {
@@ -14,7 +20,7 @@ void ComputeRenderpass::set_ouput_texture(Texture* output_texture) {
     auto image = api.get_image(output_texture->device_image);
 
     // TODO: Remove hardcoded offset
-    memcpy(constants.data() + 56, &image.bindless_storage_index, sizeof(bindless_index));
+    memcpy(constants + 56, &image.bindless_storage_index, sizeof(bindless_index));
 }
 
 void ComputeRenderpass::set_dispatch_size(size_t count_x, size_t count_y, size_t count_z) {
@@ -24,20 +30,20 @@ void ComputeRenderpass::set_dispatch_size(size_t count_x, size_t count_y, size_t
 }
 
 void ComputeRenderpass::set_constant(off_t offset, uint64_t* constant) {
-    memcpy(constants.data() + offset, constant, sizeof(uint64_t));
+    memcpy(constants + offset, constant, sizeof(uint64_t));
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Texture* texture) {
     auto image = api.get_image(texture->device_image);
 
-    memcpy(constants.data() + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
+    memcpy(constants + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
 
     input_textures.push_back(texture);
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Buffer* buffer) {
     auto device_buffer = api.get_buffer(buffer->device_buffer);
-    memcpy(constants.data() + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
+    memcpy(constants + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
 }
 
 void ComputeRenderpass::execute(vkrenderer& renderer, VkCommandBuffer command_buffer) {

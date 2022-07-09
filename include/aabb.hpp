@@ -1,10 +1,11 @@
 #ifndef __AABB_HPP_
 #define __AABB_HPP_
 
-#include "vec3.hpp"
-#include "triangle.hpp"
 #include <cmath>
 #include <climits>
+
+#include "vec3.hpp"
+#include "triangle.hpp"
 
 class aabb {
     public:

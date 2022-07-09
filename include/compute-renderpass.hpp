@@ -2,7 +2,6 @@
 
 #include "renderpass.hpp"
 #include "vk-api.hpp"
-#include <array>
 
 class Texture;
 class Buffer;
@@ -14,12 +13,9 @@ class ComputeRenderpass : public Renderpass {
         : Renderpass(api)
     {}
 
-    ~ComputeRenderpass() {
-        api.destroy_pipeline(pipeline);
-    }
+    ~ComputeRenderpass() override;
 
-
-    void set_pipeline(std::string& shader_name);
+    void set_pipeline(const char* shader_name);
 
     void set_dispatch_size(size_t count_x, size_t count_y, size_t count_z);
 
@@ -30,7 +26,7 @@ class ComputeRenderpass : public Renderpass {
     void set_constant(off_t offset, Buffer* buffer);
 
     // TODO: Do not use vulkan api type
-    void execute(vkrenderer& renderer, VkCommandBuffer command_buffer) override final;
+    void execute(vkrenderer& renderer, VkCommandBuffer command_buffer) final;
 
     Texture* output_texture;
 
@@ -38,7 +34,7 @@ class ComputeRenderpass : public Renderpass {
 
     std::vector<Texture*> input_textures;
 
-    std::array<uint8_t, 64> constants;
+    uint8_t constants[64];
 
     size_t group_count_x;
     size_t group_count_y;

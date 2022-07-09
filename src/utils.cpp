@@ -1,8 +1,12 @@
 #include "utils.hpp"
 
-#include <iostream>
-
 #include "defines.hpp"
+
+#ifdef WINDOWS
+#include <windows.h>
+#endif
+
+#include <iostream>
 
 std::vector<uint8_t> read_file(const char* path) {
 #if defined(WINDOWS)

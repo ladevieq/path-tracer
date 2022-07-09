@@ -1,11 +1,9 @@
 #pragma once
 
-#include <stdint.h>
 #include <vector>
-#include <array>
 
-#include "vk-renderer.hpp"
 #include "renderpass.hpp"
+#include "vk-renderer.hpp"
 
 class Buffer;
 class Texture;
@@ -29,7 +27,7 @@ class PrimitiveRenderpass : public Renderpass {
 
     void finalize_render_pass();
 
-    void execute(vkrenderer& renderer, VkCommandBuffer command_buffer) override final;
+    void execute(vkrenderer& renderer, VkCommandBuffer command_buffer) final;
 
     VkRenderPass render_pass = VK_NULL_HANDLE;
 
@@ -45,7 +43,7 @@ class PrimitiveRenderpass : public Renderpass {
     std::vector<VkImageView> color_attachments_view;
     std::vector<VkFormat> color_attachments_format;
 
-    std::array<framebuffer, vkrenderer::virtual_frames_count> framebuffers;
+    framebuffer framebuffers[vkrenderer::virtual_frames_count];
 
     std::vector<Primitive*> primitives;
 };
@@ -58,7 +56,7 @@ class Primitive {
         : api(api), primitive_render_pass(render_pass)
     {};
 
-    void set_pipeline(std::string& shader_name);
+    void set_pipeline(const char* shader_name);
 
     void set_constant_offset(off_t offset);
     void set_constant(off_t offset, uint64_t* constant);
@@ -93,5 +91,5 @@ private:
 
     VkRect2D    scissor = {};
 
-    std::array<uint8_t, 64> constants;
+    uint8_t     constants[64];
 };
