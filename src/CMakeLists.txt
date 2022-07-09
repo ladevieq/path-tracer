@@ -1,13 +1,6 @@
 add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
 
-include_directories(${CMAKE_SOURCE_DIR}/include)
-include_directories(${Vulkan_INCLUDE_DIRS})
-
-if(UNIX AND NOT APPLE)
-    include_directories(${X11_xcb_INCLUDE_PATH})
-endif()
-
-set(LIBRARIES imgui::imgui nlohmann_json::nlohmann_json)
+set(LIBRARIES imgui::imgui nlohmann_json::nlohmann_json Tracy::TracyClient)
 
 add_executable(
     path-tracer
@@ -25,7 +18,16 @@ add_executable(
     gltf.cpp
     compute-renderpass.cpp
     primitive-renderpass.cpp
+    ${Tracy_SOURCE_DIR}/TracyClient.cpp
 )
+
+target_include_directories(path-tracer PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(path-tracer PUBLIC ${Vulkan_INCLUDE_DIRS})
+
+if(UNIX AND NOT APPLE)
+    target_include_directories(path-tracer PUBLIC ${X11_xcb_INCLUDE_PATH})
+endif()
+
 
 if(UNIX AND NOT APPLE)
     list(APPEND LIBRARIES ${CMAKE_DL_LIBS} ${X11_xcb_LIB} ${X11_xkbcommon_LIB} ${X11_xkbcommon_X11_LIB})
