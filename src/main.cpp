@@ -14,6 +14,8 @@
 #include "vk-renderer.hpp"
 #include "window.hpp"
 
+#include "Tracy.hpp"
+
 #if defined(LINUX)
 #include <dlfcn.h>
 #include <unistd.h>

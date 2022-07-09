@@ -28,23 +28,25 @@ endif()
 find_package(imgui CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(Tracy CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 if(UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)
 endif()
 
-find_program(CMAKE_CXX_CPPCHECK NAMES cppcheck)
-if (CMAKE_CXX_CPPCHECK)
-    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/cppcheck)
-
-    list(
-        APPEND CMAKE_CXX_CPPCHECK
-            "--project=${CMAKE_BINARY_DIR}/compile_commands.json"
-            "--cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck"
-            "--enable=all"
-            "-iinclude/thirdparty"
-    )
-endif()
+# find_program(CMAKE_CXX_CPPCHECK NAMES cppcheck)
+# if (CMAKE_CXX_CPPCHECK)
+#     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/cppcheck)
+# 
+#     list(
+#         APPEND CMAKE_CXX_CPPCHECK
+#             "--project=${CMAKE_BINARY_DIR}/compile_commands.json"
+#             "--cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck"
+#             "--enable=all"
+#             "-iinclude/thirdparty"
+#     )
+# endif()
 
 add_subdirectory(src)
 add_subdirectory(shaders)
