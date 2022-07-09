@@ -1,7 +1,8 @@
+#include "vk-context.hpp"
+
 #include <iostream>
 #include <cassert>
 
-#include "vk-context.hpp"
 #include "vulkan-loader.hpp"
 
 #define VMA_IMPLEMENTATION
@@ -163,7 +164,7 @@ void vkcontext::create_memory_allocator() {
     allocator_info.device = device;
     allocator_info.instance = instance;
     allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-     
+
     vmaCreateAllocator(&allocator_info, &allocator);
 }
 

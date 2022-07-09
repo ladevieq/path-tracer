@@ -164,10 +164,11 @@
     VULKAN_DEVICE_FUNCTIONS
 #undef X
 
-    void load_vulkan();
 
-    void load_instance_functions(VkInstance instance);
+void load_vulkan();
 
-    void load_device_functions(VkDevice device);
+void load_instance_functions(VkInstance instance);
+
+void load_device_functions(VkDevice device);
 
 #endif // !__VULKAN_LOADER_HPP_

@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#include "vec3.hpp"
+using color = class vec3;
 
 void write_color(std::ostream& out, const color& pixel_color);
 

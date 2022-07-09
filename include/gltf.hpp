@@ -1,7 +1,6 @@
 #ifndef __GLTF_HPP_
 #define __GLTF_HPP_
 
-#include <filesystem>
 #include <vector>
 #include <optional>
 
@@ -10,8 +9,6 @@
 using json = nlohmann::json;
 
 #include "material.hpp"
-
-#include "vk-renderer.hpp"
 
 struct mesh_part {
     std::vector<uint16_t> indices;
@@ -34,6 +31,11 @@ struct node {
     std::optional<mesh> mesh;
 };
 
+namespace std::filesystem {
+    class path;
+}
+
+class vkrenderer;
 class gltf {
     public:
     static node load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer);

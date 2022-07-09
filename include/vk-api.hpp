@@ -1,10 +1,8 @@
 #ifndef __VK_API_HPP_
 #define __VK_API_HPP_
 
-#include <stdint.h>
 #include <vector>
-#include <map>
-#include <iostream>
+#include <cassert>
 
 #include "vk-context.hpp"
 
@@ -18,7 +16,7 @@ struct buffer {
 
 struct pipeline {
     std::vector<VkShaderModule> shader_modules;
-    VkPipeline                  handle;
+    VkPipeline                  handle = VK_NULL_HANDLE;
     VkPipelineBindPoint         bind_point;
 };
 
@@ -34,8 +32,8 @@ struct image {
     VkFormat                format;
     VkExtent3D              size;
     VkImageUsageFlags       usages;
-    bindless_index          bindless_storage_index;
-    bindless_index          bindless_sampled_index;
+    bindless_index          bindless_storage_index = 0;
+    bindless_index          bindless_sampled_index = 0;
 
     VkImageLayout           previous_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     VkPipelineStageFlags    previous_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -68,7 +66,7 @@ struct global_descriptor {
     std::vector<uint32_t>   index_pool[3];
 
     global_descriptor() {
-        for (int32_t index = 1024; index >= 0; index--) {
+        for (int32_t index = 1024; index > 0; index--) {
             index_pool[0].push_back((uint32_t)index);
             index_pool[1].push_back((uint32_t)index);
             index_pool[2].push_back((uint32_t)index);
@@ -84,10 +82,11 @@ struct global_descriptor {
     }
 
     void free(uint32_t index, VkDescriptorType type) {
+        assert(index != 0);
         index_pool[descriptor_type_binding(type)].push_back(index);
     }
 
-    int32_t descriptor_type_binding(VkDescriptorType type) {
+    static int32_t descriptor_type_binding(VkDescriptorType type) {
         switch(type) {
             case VK_DESCRIPTOR_TYPE_SAMPLER:
                  return 0;
@@ -96,7 +95,7 @@ struct global_descriptor {
             case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                 return 2;
             default:
-                std::cerr << "descriptor type not supported" << std::endl;
+                assert(true && "descriptor type not supported");
                 return -1;
         }
     }
@@ -106,7 +105,7 @@ class window;
 
 class vkapi {
     public:
-        vkapi();
+        vkapi(vkcontext& context);
         ~vkapi();
 
         handle create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
@@ -121,16 +120,16 @@ class vkapi {
         void destroy_images(std::vector<handle>& images);
 
 
-        VkFence create_fence();
-        void destroy_fence(VkFence fence);
-        std::vector<VkFence> create_fences(size_t fences_count);
-        void destroy_fences(std::vector<VkFence> &fences);
+        [[nodiscard]] VkFence create_fence() const;
+        void destroy_fence(VkFence fence) const;
+        [[nodiscard]] std::vector<VkFence> create_fences(size_t fences_count) const;
+        void destroy_fences(VkFence fences[], size_t fences_count) const;
 
 
-        VkSemaphore create_semaphore();
-        void destroy_semaphore(VkSemaphore semaphore);
-        std::vector<VkSemaphore> create_semaphores(size_t semaphores_count);
-        void destroy_semaphores(std::vector<VkSemaphore> &semaphores);
+        [[nodiscard]] VkSemaphore create_semaphore() const;
+        void destroy_semaphore(VkSemaphore semaphore) const;
+        [[nodiscard]] std::vector<VkSemaphore> create_semaphores(size_t semaphores_count) const;
+        void destroy_semaphores(VkSemaphore semaphores[], size_t semaphores_count) const;
 
         handle create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
         void destroy_sampler(handle sampler);
@@ -152,7 +151,7 @@ class vkapi {
 
 
         pipeline create_compute_pipeline(const char* shader_name);
-        pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState> dynamic_states);
+        pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states);
         void destroy_pipeline(pipeline &pipeline);
 
 
@@ -191,21 +190,21 @@ class vkapi {
 
         void end_record(VkCommandBuffer command_buffer);
 
-        VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence);
+        VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
 
-        VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore);
+        VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) const;
 
         const buffer& get_buffer(handle buffer_handle) { return *buffers[buffer_handle]; };
         const image& get_image(handle image_handle) { return *images[image_handle]; };
         const sampler& get_sampler(handle sampler_handle) { return *samplers[sampler_handle]; };
 
-        vkcontext           context;
+        vkcontext&  context;
 
     private:
 
         global_descriptor   bindless_descriptor;
 
-        const char* shader_stage_extension(VkShaderStageFlags shader_stage);
+        static const char* shader_stage_extension(VkShaderStageFlags shader_stage);
 
         // TODO: Use freelists instead
         std::vector<buffer*>     buffers;

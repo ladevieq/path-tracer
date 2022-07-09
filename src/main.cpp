@@ -1,15 +1,15 @@
-#include <cassert>
 #include <chrono>
-#include <cstdio>
-#include <cstring>
-#include <iostream>
+#include <filesystem>
 
 #include "imgui.h"
-#include "thirdparty/renderdoc.h"
 
+#ifdef ENABLE_RENDERDOC
+#include "thirdparty/renderdoc.h"
+#endif
+
+#include "defines.hpp"
 #include "compute-renderpass.hpp"
 #include "primitive-renderpass.hpp"
-#include "defines.hpp"
 #include "scene.hpp"
 #include "vk-renderer.hpp"
 #include "window.hpp"
@@ -29,6 +29,7 @@ struct VkVertex {
 };
 
 int main() {
+#ifdef ENABLE_RENDERDOC
     RENDERDOC_API_1_1_2 *rdoc_api = nullptr;
 
 #ifdef WINDOWS
@@ -49,6 +50,7 @@ int main() {
         assert(ret == 1);
     }
 #endif
+#endif // ENABLE_RENDERDOC
 
     // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
@@ -427,7 +429,7 @@ int main() {
     //     write_color(std::cout, output_image[index]);
     // }
 
-    std::cerr << "Done !" << std::endl;
+    // std::cerr << "Done !" << std::endl;
 
     return 0;
 }

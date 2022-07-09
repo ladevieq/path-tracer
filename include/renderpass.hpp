@@ -1,8 +1,9 @@
 #pragma once
 
-#include <string>
+using VkCommandBuffer = struct VkCommandBuffer_T*;
 
-#include "vk-renderer.hpp"
+class vkrenderer;
+class vkapi;
 
 class Renderpass {
     public:
@@ -11,7 +12,7 @@ class Renderpass {
         :api(api)
     {};
 
-    virtual ~Renderpass() {};
+    virtual ~Renderpass() = default;
 
     // TODO: Do not use vulkan api type
     virtual void execute(vkrenderer& renderer, VkCommandBuffer command_buffer) = 0;

@@ -1,8 +1,6 @@
 #ifndef __VK_RENDERER_HPP_
 #define __VK_RENDERER_HPP_
 
-#include <stdint.h>
-#include <sys/types.h>
 #include <vector>
 
 #include "vk-api.hpp"
@@ -25,8 +23,6 @@ class vkrenderer {
         ~vkrenderer();
 
         void begin_frame();
-
-        void compute(uint32_t width, uint32_t height);
 
         void finish_frame();
 
@@ -52,19 +48,23 @@ class vkrenderer {
 
         void render();
 
-        uint32_t frame_index() { return this->virtual_frame_index; }
+        [[nodiscard]]uint32_t frame_index() const { return this->virtual_frame_index; }
 
-        Texture* back_buffer() { return swapchain_textures[swapchain_image_index]; }
+        [[nodiscard]]Texture* back_buffer() const { return swapchain_textures[swapchain_image_index]; }
 
-        VkFormat back_buffer_format() { return swapchain.surface_format.format; }
+        [[nodiscard]]VkFormat back_buffer_format() const { return swapchain.surface_format.format; }
 
         static constexpr uint32_t       virtual_frames_count = 2;
+
+        vkcontext context;
+
+        vkapi                           api;
 
     private:
 
         void handle_swapchain_result(VkResult function_result);
 
-        vkapi                           api;
+        // vkapi                           api;
 
         std::vector<Renderpass*>        renderpasses;
 
@@ -78,9 +78,9 @@ class vkrenderer {
 
         pipeline                        tonemapping_pipeline;
 
-        std::vector<VkFence>            submission_fences;
-        std::vector<VkSemaphore>        execution_semaphores;
-        std::vector<VkSemaphore>        acquire_semaphores;
+        VkFence                         submission_fences[virtual_frames_count];
+        VkSemaphore                     execution_semaphores[virtual_frames_count];
+        VkSemaphore                     acquire_semaphores[virtual_frames_count];
 
         VkSurfaceKHR                    platform_surface;
         swapchain                       swapchain;

@@ -1,7 +1,6 @@
 #ifndef __WINDOW_HPP_
 #define __WINDOW_HPP_
 
-#include <cstdint>
 #include <vector>
 
 #include "defines.hpp"

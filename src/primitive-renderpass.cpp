@@ -1,17 +1,15 @@
 #include "primitive-renderpass.hpp"
 
 #include "vk-renderer.hpp"
-#include "vulkan/vulkan_core.h"
-#include <stdint.h>
 
 
-void Primitive::set_pipeline(std::string &shader_name) {
+void Primitive::set_pipeline(const char* shader_name) {
     std::vector<VkDynamicState> dynamic_states {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR
     };
 
-    pipeline = api.create_graphics_pipeline(shader_name.c_str(), (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), primitive_render_pass.render_pass, dynamic_states);
+    pipeline = api.create_graphics_pipeline(shader_name, (VkShaderStageFlagBits)(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT), primitive_render_pass.render_pass, dynamic_states);
 }
 
 void Primitive::set_constant_offset(off_t offset) {
@@ -19,23 +17,23 @@ void Primitive::set_constant_offset(off_t offset) {
 }
 
 void Primitive::set_constant(off_t offset, uint64_t* constant) {
-    memcpy(constants.data() + offset, constant, sizeof(uint64_t));
+    memcpy(constants + offset, constant, sizeof(uint64_t));
 }
 
 void Primitive::set_constant(off_t offset, Texture* texture) {
     auto image = api.get_image(texture->device_image);
 
-    memcpy(constants.data() + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
+    memcpy(constants + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
 }
 
 void Primitive::set_constant(off_t offset, Buffer* buffer) {
     auto device_buffer = api.get_buffer(buffer->device_buffer);
-    memcpy(constants.data() + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
+    memcpy(constants + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
 }
 
 void Primitive::set_constant(off_t offset, Sampler* sampler) {
     auto device_sampler = api.get_sampler(sampler->device_sampler);
-    memcpy(constants.data() + offset, (void*)&device_sampler.bindless_index, sizeof(bindless_index));
+    memcpy(constants + offset, (void*)&device_sampler.bindless_index, sizeof(bindless_index));
 }
 
 void Primitive::set_index_buffer(Buffer* index_buffer) {
