@@ -44,7 +44,7 @@ endif()
 #             "--project=${CMAKE_BINARY_DIR}/compile_commands.json"
 #             "--cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck"
 #             "--enable=all"
-#             "-iinclude/thirdparty"
+#             "-ithirdparty"
 #     )
 # endif()
 

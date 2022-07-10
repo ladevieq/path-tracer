@@ -4,7 +4,7 @@
 #include "imgui.h"
 
 #ifdef ENABLE_RENDERDOC
-#include "thirdparty/renderdoc.h"
+#include <renderdoc.h>
 #endif
 
 #include "defines.hpp"

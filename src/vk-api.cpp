@@ -1157,7 +1157,7 @@ void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass rende
     attachment_begin_info.attachmentCount           = attachments.size();
     attachment_begin_info.pAttachments              = attachments.data();
 
-    VkClearValue clear_value = { 0.f, 0.f, 0.f, 1.f };
+    VkClearValue clear_value { 0.f, 0.f, 0.f, 1.f };
     VkRenderPassBeginInfo render_pass_begin_info    = {};
     render_pass_begin_info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_begin_info.pNext                    = &attachment_begin_info;

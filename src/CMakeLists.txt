@@ -21,6 +21,8 @@ add_executable(
     ${Tracy_SOURCE_DIR}/TracyClient.cpp
 )
 
+target_include_directories(path-tracer SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty)
+
 target_include_directories(path-tracer PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(path-tracer PUBLIC ${Vulkan_INCLUDE_DIRS})
 
