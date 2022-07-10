@@ -1,10 +1,13 @@
-#include <cassert>
-#include <memory>
-
 #include "vk-api.hpp"
-#include "vulkan-loader.hpp"
+
+#include <cassert>
+
+#include <vk_mem_alloc.h>
+
 #include "window.hpp"
 #include "utils.hpp"
+#include "vk-context.hpp"
+#include "vulkan-loader.hpp"
 
 #ifdef _DEBUG
 #define VKRESULT(result) assert(result == VK_SUCCESS);
@@ -171,12 +174,14 @@ handle vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size                = data_size;
     buffer_info.usage               = buffer_usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR;
-     
+
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = mem_usage;
     alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer->handle, &buffer->alloc, &buffer->alloc_info))
+    VmaAllocationInfo alloc_info {};
+
+    VKRESULT(vmaCreateBuffer(context.allocator, &buffer_info, &alloc_create_info, &buffer->handle, &buffer->alloc, &alloc_info))
 
     VkBufferDeviceAddressInfo buffer_device_address_info = {};
     buffer_device_address_info.sType    = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -186,6 +191,7 @@ handle vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     buffer->size = data_size;
 
     buffer->device_address = vkGetBufferDeviceAddress(context.device, &buffer_device_address_info);
+    buffer->device_ptr = alloc_info.pMappedData;
 
     buffers.push_back(buffer);
 
@@ -260,7 +266,9 @@ handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags u
     VmaAllocationCreateInfo alloc_create_info = {};
     alloc_create_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image->handle, &image->alloc, &image->alloc_info))
+    VmaAllocationInfo alloc_info {};
+
+    VKRESULT(vmaCreateImage(context.allocator, &img_create_info, &alloc_create_info, &image->handle, &image->alloc, &alloc_info))
 
     VkImageViewCreateInfo image_view_create_info    = {};
     image_view_create_info.sType                    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -280,6 +288,7 @@ handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags u
     VKRESULT(vkCreateImageView(context.device, &image_view_create_info, VK_NULL_HANDLE, &image->view))
 
     image->usages = usages;
+    image->device_ptr = alloc_info.pMappedData;
 
     images.push_back(image);
 
@@ -387,7 +396,7 @@ std::vector<VkSemaphore> vkapi::create_semaphores(size_t semaphores_count) const
 }
 
 void vkapi::destroy_semaphores(VkSemaphore semaphores[], size_t semaphores_count) const {
-    for(auto index { 0 }; index < semaphores_count; index++) {
+    for(size_t index { 0 }; index < semaphores_count; index++) {
         vkDestroySemaphore(context.device, semaphores[index], nullptr);
     }
 }

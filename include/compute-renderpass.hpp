@@ -9,10 +9,7 @@ class Buffer;
 class ComputeRenderpass : public Renderpass {
     public:
 
-    ComputeRenderpass(vkapi& api)
-        : Renderpass(api)
-    {}
-
+    ComputeRenderpass(vkapi& api);
     ~ComputeRenderpass() override;
 
     void set_pipeline(const char* shader_name);

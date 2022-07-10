@@ -3,6 +3,10 @@
 #include <cstring>
 #include <cassert>
 
+#include <vk_mem_alloc.h>
+
+#include "vulkan-loader.hpp"
+
 #include "compute-renderpass.hpp"
 #include "primitive-renderpass.hpp"
 
@@ -132,7 +136,7 @@ void vkrenderer::update_image(Texture* texture, void* data) {
         staging_buffer = api.create_buffer(max_texture_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     }
 
-    std::memcpy(buffer.alloc_info.pMappedData, data, max_texture_size);
+    std::memcpy(buffer.device_ptr, data, max_texture_size);
 
     VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(context.device, 1, &submission_fences[virtual_frame_index]))
@@ -159,7 +163,7 @@ void vkrenderer::update_buffer(Buffer* buffer, void* data, off_t offset, size_t 
 
     size_t dynamic_offset = buffer->isStatic ? 0 : buffer->size * virtual_frame_index;
 
-    std::memcpy((uint8_t*)device_buffer.alloc_info.pMappedData + dynamic_offset + offset, data, size);
+    std::memcpy((uint8_t*)device_buffer.device_ptr + dynamic_offset + offset, data, size);
 }
 
 

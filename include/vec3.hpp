@@ -1,7 +1,6 @@
 #ifndef __VEC3_HPP_
 #define __VEC3_HPP_
 
-#include <ostream>
 #include <xmmintrin.h>
 
 class vec3 {
@@ -43,6 +42,8 @@ class vec3 {
 
     bool near_zero() const;
 
+    void print() const;
+
     static vec3 random();
 
     static vec3 random(float min, float max);
@@ -67,8 +68,6 @@ vec3 operator/(const vec3& u, float scale);
 vec3 reflect(const vec3& v, const vec3& n);
 
 vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat);
-
-std::ostream& operator<<(std::ostream& out, vec3 vec);
 
 using point3 = vec3;
 using color = vec3;

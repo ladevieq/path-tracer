@@ -1,17 +1,6 @@
 #ifndef __VULKAN_LOADER_HPP_
 #define __VULKAN_LOADER_HPP_
 
-#include "defines.hpp"
-
-#if defined(WINDOWS)
-#define VK_USE_PLATFORM_WIN32_KHR
-#elif defined(LINUX)
-#define VK_USE_PLATFORM_XCB_KHR
-#elif defined(MACOS)
-#define VK_USE_PLATFORM_METAL_EXT
-#endif
-
-#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
 #define VULKAN_EXPORTED_FUNCTIONS \

@@ -3,8 +3,6 @@
 
 #include <vector>
 
-#include "defines.hpp"
-
 class vkrenderer;
 
 #if defined(LINUX)

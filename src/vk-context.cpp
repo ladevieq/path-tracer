@@ -3,10 +3,10 @@
 #include <iostream>
 #include <cassert>
 
-#include "vulkan-loader.hpp"
-
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
+
+#include "vulkan-loader.hpp"
 
 #ifdef _DEBUG
 #define VKRESULT(result) assert(result == VK_SUCCESS);
@@ -218,11 +218,9 @@ void vkcontext::check_available_instance_layers(std::vector<const char*>& needed
 
     uint32_t available_needed_layers_count = 0;
 
-    std::vector<const char*> available_layers;
     for (auto& layer_property: layer_properties) {
         for (auto& needed_layer: needed_layers) {
             if (strcmp(layer_property.layerName, needed_layer) == 0) {
-                available_layers.push_back(needed_layer);
                 available_needed_layers_count++;
             }
         }
@@ -239,12 +237,9 @@ void vkcontext::check_available_instance_extensions(std::vector<const char*>& av
     vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &vulkan_extensions_count, vulkan_extensions_properties.data());
 
     uint32_t available_needed_extensions_count = 0;
-
-    std::vector<const char*> available_extensions;
     for (auto& extension: vulkan_extensions_properties) {
         for (auto& needed_extension: needed_extensions) {
             if (strcmp(extension.extensionName, needed_extension) == 0) {
-                available_extensions.push_back(needed_extension);
                 available_needed_extensions_count++;
             }
         }
@@ -277,9 +272,9 @@ bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {
         vulkan_12_features.imagelessFramebuffer == VK_TRUE) {
         std::cerr << "Using physical device " << physical_device_properties.deviceName << std::endl;
         return true;
-    } else {
-        std::cerr << "Physical device " << physical_device_properties.deviceName << " is missing some features" << std::endl;
-        return false;
     }
+
+    std::cerr << "Physical device " << physical_device_properties.deviceName << " is missing some features" << std::endl;
+    return false;
 }
 
