@@ -2,10 +2,9 @@
 #define __VK_CONTEXT_HPP_
 
 #include <vector>
+#include <vulkan/vulkan.h>
 
-#include "vulkan-loader.hpp"
-
-#include <vk_mem_alloc.h>
+using VmaAllocator = struct VmaAllocator_T*;
 
 class vkcontext {
     public:
@@ -36,11 +35,11 @@ class vkcontext {
 
         void select_queue(VkQueueFlags queueUsage);
 
-        void check_available_instance_layers(std::vector<const char*>& needed_layers);
+        static void check_available_instance_layers(std::vector<const char*>& needed_layers);
 
-        void check_available_instance_extensions(std::vector<const char*>& available_layers, std::vector<const char*>& needed_extensions);
+        static void check_available_instance_extensions(std::vector<const char*>& available_layers, std::vector<const char*>& needed_extensions);
 
-        bool support_required_features(VkPhysicalDevice physical_device);
+        static bool support_required_features(VkPhysicalDevice physical_device);
 
 
         VkDebugUtilsMessengerEXT        debugMessenger;

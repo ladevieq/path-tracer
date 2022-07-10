@@ -1,6 +1,6 @@
 #include "primitive-renderpass.hpp"
 
-#include "vk-renderer.hpp"
+#include "vulkan-loader.hpp"
 
 
 void Primitive::set_pipeline(const char* shader_name) {

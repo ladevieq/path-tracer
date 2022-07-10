@@ -1,6 +1,15 @@
-add_definitions(-DNOMINMAX -D_USE_MATH_DEFINES)
-
 set(LIBRARIES imgui::imgui nlohmann_json::nlohmann_json Tracy::TracyClient)
+
+set(DEFINES -DNOMINMAX -D_USE_MATH_DEFINES -DVK_NO_PROTOTYPES)
+
+if(UNIX AND NOT APPLE)
+    set(DEFINES ${DEFINES} -DLINUX -DVK_USE_PLATFORM_XCB_KHR)
+elseif(WIN32)
+    set(DEFINES ${DEFINES} -DWINDOWS -DVK_USE_PLATFORM_WIN32_KHR)
+elseif(APPLE)
+    set(DEFINES ${DEFINES} -DMACOS -DVK_USE_PLATFORM_METAL_EXT)
+endif()
+
 
 add_executable(
     path-tracer
@@ -18,8 +27,10 @@ add_executable(
     gltf.cpp
     compute-renderpass.cpp
     primitive-renderpass.cpp
-    ${Tracy_SOURCE_DIR}/TracyClient.cpp
+    # ${Tracy_SOURCE_DIR}/TracyClient.cpp
 )
+
+target_compile_definitions(path-tracer PUBLIC ${DEFINES})
 
 target_include_directories(path-tracer SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty)
 

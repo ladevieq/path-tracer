@@ -7,7 +7,6 @@
 #include <renderdoc.h>
 #endif
 
-#include "defines.hpp"
 #include "compute-renderpass.hpp"
 #include "primitive-renderpass.hpp"
 #include "scene.hpp"

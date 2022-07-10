@@ -14,9 +14,9 @@ class camera {
             float focus_dist
         );
 
-        void set_aspect_ratio(float aspect_ratio);
+        void set_aspect_ratio(float ratio);
 
-        void move(vec3 v);
+        void move(const vec3& v);
 
         void rotate_y(float theta);
 

@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "vk-context.hpp"
 #include "vk-api.hpp"
 
 

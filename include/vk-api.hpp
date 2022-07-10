@@ -4,11 +4,14 @@
 #include <vector>
 #include <cassert>
 
-#include "vk-context.hpp"
+#include <vulkan/vulkan.h>
+
+using VmaAllocation = struct VmaAllocation_T*;
+using VmaMemoryUsage = enum VmaMemoryUsage;
 
 struct buffer {
     VmaAllocation       alloc;
-    VmaAllocationInfo   alloc_info;
+    void*               device_ptr;
     VkBuffer            handle;
     size_t              size;
     VkDeviceAddress     device_address;
@@ -27,7 +30,7 @@ struct image {
     VkImage                 handle;
     VkImageView             view;
     VmaAllocation           alloc;
-    VmaAllocationInfo       alloc_info;
+    void*                   device_ptr;
     VkImageSubresourceRange subresource_range;
     VkFormat                format;
     VkExtent3D              size;
@@ -102,6 +105,7 @@ struct global_descriptor {
 };
 
 class window;
+class vkcontext;
 
 class vkapi {
     public:

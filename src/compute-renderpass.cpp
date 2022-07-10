@@ -1,8 +1,10 @@
 #include "compute-renderpass.hpp"
 
-#include "vk-api.hpp"
-
 #include "vk-renderer.hpp"
+
+ComputeRenderpass::ComputeRenderpass(vkapi& api)
+    : Renderpass(api)
+{}
 
 ComputeRenderpass::~ComputeRenderpass() {
     api.destroy_pipeline(pipeline);

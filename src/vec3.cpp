@@ -92,6 +92,10 @@ bool vec3::near_zero() const {
     return (fabs(v[0]) < EPSILON) && (fabs(v[1]) < EPSILON) && (fabs(v[2]) < EPSILON);
 }
 
+void vec3::print() const {
+    printf("%f %f %f\n", v[0], v[1], v[2]);
+}
+
 vec3 vec3::random() { return vec3{randd(), randd(), randd()}; }
 
 vec3 vec3::random(float min, float max) { return vec3{randd(min, max), randd(min, max), randd(min, max)}; }
@@ -131,8 +135,4 @@ vec3 refract(const vec3 &uv, const vec3 &n, float etai_over_etat) {
     vec3 r_out_parallel = -sqrt(fabs(1.f - r_out_perp.length_sq())) * n;
 
     return r_out_perp + r_out_parallel;
-}
-
-std::ostream &operator<<(std::ostream &out, vec3 vec) {
-    return out << vec[0] << ' ' << vec[1] << ' ' << vec[2] << std::endl;
 }

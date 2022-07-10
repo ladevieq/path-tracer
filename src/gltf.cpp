@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <cstring>
+#include <filesystem>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -10,7 +11,7 @@
 #include "utils.hpp"
 
 node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer) {
-    std::fstream f{path / filename};
+    std::fstream f { path / filename };
     json gltf_json;
 
     f >> gltf_json;

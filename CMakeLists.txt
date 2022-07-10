@@ -13,6 +13,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 add_compile_options(
     -msse4.1
     -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
+    -ftime-trace
     # https://github.com/cpp-best-practices/cppbestpractices/blob/master/02-Use_the_Tools_Available.md#gcc--clang
     -Wall
     -Wextra
@@ -21,7 +22,6 @@ add_compile_options(
     -Wnon-virtual-dtor
     -Wpedantic
     -Wunused
-    # -ftime-trace
 )
 endif()
 
