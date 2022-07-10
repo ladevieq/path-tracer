@@ -4,7 +4,7 @@
 #include <cstring>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "thirdparty/stb_image.h"
+#include <stb_image.h>
 
 #include "vk-renderer.hpp"
 #include "utils.hpp"

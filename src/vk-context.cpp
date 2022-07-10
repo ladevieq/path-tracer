@@ -6,7 +6,7 @@
 #include "vulkan-loader.hpp"
 
 #define VMA_IMPLEMENTATION
-#include "thirdparty/vk_mem_alloc.h"
+#include <vk_mem_alloc.h>
 
 #ifdef _DEBUG
 #define VKRESULT(result) assert(result == VK_SUCCESS);
@@ -20,7 +20,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
                                              void *userData)
 {
     std::cerr << data->pMessage << std::endl;
-     return VK_FALSE;
+    return VK_FALSE;
 }
 
 

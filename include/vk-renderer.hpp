@@ -107,7 +107,7 @@ class Sampler {
 class Buffer {
     public:
 
-    Buffer(vkrenderer* renderer, size_t size, bool isStatic)
+    Buffer(size_t size, bool isStatic)
         : size(size), isStatic(isStatic) {}
 
     handle device_buffer;

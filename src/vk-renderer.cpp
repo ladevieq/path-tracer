@@ -164,7 +164,7 @@ void vkrenderer::update_buffer(Buffer* buffer, void* data, off_t offset, size_t 
 
 
 Buffer* vkrenderer::create_buffer(size_t size, bool isStatic) {
-    auto* buffer = new Buffer(this, size, isStatic);
+    auto* buffer = new Buffer(size, isStatic);
 
     buffer->device_buffer = api.create_buffer(isStatic ? size : size * virtual_frames_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
@@ -172,7 +172,7 @@ Buffer* vkrenderer::create_buffer(size_t size, bool isStatic) {
 }
 
 Buffer* vkrenderer::create_index_buffer(size_t size, bool isStatic) {
-    auto* buffer = new Buffer(this, size, isStatic);
+    auto* buffer = new Buffer(size, isStatic);
 
     buffer->device_buffer = api.create_buffer(isStatic ? size : size * virtual_frames_count, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 

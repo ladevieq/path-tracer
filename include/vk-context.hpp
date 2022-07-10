@@ -4,7 +4,8 @@
 #include <vector>
 
 #include "vulkan-loader.hpp"
-#include "thirdparty/vk_mem_alloc.h"
+
+#include <vk_mem_alloc.h>
 
 class vkcontext {
     public:
