@@ -2,7 +2,7 @@
 #define __SCENE_HPP_
 
 #include "camera.hpp"
-#include "bvh-node.hpp"
+#include "bvh.hpp"
 #include "material.hpp"
 
 class vkrenderer;
@@ -20,7 +20,7 @@ class scene {
         uint32_t sample_index = 0;
 
         uint32_t enable_dof = (uint32_t)false;
-        uint32_t debug_bvh  = (uint32_t)false;
+        uint32_t debug_bvh  = (uint32_t)true;
         int32_t downscale_factor = 1;
 
         metadata(camera cam, uint32_t width, uint32_t height)
