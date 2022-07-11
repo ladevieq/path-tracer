@@ -27,6 +27,7 @@ add_executable(
     gltf.cpp
     compute-renderpass.cpp
     primitive-renderpass.cpp
+    bvh.cpp
     # ${Tracy_SOURCE_DIR}/TracyClient.cpp
 )
 

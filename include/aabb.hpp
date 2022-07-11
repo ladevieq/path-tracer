@@ -17,14 +17,8 @@ class aabb {
             auto &v2 = tri.p2;
             auto &v3 = tri.p3;
 
-            // TODO: Use vector 3 functions
-            minimum.v[0] = fmin(fmin(v1.v[0], v2.v[0]), v3.v[0]);
-            minimum.v[1] = fmin(fmin(v1.v[1], v2.v[1]), v3.v[1]);
-            minimum.v[2] = fmin(fmin(v1.v[2], v2.v[2]), v3.v[2]);
-
-            maximum.v[0] = fmax(fmax(v1.v[0], v2.v[0]), v3.v[0]);
-            maximum.v[1] = fmax(fmax(v1.v[1], v2.v[1]), v3.v[1]);
-            maximum.v[2] = fmax(fmax(v1.v[2], v2.v[2]), v3.v[2]);
+            minimum = v1.min(v2.min(v3));
+            maximum = v1.max(v2.max(v3));
         }
 
         void union_with(const aabb &box) {
