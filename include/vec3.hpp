@@ -34,9 +34,9 @@ class vec3 {
 
     vec3 cross(const vec3& vec) const;
 
-    vec3& min(const vec3& vec);
+    vec3 min(const vec3& vec) const;
 
-    vec3& max(const vec3& vec);
+    vec3 max(const vec3& vec) const;
 
     vec3& normalize();
 

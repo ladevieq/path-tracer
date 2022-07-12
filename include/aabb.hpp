@@ -22,13 +22,13 @@ class aabb {
         }
 
         void union_with(const aabb &box) {
-            minimum.min(box.minimum);
-            maximum.max(box.maximum);
+            minimum = minimum.min(box.minimum);
+            maximum = maximum.max(box.maximum);
         }
 
         void union_with(const point3 &point) {
-            minimum.min(point);
-            maximum.max(point);
+            minimum = minimum.min(point);
+            maximum = maximum.max(point);
         }
 
         int32_t maximum_axis() const {

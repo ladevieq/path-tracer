@@ -16,7 +16,7 @@ vec3::vec3(const vec3 &vec) { v = _mm_load_ps((float *)&vec.v); }
 
 vec3::vec3(const vec3 &&vec) { v = _mm_load_ps((float *)&vec.v); }
 
-vec3 vec3::operator-() const { return vec3(_mm_xor_ps(v, _mm_set1_ps(-0.0f))); }
+vec3 vec3::operator-() const { return { _mm_xor_ps(v, _mm_set1_ps(-0.0f)) }; }
 
 vec3 &vec3::operator=(const vec3 &vec) {
     v = _mm_load_ps((float *)&vec.v);
@@ -68,16 +68,12 @@ vec3 vec3::cross(const vec3 &vec) const {
     return _mm_sub_ps(tmp3, tmp4);
 }
 
-vec3 &vec3::min(const vec3 &vec) {
-    v = _mm_min_ps(v, vec.v);
-
-    return *this;
+vec3 vec3::min(const vec3 &vec) const {
+    return { _mm_min_ps(v, vec.v) };
 }
 
-vec3 &vec3::max(const vec3 &vec) {
-    v = _mm_max_ps(v, vec.v);
-
-    return *this;
+vec3 vec3::max(const vec3 &vec) const {
+    return { _mm_max_ps(v, vec.v) };
 }
 
 vec3 &vec3::normalize() {
@@ -96,9 +92,9 @@ void vec3::print() const {
     printf("%f %f %f\n", v[0], v[1], v[2]);
 }
 
-vec3 vec3::random() { return vec3{randd(), randd(), randd()}; }
+vec3 vec3::random() { return { randd(), randd(), randd() }; }
 
-vec3 vec3::random(float min, float max) { return vec3{randd(min, max), randd(min, max), randd(min, max)}; }
+vec3 vec3::random(float min, float max) { return { randd(min, max), randd(min, max), randd(min, max) }; }
 
 
 // TODO: Use simd instructions

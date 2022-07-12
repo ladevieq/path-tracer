@@ -47,6 +47,10 @@ void camera::rotate_y(float theta) {
 
     auto h = tan(deg_to_rad(fov) / 2.f);
     auto viewport_height = 2.f * h;
+    auto viewport_width = viewport_height * aspect_ratio;
+
+    horizontal  = focus_distance * viewport_width * right;
+    vertical    = focus_distance * viewport_height * up;
 
     vertical    = focus_distance * viewport_height * up;
     first_pixel = position - horizontal / 2.0 - vertical / 2.0 + focus_distance * forward;
