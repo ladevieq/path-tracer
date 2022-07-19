@@ -64,7 +64,7 @@ class Primitive {
     void set_constant(off_t offset, Buffer* buffer);
     void set_constant(off_t offset, Sampler* sampler);
 
-    void set_index_buffer(Buffer* index_buffer);
+    void set_index_buffer(Buffer* buffer);
 
     void set_scissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
 

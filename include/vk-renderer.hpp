@@ -39,6 +39,8 @@ class vkrenderer {
 
         Texture* create_2d_texture(size_t width, size_t height, VkFormat format);
 
+        void destroy_2d_texture(Texture* texture);
+
         Sampler* create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
 
         ComputeRenderpass* create_compute_renderpass();

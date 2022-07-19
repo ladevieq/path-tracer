@@ -821,7 +821,7 @@ void vkapi::destroy_descriptor_sets(std::vector<VkDescriptorSet> &descriptor_set
 }
 
 
-VkSurfaceKHR vkapi::create_surface(window& wnd) {
+VkSurfaceKHR vkapi::create_surface(window& wnd) const {
     VkSurfaceKHR surface;
 
 #if defined(LINUX)
@@ -838,8 +838,8 @@ VkSurfaceKHR vkapi::create_surface(window& wnd) {
     create_info.sType                       = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     create_info.pNext                       = nullptr;
     create_info.flags                       = 0;
-    create_info.hinstance                   = GetModuleHandle(NULL);
-    create_info.hwnd                        = wnd.win_handle;
+    create_info.hinstance                   = GetModuleHandle(nullptr);
+    create_info.hwnd                        = wnd.window_handle;
 
     VKRESULT(vkCreateWin32SurfaceKHR(context.instance, &create_info, nullptr, &surface))
 #elif defined(MACOS)
@@ -1166,7 +1166,7 @@ void vkapi::begin_render_pass(VkCommandBuffer command_buffer, VkRenderPass rende
     attachment_begin_info.attachmentCount           = attachments.size();
     attachment_begin_info.pAttachments              = attachments.data();
 
-    VkClearValue clear_value { 0.f, 0.f, 0.f, 1.f };
+    VkClearValue clear_value { .color { .float32 { 0.f, 0.f, 0.f, 1.f } } };
     VkRenderPassBeginInfo render_pass_begin_info    = {};
     render_pass_begin_info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_begin_info.pNext                    = &attachment_begin_info;
@@ -1208,8 +1208,8 @@ void vkapi::draw(VkCommandBuffer command_buffer, pipeline& pipeline, handle inde
 }
 
 void vkapi::blit_full(VkCommandBuffer command_buffer, handle src, handle dst) {
-    auto src_image = images[src];
-    auto dst_image = images[dst];
+    auto *src_image = images[src];
+    auto *dst_image = images[dst];
 
     VkImageSubresourceLayers images_subres_layers {
         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1224,9 +1224,9 @@ void vkapi::blit_full(VkCommandBuffer command_buffer, handle src, handle dst) {
         .z  = 0,
     };
     VkOffset3D end_offset {
-        .x  = (int32_t)src_image->size.width,
-        .y  = (int32_t)src_image->size.height,
-        .z  = (int32_t)src_image->size.depth,
+        .x  = (int32_t)dst_image->size.width,
+        .y  = (int32_t)dst_image->size.height,
+        .z  = (int32_t)dst_image->size.depth,
     };
 
     VkImageBlit blit_region {

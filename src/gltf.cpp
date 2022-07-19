@@ -22,8 +22,8 @@ node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &
     auto buffers_content = std::vector<std::vector<uint8_t>>(buffers.size());
     for (size_t buffer_index{0}; buffer_index < buffers.size(); buffer_index++) {
         auto& buffer = buffers[buffer_index];
-        auto buffer_path = (path / buffer["uri"].get<std::string>()).string();
-        buffers_content[buffer_index] = read_file(buffer_path);
+        auto buffer_path = path / buffer["uri"].get<std::string>();
+        buffers_content[buffer_index] = read_file(buffer_path.string().c_str());
     }
 
     auto textures = load_textures(gltf_json, path, renderer);
@@ -39,6 +39,8 @@ node gltf::load(std::filesystem::path &path, std::string &filename, vkrenderer &
     for (size_t child_index = 0; child_index < root_children_count; child_index++) {
         load_node(gltf_json, root_children[child_index].get<uint32_t>(), root_node.children[child_index], meshes);
     }
+
+    f.close();
 
     return root_node;
 }
