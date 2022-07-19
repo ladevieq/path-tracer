@@ -12,6 +12,7 @@
 #include "scene.hpp"
 #include "vk-renderer.hpp"
 #include "window.hpp"
+#include "utils.hpp"
 
 #include "Tracy.hpp"
 
@@ -79,7 +80,31 @@ int main() {
     auto main_scene = scene(cam, width, height, renderer);
 
     auto *raytracing_pass = renderer.create_compute_renderpass();
-    raytracing_pass->set_pipeline(raytracing_shader_name);
+    raytracing_pass->set_pipeline("compute");
+
+    watcher::watch_file(std::filesystem::path("../shaders/compute.comp"), [&]() {
+        LPSTR cmd_line = "glslc.exe --target-env=vulkan1.2 -std=460 ../shaders/compute.comp -o shaders/compute.comp.spv -I \"../shaders/include\"\0";
+        STARTUPINFO start_info {};
+        PROCESS_INFORMATION proc_info {};
+        if (FAILED(CreateProcessA(
+            nullptr,
+            cmd_line,
+            nullptr,
+            nullptr,
+            FALSE,
+            0,
+            nullptr,
+            nullptr,
+            &start_info,
+            &proc_info
+        )))
+            log_last_error();
+        WaitForSingleObject(proc_info.hProcess, INFINITE);
+        CloseHandle(proc_info.hProcess);
+        CloseHandle(proc_info.hThread);
+
+        raytracing_pass->set_pipeline("compute");
+    });
 
     auto *accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
     auto *output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
@@ -123,6 +148,8 @@ int main() {
         start = std::chrono::high_resolution_clock::now();
 
         io.DeltaTime = delta_time;
+
+        watcher::pull_changes();
 
         wnd.poll_events();
 

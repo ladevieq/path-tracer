@@ -1,11 +1,11 @@
-#ifndef __UTILS_HPP_
-#define __UTILS_HPP_
+#pragma once
 
 #include <vector>
 #include <functional>
+#include <unordered_map>
+#include <string>
 
 std::vector<uint8_t> read_file(const char* path);
-std::vector<uint8_t> read_file(std::string& path);
 
 #define PI 3.14159265359
 #define EPSILON 0.000001
@@ -36,6 +36,28 @@ inline float clamp(float x, float min, float max) {
     return x;
 }
 
-void watch_file(std::filesystem::path&& filepath, std::function<void()>&& callback);
+#include <windows.h>
 
-#endif // !__UTILS_HPP_
+#if defined(WINDOWS)
+void log_last_error();
+#endif
+
+class watcher {
+public:
+    static bool watch_file(std::filesystem::path&& filepath, std::function<void()> callback);
+
+    static bool watch_dir(std::filesystem::path&& dir_path);
+
+    static void pull_changes();
+
+private:
+
+    struct watch_data {
+        HANDLE      dir_handle;
+        OVERLAPPED  overlapped;
+        DWORD       buffer[512];
+    };
+
+    inline static std::unordered_map<std::string, std::function<void()>> callbacks;
+    inline static std::unordered_map<std::string, watch_data> watched_dirs;
+};
