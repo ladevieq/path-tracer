@@ -163,7 +163,7 @@ class vkapi {
         void destroy_descriptor_sets(std::vector<VkDescriptorSet> &descriptor_sets);
 
 
-        VkSurfaceKHR create_surface(window& wnd);
+        VkSurfaceKHR create_surface(window& wnd) const;
         void destroy_surface(VkSurfaceKHR surface);
 
 

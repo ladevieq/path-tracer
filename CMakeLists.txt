@@ -11,9 +11,10 @@ project(path-tracer VERSION 1.0 LANGUAGES CXX)
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 add_compile_options(
-    -msse4.1
+    # -fsanitize=address TODO: Enable once compilation with the flag work on windows
     -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
     -ftime-trace
+    -msse4.1
     # https://github.com/cpp-best-practices/cppbestpractices/blob/master/02-Use_the_Tools_Available.md#gcc--clang
     -Wall
     -Wextra

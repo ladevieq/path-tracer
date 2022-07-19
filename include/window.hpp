@@ -134,18 +134,22 @@ struct event {
 
 class window {
     public:
-        window(uint32_t width, uint32_t height);
+        window(uint32_t desired_width, uint32_t desired_height);
         ~window();
 
         void poll_events();
 
-
 #if defined(WINDOWS)
+        void message_loop();
+
         LRESULT message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
         static LRESULT CALLBACK window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
-        HWND                win_handle;
+        HWND                window_handle {};
+        WNDCLASS            window_class {};
+        LPVOID              main_fiber;
+        LPVOID              message_loop_fiber;
 #elif defined(LINUX)
         xcb_connection_t*   connection;
         xcb_window_t        win;
@@ -164,8 +168,8 @@ class window {
 
         bool                isOpen;
 
-        bool keyboard[KEYS::MAX_KEYS] = { false };
-        bool mouse[BUTTONS::MAX_BUTTONS] = { false };
+        bool keyboard[KEYS::MAX_KEYS] { false };
+        bool mouse[BUTTONS::MAX_BUTTONS] { false };
 };
 
 #endif // !__WINDOW_HPP_

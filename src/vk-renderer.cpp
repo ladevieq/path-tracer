@@ -95,7 +95,7 @@ void vkrenderer::finish_frame() {
 }
 
 void vkrenderer::recreate_swapchain() {
-    // VKRESULT(vkWaitForFences(context.device, submission_fences.size(), submission_fences.data(), VK_TRUE, UINT64_MAX))
+    VKRESULT(vkWaitForFences(context.device, vkrenderer::virtual_frames_count, submission_fences, VK_TRUE, UINT64_MAX))
 
     auto swapchain_image_usages = api.get_image(swapchain.images[0]).usages;
     struct swapchain old_swapchain = swapchain;
@@ -192,6 +192,11 @@ Texture* vkrenderer::create_2d_texture(size_t width, size_t height, VkFormat for
     );
 
     return texture;
+}
+
+void vkrenderer::destroy_2d_texture(Texture* texture) {
+    api.destroy_image(texture->device_image);
+    delete texture;
 }
 
 // TODO: Check if a similar sampler has been allocated

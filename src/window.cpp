@@ -1,11 +1,9 @@
 #include "window.hpp"
 
-#include <iostream>
-
-#include "vk-renderer.hpp"
-#include "utils.hpp"
 
 #ifdef LINUX
+#include <iostream>
+
 #include <xkbcommon/xkbcommon-x11.h>
 
 window::window(uint32_t width, uint32_t height)
@@ -172,83 +170,106 @@ void window::poll_events() {
 }
 
 #elif defined(WINDOWS)
-
 #include <windowsx.h>
-#include <cctype>
+
+#include "utils.hpp"
 
 LRESULT CALLBACK window::window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     window* win = nullptr;
 
     if (umsg == WM_CREATE) {
-        LPCREATESTRUCT lpcs = (LPCREATESTRUCT)lparam;
+        auto *lpcs = (LPCREATESTRUCT)lparam;
         win = (window*)lpcs->lpCreateParams;
 
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)win);
+        SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)win);
     } else {
-        win = (window*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+        win = (window*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
         return win->message_handler(hwnd, umsg, wparam, lparam);
     }
 
     return DefWindowProc(hwnd, umsg, wparam, lparam);
 }
 
-window::window(uint32_t width, uint32_t height)
-    :width(width), height(height) {
-        auto process_handle = GetModuleHandle(NULL);
-
-        WNDCLASS window_class       = {};
-        window_class.style          = 0;
-        window_class.lpfnWndProc    = &window::window_procedure;
-        window_class.cbClsExtra     = 0;
-        window_class.cbWndExtra     = 0;
-        window_class.hInstance      = process_handle;
-        window_class.hIcon          = NULL;
-        window_class.hCursor        = NULL;
-        window_class.hbrBackground  = NULL;
-        window_class.lpszMenuName   = NULL;
-        window_class.lpszClassName  = "default-window";
-
-        RegisterClass(&window_class);
-
-        win_handle = CreateWindow(
-            "default-window",
-            "path-tracer",
-            WS_OVERLAPPEDWINDOW,
-            10,
-            10,
-            width,
-            height,
-            NULL,
-            NULL,
-            process_handle,
-            this
-        );
-
-        ShowWindow(win_handle, SW_SHOW);
-
-        isOpen = true;
+void message_loop(void* wnd) {
+    ((window*)wnd)->message_loop();
 }
 
-window::~window() {}
+window::window(uint32_t desired_width, uint32_t desired_height) 
+    : width(desired_width), height(desired_height) {
+    auto *process_handle = GetModuleHandleA(nullptr);
+
+    window_class.style          = 0;
+    window_class.lpfnWndProc    = &window::window_procedure;
+    window_class.cbClsExtra     = 0;
+    window_class.cbWndExtra     = 0;
+    window_class.hInstance      = process_handle;
+    window_class.hIcon          = nullptr;
+    window_class.hCursor        = nullptr;
+    window_class.hbrBackground  = nullptr;
+    window_class.lpszMenuName   = nullptr;
+    window_class.lpszClassName  = "default-window";
+
+    RegisterClass(&window_class);
+
+    RECT rect { 0, 0, (int32_t)desired_width, (int32_t)desired_height };
+    DWORD style = WS_OVERLAPPEDWINDOW;
+
+    if (FAILED(AdjustWindowRect(&rect, style, FALSE)))
+        log_last_error();
+
+    main_fiber = ConvertThreadToFiber(nullptr);
+    message_loop_fiber = CreateFiber(0, &::message_loop, this);
+
+    window_handle = CreateWindowA(
+        "default-window",
+        "path-tracer",
+        style,
+        10,
+        10,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
+        nullptr,
+        nullptr,
+        process_handle,
+        this
+    );
+
+    ShowWindow(window_handle, SW_SHOW);
+
+    isOpen = true;
+}
+
+window::~window() {
+    DestroyWindow(window_handle);
+    UnregisterClassA(window_class.lpszClassName, GetModuleHandleA(nullptr));
+}
+
+void window::message_loop() {
+    MSG msg {};
+
+    while(true) {
+        // Generate keydown events pressed keys
+        for (size_t virtual_key { KEYS::LSHIFT }; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
+            if (keyboard[virtual_key]) {
+                events.push_back({ 
+                    .key = (KEYS)virtual_key,
+                    .type = EVENT_TYPES::KEY_PRESS,
+                });
+            }
+        }
+
+
+        while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
+        }
+
+        SwitchToFiber(main_fiber);
+    }
+}
 
 void window::poll_events() {
-    MSG msg = {};
-
-    // Generate keydown events pressed keys
-    for (size_t virtual_key = KEYS::LSHIFT; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
-        if (keyboard[virtual_key]) {
-            events.push_back({ 
-                .key = (KEYS)virtual_key,
-                .type = EVENT_TYPES::KEY_PRESS,
-            });
-        }
-    }
-
-
-    while (PeekMessage(&msg, win_handle, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+    SwitchToFiber(message_loop_fiber);
 }
 
 LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
@@ -346,13 +367,14 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
             return DefWindowProc(hwnd, umsg, wparam, lparam);
         }
     }
+
+    SwitchToFiber(main_fiber);
+
     return 0;
 }
 #elif defined(MACOS)
 window::window(uint32_t width, uint32_t height) {
 }
-
-window::~window() {};
 
 void window::poll_events() {}
 #endif

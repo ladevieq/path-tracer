@@ -36,8 +36,8 @@ void Primitive::set_constant(off_t offset, Sampler* sampler) {
     memcpy(constants + offset, (void*)&device_sampler.bindless_index, sizeof(bindless_index));
 }
 
-void Primitive::set_index_buffer(Buffer* index_buffer) {
-    this->index_buffer = index_buffer;
+void Primitive::set_index_buffer(Buffer* buffer) {
+    this->index_buffer = buffer;
 }
 
 void Primitive::set_scissor(int32_t x, int32_t y, uint32_t width, uint32_t height) {

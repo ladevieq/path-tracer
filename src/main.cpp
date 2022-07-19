@@ -53,33 +53,31 @@ int main() {
 #endif
 #endif // ENABLE_RENDERDOC
 
-    // Image dimensions
     const float aspect_ratio = 16.0 / 9.0;
-    uint32_t width = 400;
-    uint32_t height = width / aspect_ratio;
+    const auto width = 400;
+    auto height = (uint32_t)(width / aspect_ratio);
 
-    window wnd{width, height};
+    window wnd { width, height };
 
     float delta_time = 0.f;
     uint64_t frame_count = 0;
     auto start = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
 
-    point3 position = {13.0, 2.0, -3.0};
-    point3 target = {0.0, 0.0, 0.0};
-    auto v_fov = 90;
-    auto aperture = 0.1;
-    auto focus_distance = 10;
-    auto cam = camera(position, target, v_fov, (float)width / (float)height, aperture, focus_distance);
+    point3 position { 13.f, 2.f, -3.f };
+    point3 target {};
+    const auto v_fov = 90.f;
+    const auto aperture = 0.1f;
+    const auto focus_distance = 10.f;
+    auto cam = camera(position, target, v_fov, aspect_ratio, aperture, focus_distance);
 
-    vkrenderer renderer{wnd};
+    vkrenderer renderer { wnd };
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
 
     auto main_scene = scene(cam, width, height, renderer);
 
-    std::string raytracing_shader_name = "compute";
     auto *raytracing_pass = renderer.create_compute_renderpass();
     raytracing_pass->set_pipeline(raytracing_shader_name);
 
@@ -91,6 +89,7 @@ int main() {
     raytracing_pass->set_constant(32, main_scene.normals_buffer);
     raytracing_pass->set_constant(40, main_scene.uvs_buffer);
     raytracing_pass->set_constant(48, main_scene.materials_buffer);
+    raytracing_pass->set_dispatch_size(width / 8 + 1, height / 8 + 1, 1);
 
     uint8_t *pixels = nullptr;
     int atlas_width, atlas_height;
@@ -127,17 +126,14 @@ int main() {
 
         wnd.poll_events();
 
-        for (auto event : wnd.events) {
+        for (auto &event : wnd.events) {
             switch (event.type) {
             case EVENT_TYPES::RESIZE: {
-                width = event.width;
-                height = event.height;
+                main_scene.meta.width = event.width;
+                main_scene.meta.height = event.height;
 
-                main_scene.meta.width = width;
-                main_scene.meta.height = height;
-
-                io.DisplaySize.x = (float)width;
-                io.DisplaySize.y = (float)height;
+                io.DisplaySize.x = (float)event.width;
+                io.DisplaySize.y = (float)event.height;
 
                 if (event.width == 0 && event.height == 0) {
                     can_render = false;
@@ -145,10 +141,11 @@ int main() {
                     can_render = true;
                     renderer.recreate_swapchain();
                     main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
-                    main_scene.meta.sample_index = 1;
 
-                    accumulation_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
-                    output_texture = renderer.create_2d_texture(width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+                    renderer.destroy_2d_texture(accumulation_texture);
+                    renderer.destroy_2d_texture(output_texture);
+                    accumulation_texture = renderer.create_2d_texture(event.width, event.height, VK_FORMAT_R32G32B32A32_SFLOAT);
+                    output_texture = renderer.create_2d_texture(event.width, event.height, VK_FORMAT_R32G32B32A32_SFLOAT);
                     raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
                 }
 
