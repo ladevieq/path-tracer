@@ -1,7 +1,20 @@
 #ifndef __VULKAN_LOADER_HPP_
 #define __VULKAN_LOADER_HPP_
 
+#if defined(WINDOWS)
+#include <vulkan/vk_platform.h>
+#include <vulkan/vulkan_core.h>
+typedef unsigned long DWORD;
+typedef const wchar_t* LPCWSTR;
+typedef void* HANDLE;
+typedef struct HINSTANCE__* HINSTANCE;
+typedef struct HWND__* HWND;
+typedef struct HMONITOR__* HMONITOR;
+typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
+#include <vulkan/vulkan_win32.h>
+#else
 #include <vulkan/vulkan.h>
+#endif
 
 #define VULKAN_EXPORTED_FUNCTIONS \
     X(vkGetInstanceProcAddr)      \

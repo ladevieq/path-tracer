@@ -7,6 +7,7 @@
 #include "window.hpp"
 #include "utils.hpp"
 #include "vk-context.hpp"
+
 #include "vulkan-loader.hpp"
 
 #ifdef _DEBUG
