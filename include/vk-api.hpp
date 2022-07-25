@@ -4,7 +4,7 @@
 #include <vector>
 #include <cassert>
 
-#include <vulkan/vulkan.h>
+#include "vulkan-loader.hpp"
 
 using VmaAllocation = struct VmaAllocation_T*;
 using VmaMemoryUsage = enum VmaMemoryUsage;

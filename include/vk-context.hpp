@@ -2,7 +2,7 @@
 #define __VK_CONTEXT_HPP_
 
 #include <vector>
-#include <vulkan/vulkan.h>
+#include "vulkan-loader.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
 

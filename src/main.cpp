@@ -128,7 +128,6 @@ int main() {
     Buffer* ui_vertex_buffer = nullptr;
     Buffer* ui_index_buffer = nullptr;
 
-    std::string ui_shader_name = "ui";
     std::vector<Primitive*> ui_primitives;
     auto ui_pass = renderer.create_primitive_renderpass();
     ui_pass->set_viewport(0.f, 0.f, (float)width, (float)height);
@@ -350,7 +349,7 @@ int main() {
 
                 for (size_t index = previous_size; index < ui_primitives.size(); index++) {
                     ui_primitives[index] = renderer.create_primitive(*ui_pass);
-                    ui_primitives[index]->set_pipeline(ui_shader_name);
+                    ui_primitives[index]->set_pipeline("ui");
                     ui_primitives[index]->set_constant_offset(64);
                     ui_primitives[index]->set_constant(32, ui_texture);
                     ui_primitives[index]->set_constant(36, ui_texture_sampler);
