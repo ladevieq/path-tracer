@@ -1,6 +1,8 @@
 #ifndef __MATERIAL_HPP_
 #define __MATERIAL_HPP_
 
+#include <cstdint>
+
 #include "vec3.hpp"
 
 struct texture {

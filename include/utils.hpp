@@ -31,16 +31,17 @@ inline int32_t randi(int32_t min, int32_t max) {
 }
 
 inline float clamp(float x, float min, float max) {
-    if (x < min) return min;
-    if (x > max) return max;
+    if (x < min) { return min; }
+    if (x > max) { return max; }
     return x;
 }
 
-#include <windows.h>
 
 #if defined(WINDOWS)
+
+#include <windows.h>
+
 void log_last_error();
-#endif
 
 class watcher {
 public:
@@ -61,3 +62,4 @@ private:
     inline static std::unordered_map<std::string, std::function<void()>> callbacks;
     inline static std::unordered_map<std::string, watch_data> watched_dirs;
 };
+#endif

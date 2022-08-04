@@ -1,11 +1,10 @@
 #ifndef __SCENE_HPP_
 #define __SCENE_HPP_
 
-#include "camera.hpp"
-#include "bvh.hpp"
-#include "material.hpp"
+#include <cstdint>
 
-class vkrenderer;
+#include "camera.hpp"
+
 class Buffer;
 class scene {
     struct metadata {
@@ -23,23 +22,15 @@ class scene {
         uint32_t debug_bvh  = (uint32_t)false;
         int32_t downscale_factor = 1;
 
-        metadata(camera cam, uint32_t width, uint32_t height)
-            : cam(std::move(cam)), width(width), height(height) {}
+        metadata(const camera &cam, uint32_t width, uint32_t height);
     };
 
     // void random_scene();
 
 public:
-    scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer);
+    scene(const camera& cam, uint32_t width, uint32_t height);
 
     metadata meta;
-
-    // Geometry & BVH
-    std::vector<uint32_t>   indices;
-    std::vector<float>      positions;
-    std::vector<float>      normals;
-    std::vector<float>      uvs;
-    std::vector<material>   materials;
 
     Buffer*                 scene_buffer;
     Buffer*                 indices_buffer;
@@ -48,8 +39,6 @@ public:
     Buffer*                 uvs_buffer;
     Buffer*                 bvh_buffer;
     Buffer*                 materials_buffer;
-
-    std::vector<packed_bvh_node> packed_nodes;
 };
 
 #endif // !__SCENE_HPP_

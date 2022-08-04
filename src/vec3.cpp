@@ -44,7 +44,7 @@ vec3 &vec3::operator/=(float numerator) {
     return *this;
 }
 
-float vec3::operator[](int axis) {
+float vec3::operator[](const int axis) {
     if (axis > 2) { return std::numeric_limits<float>::infinity(); }
 
     return v[axis];

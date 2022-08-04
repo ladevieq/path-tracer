@@ -1,5 +1,6 @@
 #include "vk-api.hpp"
 
+#include <filesystem>
 #include <cassert>
 
 #include <vk_mem_alloc.h>
@@ -30,19 +31,19 @@ vkapi::vkapi(vkcontext& context)
     std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
         {
             .type                               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount                    = (uint32_t)1024,
+            .descriptorCount                    = (uint32_t)global_descriptor::pool_size,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount                    = (uint32_t)1024,
+            .descriptorCount                    = (uint32_t)global_descriptor::pool_size,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .descriptorCount                    = (uint32_t)1024,
+            .descriptorCount                    = (uint32_t)global_descriptor::pool_size,
         },
         {
             .type                               = VK_DESCRIPTOR_TYPE_SAMPLER,
-            .descriptorCount                    = (uint32_t)1024,
+            .descriptorCount                    = (uint32_t)global_descriptor::pool_size,
         }
     };
 
@@ -61,19 +62,19 @@ vkapi::vkapi(vkcontext& context)
             {
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-                .descriptorCount = 1024,
+                .descriptorCount = global_descriptor::pool_size,
                 .stageFlags = VK_SHADER_STAGE_ALL,
             },
             {
                 .binding = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .descriptorCount = 1024,
+                .descriptorCount = global_descriptor::pool_size,
                 .stageFlags = VK_SHADER_STAGE_ALL,
             },
             {
                 .binding = 2,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount = 1024,
+                .descriptorCount = global_descriptor::pool_size,
                 .stageFlags = VK_SHADER_STAGE_ALL,
             },
     };
@@ -145,7 +146,6 @@ vkapi::vkapi(vkcontext& context)
 }
 
 vkapi::~vkapi() {
-    // Free resources
     for (handle buffer_handle = 0; buffer_handle < buffers.size(); buffer_handle++) {
         destroy_buffer(buffer_handle);
     }
@@ -168,8 +168,8 @@ vkapi::~vkapi() {
 }
 
 
-handle vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage) {
-    struct buffer* buffer = new struct buffer();
+handle vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, uint32_t mem_usage) {
+    auto* buffer = new struct buffer();
 
     VkBufferCreateInfo buffer_info  = {};
     buffer_info.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -177,7 +177,7 @@ handle vkapi::create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, V
     buffer_info.usage               = buffer_usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR;
 
     VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.usage = mem_usage;
+    alloc_create_info.usage = (VmaMemoryUsage)mem_usage;
     alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
     VmaAllocationInfo alloc_info {};
@@ -237,7 +237,7 @@ void vkapi::destroy_buffer(handle buffer) {
 
 
 handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages) {
-    struct image* image = new struct image();
+    auto* image = new struct image();
 
     image->size = size;
 
@@ -295,12 +295,12 @@ handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags u
 
     auto image_handle = images.size() - 1;
 
-    if (usages & VK_IMAGE_USAGE_STORAGE_BIT) {
+    if ((usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) {
         image->bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
         update_descriptor_image(image_handle, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     }
 
-    if (usages & VK_IMAGE_USAGE_SAMPLED_BIT) {
+    if ((usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0U) {
         image->bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
         update_descriptor_image(image_handle, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
     }
@@ -308,7 +308,7 @@ handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags u
     return image_handle;
 }
 void vkapi::destroy_image(handle image) {
-    auto current_image = images[image];
+    auto* current_image = images[image];
     bindless_descriptor.free(current_image->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     bindless_descriptor.free(current_image->bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
 
@@ -330,8 +330,8 @@ std::vector<handle> vkapi::create_images(VkExtent3D size, VkFormat format, VkIma
     return images_handles;
 }
 
-void vkapi::destroy_images(std::vector<handle> &images) {
-    for (auto handle: images) {
+void vkapi::destroy_images(std::vector<handle> &imgs) {
+    for (auto handle: imgs) {
         destroy_image(handle);
     }
 }
@@ -599,13 +599,13 @@ std::vector<framebuffer> vkapi::create_framebuffers(VkRenderPass render_pass, st
     return framebuffers;
 }
 
-void vkapi::destroy_framebuffer(framebuffer framebuffer) {
+void vkapi::destroy_framebuffer(framebuffer framebuffer) const {
     VKRESULT(vkDeviceWaitIdle(context.device))
 
     vkDestroyFramebuffer(context.device, framebuffer.handle, VK_NULL_HANDLE);
 }
 
-void vkapi::destroy_framebuffers(std::vector<framebuffer>& framebuffers) {
+void vkapi::destroy_framebuffers(std::vector<framebuffer>& framebuffers) const {
     VKRESULT(vkDeviceWaitIdle(context.device))
 
     for (auto& framebuffer: framebuffers) {
@@ -614,14 +614,14 @@ void vkapi::destroy_framebuffers(std::vector<framebuffer>& framebuffers) {
 }
 
 
-pipeline vkapi::create_compute_pipeline(const char* shader_name) {
+pipeline vkapi::create_compute_pipeline(const char* shader_name) const {
     pipeline pipeline {
         .bind_point = VK_PIPELINE_BIND_POINT_COMPUTE
     };
 
-    char shader_path[256] = {};
-    sprintf(shader_path, "%s%s%s", "./shaders/", shader_name, ".comp.spv");
-    std::vector<uint8_t> shader_code = read_file(shader_path);
+    auto shader_filename = std::string(shader_name) + ".comp.spv";
+    auto shader_path = std::filesystem::path{ "./shaders" } / shader_filename;
+    std::vector<uint8_t> shader_code = read_file(shader_path.string().c_str());
     assert(!shader_code.empty());
 
     pipeline.shader_modules.resize(1);
@@ -631,9 +631,9 @@ pipeline vkapi::create_compute_pipeline(const char* shader_name) {
     shader_create_info.pNext                        = VK_NULL_HANDLE;
     shader_create_info.flags                        = 0;
     shader_create_info.codeSize                     = shader_code.size();
-    shader_create_info.pCode                        = (uint32_t*)shader_code.data();
+    shader_create_info.pCode                        = reinterpret_cast<uint32_t*>(shader_code.data());
 
-    VKRESULT(vkCreateShaderModule(context.device, &shader_create_info, VK_NULL_HANDLE, &pipeline.shader_modules[0]))
+    VKRESULT(vkCreateShaderModule(context.device, &shader_create_info, VK_NULL_HANDLE, (pipeline.shader_modules).data()))
 
     VkPipelineShaderStageCreateInfo stage_create_info = {};
     stage_create_info.sType                         = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -664,7 +664,7 @@ pipeline vkapi::create_compute_pipeline(const char* shader_name) {
     return pipeline;
 }
 
-pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states) {
+pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states) const {
     pipeline pipeline {
         .bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS
     };
@@ -672,22 +672,20 @@ pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageF
     std::vector<VkPipelineShaderStageCreateInfo> stages_create_info = {};
 
     for (VkShaderStageFlags stage_flag = VK_SHADER_STAGE_VERTEX_BIT; stage_flag <= VK_SHADER_STAGE_ALL_GRAPHICS; stage_flag <<= 2) {
-        if (stage_flag & shader_stages) {
+        if ((stage_flag & shader_stages) != 0U) {
             VkShaderModule shader_module;
 
-            char shader_path[256] = {};
-            sprintf(shader_path, "%s%s%s%s", "./shaders/", shader_name, shader_stage_extension(stage_flag), ".spv");
-            std::vector<uint8_t> shader_code = read_file(shader_path);
-            if (shader_code.size() == 0) {
-                exit(1);
-            }
+            auto shader_filename = std::string(shader_name) + shader_stage_extension(stage_flag) + ".spv";
+            auto shader_path = std::filesystem::path{ "./shaders" } / shader_filename;
+            std::vector<uint8_t> shader_code = read_file(shader_path.string().c_str());
+            assert(!shader_code.empty());
 
             VkShaderModuleCreateInfo shader_create_info     = {};
             shader_create_info.sType                        = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
             shader_create_info.pNext                        = nullptr;
             shader_create_info.flags                        = 0;
             shader_create_info.codeSize                     = shader_code.size();
-            shader_create_info.pCode                        = (uint32_t*)shader_code.data();
+            shader_create_info.pCode                        = reinterpret_cast<uint32_t*>(shader_code.data());
 
             VKRESULT(vkCreateShaderModule(context.device, &shader_create_info, nullptr, &shader_module))
 
@@ -792,7 +790,7 @@ pipeline vkapi::create_graphics_pipeline(const char* shader_name, VkShaderStageF
     return pipeline;
 }
 
-void vkapi::destroy_pipeline(pipeline &pipeline) {
+void vkapi::destroy_pipeline(pipeline &pipeline) const {
     for (auto& shader_module: pipeline.shader_modules) {
         vkDestroyShaderModule(context.device, shader_module, nullptr);
     }

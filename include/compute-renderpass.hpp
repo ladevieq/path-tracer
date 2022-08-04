@@ -16,7 +16,7 @@ class ComputeRenderpass : public Renderpass {
 
     void set_dispatch_size(size_t count_x, size_t count_y, size_t count_z);
 
-    void set_ouput_texture(Texture* ouput_texture);
+    void set_ouput_texture(Texture* out_texture);
 
     void set_constant(off_t offset, uint64_t* constant);
     void set_constant(off_t offset, Texture* texture);

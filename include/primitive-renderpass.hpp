@@ -68,7 +68,7 @@ class Primitive {
 
     void set_scissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
 
-    void set_draw_info(size_t vertex_count, off_t first_vertex, off_t vertex_offset);
+    void set_draw_info(size_t vertex_count, off_t indices_off, off_t vertex_off);
 
     void render(VkCommandBuffer command_buffer);
 
@@ -84,7 +84,7 @@ private:
     Buffer*     index_buffer;
 
     size_t      element_count;
-    off_t       first_vertex;
+    off_t       indices_offset;
     off_t       vertex_offset;
 
     off_t       constant_offset;

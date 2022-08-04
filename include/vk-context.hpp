@@ -37,7 +37,7 @@ class vkcontext {
 
         static void check_available_instance_layers(std::vector<const char*>& needed_layers);
 
-        static void check_available_instance_extensions(std::vector<const char*>& available_layers, std::vector<const char*>& needed_extensions);
+        static void check_available_instance_extensions(std::vector<const char*>& needed_extensions);
 
         static bool support_required_features(VkPhysicalDevice physical_device);
 

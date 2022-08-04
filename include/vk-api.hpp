@@ -7,7 +7,6 @@
 #include "vulkan-loader.hpp"
 
 using VmaAllocation = struct VmaAllocation_T*;
-using VmaMemoryUsage = enum VmaMemoryUsage;
 
 struct buffer {
     VmaAllocation       alloc;
@@ -68,8 +67,10 @@ struct global_descriptor {
 
     std::vector<uint32_t>   index_pool[3];
 
+    static constexpr uint32_t pool_size = 1024U;
+
     global_descriptor() {
-        for (int32_t index = 1024; index > 0; index--) {
+        for (int32_t index = pool_size; index > 0; index--) {
             index_pool[0].push_back((uint32_t)index);
             index_pool[1].push_back((uint32_t)index);
             index_pool[2].push_back((uint32_t)index);
@@ -112,7 +113,7 @@ class vkapi {
         vkapi(vkcontext& context);
         ~vkapi();
 
-        handle create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage mem_usage);
+        handle create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, uint32_t mem_usage);
         void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t size);
         void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst);
         void destroy_buffer(handle buffer);
@@ -121,7 +122,7 @@ class vkapi {
         handle create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usages);
         void destroy_image(handle image);
         std::vector<handle> create_images(VkExtent3D size, VkFormat format, VkImageUsageFlags usages, size_t image_count);
-        void destroy_images(std::vector<handle>& images);
+        void destroy_images(std::vector<handle>& imgs);
 
 
         [[nodiscard]] VkFence create_fence() const;
@@ -150,13 +151,13 @@ class vkapi {
 
         framebuffer create_framebuffer(VkRenderPass render_pass, std::vector<VkFormat>& formats, VkExtent2D size);
         std::vector<framebuffer> create_framebuffers(VkRenderPass render_pass, std::vector<VkFormat>& formats, VkExtent2D size, uint32_t framebuffer_count);
-        void destroy_framebuffer(framebuffer framebuffer);
-        void destroy_framebuffers(std::vector<framebuffer>& framebuffers);
+        void destroy_framebuffer(framebuffer framebuffer) const;
+        void destroy_framebuffers(std::vector<framebuffer>& framebuffers) const;
 
 
-        pipeline create_compute_pipeline(const char* shader_name);
-        pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states);
-        void destroy_pipeline(pipeline &pipeline);
+        pipeline create_compute_pipeline(const char* shader_name) const;
+        pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states) const;
+        void destroy_pipeline(pipeline &pipeline) const;
 
 
         std::vector<VkDescriptorSet> create_descriptor_sets(VkDescriptorSetLayout descriptor_sets_layout, size_t descriptor_sets_count);
