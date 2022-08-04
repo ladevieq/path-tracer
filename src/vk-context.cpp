@@ -19,7 +19,40 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
                                              const VkDebugUtilsMessengerCallbackDataEXT *data,
                                              void *userData)
 {
-    std::cerr << data->pMessage << std::endl;
+    const char* severity_cstr = nullptr;
+    switch(severity) {
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+            severity_cstr = "VERBOSE";
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+            severity_cstr = "INFO";
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+            severity_cstr = "WARNING";
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+            severity_cstr = "ERROR";
+            break;
+        default:
+            break;
+    }
+
+    const char* type_cstr = nullptr;
+    switch(type) {
+        case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
+            type_cstr = "GENERAL";
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
+            type_cstr = "VALIDATION";
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
+            type_cstr = "PERFORMANCE";
+            break;
+        default:
+            break;
+    }
+
+    std::cerr << "[" << severity_cstr << "_" << type_cstr << "]: " << data->pMessage << std::endl;
     return VK_FALSE;
 }
 
@@ -70,7 +103,7 @@ void vkcontext::create_instance() {
 #endif
     };
 
-    check_available_instance_extensions(needed_layers, needed_extensions);
+    check_available_instance_extensions(needed_extensions);
 
     VkInstanceCreateInfo instance_create_info       = {};
     instance_create_info.sType                      = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -182,9 +215,9 @@ void vkcontext::select_physical_device() {
     vkEnumeratePhysicalDevices(instance, &physical_devices_count, physical_devices.data());
 
 
-    for (auto& physical_device: physical_devices) {
-        if (support_required_features(physical_device)) {
-            this->physical_device = physical_device;
+    for (auto& physical_dev: physical_devices) {
+        if (support_required_features(physical_dev)) {
+            physical_device = physical_dev;
         }
     }
 
@@ -199,7 +232,7 @@ void vkcontext::select_queue(VkQueueFlags queueUsage) {
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, queue_properties.data());
 
     for (uint32_t properties_index = 0; properties_index < queue_properties_count; properties_index++) {
-        if (queue_properties[properties_index].queueFlags & queueUsage) {
+        if ((queue_properties[properties_index].queueFlags & queueUsage) != 0U) {
             queue_index = properties_index;
             return;
         }
@@ -229,7 +262,7 @@ void vkcontext::check_available_instance_layers(std::vector<const char*>& needed
     assert(available_needed_layers_count == needed_layers.size());
 }
 
-void vkcontext::check_available_instance_extensions(std::vector<const char*>& available_layers, std::vector<const char*>& needed_extensions) {
+void vkcontext::check_available_instance_extensions(std::vector<const char*>& needed_extensions) {
     uint32_t vulkan_extensions_count = 0;
     vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &vulkan_extensions_count, VK_NULL_HANDLE);
 
@@ -245,7 +278,7 @@ void vkcontext::check_available_instance_extensions(std::vector<const char*>& av
         }
     }
 
-    // assert(available_needed_extensions_count == needed_extensions.size());
+    assert(available_needed_extensions_count == needed_extensions.size());
 }
 
 bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {

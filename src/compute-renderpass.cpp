@@ -16,8 +16,8 @@ void ComputeRenderpass::set_pipeline(const char* shader_name) {
     this->pipeline = api.create_compute_pipeline(shader_name);
 }
 
-void ComputeRenderpass::set_ouput_texture(Texture* output_texture) {
-    this->output_texture = output_texture;
+void ComputeRenderpass::set_ouput_texture(Texture* out_texture) {
+    this->output_texture = out_texture;
 
     auto image = api.get_image(output_texture->device_image);
 

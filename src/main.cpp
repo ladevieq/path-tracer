@@ -83,12 +83,12 @@ int main() {
     raytracing_pass->set_pipeline("compute");
 
     watcher::watch_file(std::filesystem::path("../shaders/compute.comp"), [&]() {
-        LPSTR cmd_line = "glslc.exe --target-env=vulkan1.2 -std=460 ../shaders/compute.comp -o shaders/compute.comp.spv -I \"../shaders/include\"\0";
+        LPCSTR app_name = "glslc.exe --target-env=vulkan1.2 -std=460 ../shaders/compute.comp -o shaders/compute.comp.spv -I \"../shaders/include\"\0";
         STARTUPINFO start_info {};
         PROCESS_INFORMATION proc_info {};
         if (FAILED(CreateProcessA(
+            app_name,
             nullptr,
-            cmd_line,
             nullptr,
             nullptr,
             FALSE,

@@ -158,8 +158,8 @@ void vkrenderer::update_image(Texture* texture, void* data) {
     VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
 }
 
-void vkrenderer::update_buffer(Buffer* buffer, void* data, off_t offset, size_t size) {
-    auto device_buffer = api.get_buffer(buffer->device_buffer);
+void vkrenderer::update_buffer(Buffer* buffer, void* data, off_t offset, size_t size) const {
+    auto device_buffer = vkrenderer::api.get_buffer(buffer->device_buffer);
 
     size_t dynamic_offset = buffer->isStatic ? 0 : buffer->size * virtual_frame_index;
 

@@ -5,6 +5,8 @@
 
 #include "vk-renderer.hpp"
 #include "gltf.hpp"
+#include "bvh.hpp"
+#include "material.hpp"
 
 // void scene::random_scene() {
 //     material ground_material = { { 0.5, 0.5, 0.5 } };
@@ -55,8 +57,20 @@
 //     spheres_count = spheres.size();
 // }
 
-scene::scene(camera cam, uint32_t width, uint32_t height, vkrenderer &renderer)
-    :meta(std::move(cam), width, height){
+
+scene::metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
+    : cam(cam), width(width), height(height) {}
+
+scene::scene(const camera& cam, uint32_t width, uint32_t height)
+    :meta(cam, width, height){
+
+    // Geometry & BVH
+    std::vector<uint32_t>   indices;
+    std::vector<float>      positions;
+    std::vector<float>      normals;
+    std::vector<float>      uvs;
+    std::vector<material>   materials;
+    std::vector<packed_bvh_node> packed_nodes;
 
     // auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
     // auto bistro_interior_filename = std::string("BistroInterior.gltf");

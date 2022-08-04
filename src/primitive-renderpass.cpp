@@ -47,10 +47,10 @@ void Primitive::set_scissor(int32_t x, int32_t y, uint32_t width, uint32_t heigh
     scissor.extent.height = height;
 }
 
-void Primitive::set_draw_info(size_t vertex_count, off_t first_vertex, off_t vertex_offset) {
+void Primitive::set_draw_info(size_t vertex_count, off_t indices_off, off_t vertex_off) {
     this->element_count = vertex_count;
-    this->first_vertex = first_vertex;
-    this->vertex_offset = vertex_offset;
+    this->indices_offset = indices_off;
+    this->vertex_offset = vertex_off;
 }
 
 void Primitive::render(VkCommandBuffer command_buffer) {
@@ -63,7 +63,7 @@ void Primitive::render(VkCommandBuffer command_buffer) {
         pipeline,
         index_buffer->device_buffer,
         element_count,
-        first_vertex,
+        indices_offset,
         vertex_offset
     );
 };
@@ -122,7 +122,7 @@ void PrimitiveRenderpass::execute(vkrenderer& renderer, VkCommandBuffer command_
 
     vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
-    for (auto primitive : primitives) {
+    for (auto* primitive : primitives) {
         primitive->render(command_buffer);
     }
 
