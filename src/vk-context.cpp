@@ -17,7 +17,7 @@
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                              VkDebugUtilsMessageTypeFlagsEXT type,
                                              const VkDebugUtilsMessengerCallbackDataEXT *data,
-                                             void *userData)
+                                             void*)
 {
     const char* severity_cstr = nullptr;
     switch(severity) {

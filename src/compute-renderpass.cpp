@@ -48,7 +48,7 @@ void ComputeRenderpass::set_constant(off_t offset, Buffer* buffer) {
     memcpy(constants + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
 }
 
-void ComputeRenderpass::execute(vkrenderer& renderer, VkCommandBuffer command_buffer) {
+void ComputeRenderpass::execute(vkrenderer&, VkCommandBuffer command_buffer) {
     api.update_constants(command_buffer, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64, (void*)&constants);
 
     for (auto& texture: input_textures) {

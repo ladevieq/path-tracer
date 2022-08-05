@@ -314,7 +314,7 @@ int main() {
 
             // ImGui::End();
             bool open = true;
-            ImGui:ImGui::ShowDemoWindow(&open);
+            ImGui::ShowDemoWindow(&open);
 
             ImGui::EndFrame();
 
@@ -338,9 +338,9 @@ int main() {
             ui_pass->set_viewport(0.f, 0.f, (float)draw_data->DisplaySize.x, (float)draw_data->DisplaySize.y);
 
             auto previous_size = ui_primitives.size();
-            auto commands_count = 0;
+            auto commands_count = 0U;
 
-            for (uint32_t draw_list_index = 0; draw_list_index < draw_data->CmdListsCount; draw_list_index++) {
+            for (int32_t draw_list_index = 0; draw_list_index < draw_data->CmdListsCount; draw_list_index++) {
                 commands_count += draw_data->CmdLists[draw_list_index]->CmdBuffer.size();
             }
 
@@ -385,12 +385,12 @@ int main() {
             off_t index_buffer_offset = 0;
             std::vector<VkVertex> vertices;
             uint32_t draw_call_index = 0;
-            for (uint32_t draw_list_index = 0; draw_list_index < draw_data->CmdListsCount; draw_list_index++) {
+            for (int32_t draw_list_index = 0; draw_list_index < draw_data->CmdListsCount; draw_list_index++) {
                 auto& vertex_buffer = draw_data->CmdLists[draw_list_index]->VtxBuffer;
                 auto& index_buffer = draw_data->CmdLists[draw_list_index]->IdxBuffer;
                 vertices.resize(vertex_buffer.size());
 
-                for (size_t vert_index = 0; vert_index < vertex_buffer.Size; vert_index++) {
+                for (int32_t vert_index = 0; vert_index < vertex_buffer.Size; vert_index++) {
                     vertices[vert_index] = *((VkVertex*)&vertex_buffer[vert_index]);
                 }
 
@@ -400,8 +400,8 @@ int main() {
                 ImDrawList* draw_list = draw_data->CmdLists[draw_list_index];
                 for (auto& draw_cmd: draw_list->CmdBuffer) {
                     auto& current_primitive = ui_primitives[draw_call_index];
-                    current_primitive->set_constant(8, (uint64_t*)&scale);
-                    current_primitive->set_constant(16, (uint64_t*)&translate);
+                    current_primitive->set_constant(8, reinterpret_cast<uint64_t*>(&scale));
+                    current_primitive->set_constant(16, reinterpret_cast<uint64_t*>(&translate));
 
                     ImVec2 pos = draw_data->DisplayPos;
                     current_primitive->set_scissor(

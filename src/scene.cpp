@@ -61,7 +61,7 @@
 scene::metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
     : cam(cam), width(width), height(height) {}
 
-scene::scene(const camera& cam, uint32_t width, uint32_t height)
+scene::scene(const camera& cam, uint32_t width, uint32_t height, vkrenderer& renderer)
     :meta(cam, width, height){
 
     // Geometry & BVH

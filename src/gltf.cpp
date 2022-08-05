@@ -200,7 +200,7 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto indices_length = indices_view["byteLength"].get<size_t>();
 
         auto &indices_buffer = buffers_content[indices_buffer_index];
-        auto *indices_start = (uint16_t *)(indices_buffer.data() + indices_offset);
+        auto *indices_start = reinterpret_cast<uint16_t *>(indices_buffer.data() + indices_offset);
 
         part.indices.resize(indices_length / sizeof(uint16_t));
         std::memcpy(part.indices.data(), indices_start, indices_length);
@@ -216,7 +216,7 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto positions_length = positions_view["byteLength"].get<size_t>();
 
         auto &positions_buffer = buffers_content[positions_buffer_index];
-        auto *positions_start = (float *)(positions_buffer.data() + positions_offset);
+        auto *positions_start = reinterpret_cast<float *>(positions_buffer.data() + positions_offset);
 
         part.positions.resize(positions_length / sizeof(float));
         std::memcpy(part.positions.data(), positions_start, positions_length);
@@ -232,7 +232,7 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto normals_length = normals_view["byteLength"].get<size_t>();
 
         auto &normals_buffer = buffers_content[normals_buffer_index];
-        auto *normals_start = (float *)(normals_buffer.data() + normals_offset);
+        auto *normals_start = reinterpret_cast<float *>(normals_buffer.data() + normals_offset);
 
         part.normals.resize(normals_length / sizeof(float));
         std::memcpy(part.normals.data(), normals_start, normals_length);
@@ -248,7 +248,7 @@ mesh_part gltf::load_primitive(json &gltf_json, json &primitive, std::vector<std
         auto uvs_length = uvs_view["byteLength"].get<size_t>();
 
         auto &uvs_buffer = buffers_content[uvs_buffer_index];
-        auto *uvs_start = (float *)(uvs_buffer.data() + uvs_offset);
+        auto *uvs_start = reinterpret_cast<float *>(uvs_buffer.data() + uvs_offset);
 
         part.uvs.resize(uvs_length / sizeof(float));
         std::memcpy(part.uvs.data(), uvs_start, uvs_length);
