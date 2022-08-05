@@ -31,7 +31,7 @@ class vkrenderer {
 
         void update_image(Texture* texture, void* data);
 
-        void update_buffer(Buffer* buffer, void* data, off_t offset, size_t size) const;
+        void update_buffer(Buffer* buffer, void* data, off_t offset, size_t size);
 
         Buffer* create_buffer(size_t size, bool isStatic);
 
