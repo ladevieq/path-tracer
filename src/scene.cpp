@@ -61,7 +61,7 @@
 scene::metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
     : cam(cam), width(width), height(height) {}
 
-scene::scene(const camera& cam, uint32_t width, uint32_t height, vkrenderer& renderer)
+scene::scene(const camera& cam, uint32_t width, uint32_t height)
     :meta(cam, width, height){
 
     // Geometry & BVH
@@ -72,89 +72,85 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height, vkrenderer& ren
     std::vector<material>   materials;
     std::vector<packed_bvh_node> packed_nodes;
 
-    // auto bistro_interior_path = std::filesystem::path("../models/BistroInterior");
-    // auto bistro_interior_filename = std::string("BistroInterior.gltf");
-    // auto root_node = gltf::load(bistro_interior_path, bistro_interior_filename, renderer);
-
-    auto sponza_path = std::filesystem::path("../models/sponza");
-    auto sponza_filename = std::string("Sponza.gltf");
-    auto root_node = gltf::load(sponza_path, sponza_filename, renderer);
+    // auto root_node = gltf::load("../models/BistroInterior", "BistroInterior.gltf");
+    auto model = gltf("../models/sponza/Sponza.gltf");
 
     std::vector<triangle> triangles;
-    size_t triangles_offset = 0;
-    size_t vertices_offset = 0;
-    std::queue<node> nodes_to_load {};
-    nodes_to_load.push(root_node);
+    // size_t triangles_offset = 0;
+    // size_t vertices_offset = 0;
+    // std::queue<node> nodes_to_load {};
+    // nodes_to_load.push(model.root_node);
 
-    while(!nodes_to_load.empty()) {
-        auto &node = nodes_to_load.front();
+    // while(!nodes_to_load.empty()) {
+    //     auto &node = nodes_to_load.front();
 
-        if (node.mesh) {
-            auto &mesh = node.mesh.value();
+        // if (node.mesh != nullptr) {
+            // auto &mesh = node.mesh.value();
 
-            indices.resize(indices.size()       + (size_t)mesh.triangles_count * 3);
-            positions.resize(positions.size()   + (size_t)mesh.vertices_count * 3);
-            normals.resize(normals.size()       + (size_t)mesh.vertices_count * 3);
-            uvs.resize(uvs.size()               + (size_t)mesh.vertices_count * 2);
+            // indices.resize(indices.size()       + (size_t)mesh.triangle_count() * 3);
+            // positions.resize(positions.size()   + (size_t)mesh.vertex_count() * 3);
+            // normals.resize(normals.size()       + (size_t)mesh.vertex_count() * 3);
+            // uvs.resize(uvs.size()               + (size_t)mesh.vertex_count() * 2);
 
 
-            for (auto& mesh_part: mesh.parts) {
-                std::memcpy(positions.data()    + vertices_offset * 3, mesh_part.positions.data(), mesh_part.positions.size() * sizeof(float));
-                std::memcpy(normals.data()      + vertices_offset * 3, mesh_part.normals.data(),   mesh_part.normals.size() * sizeof(float));
-                std::memcpy(uvs.data()          + vertices_offset * 2, mesh_part.uvs.data(),       mesh_part.uvs.size() * sizeof(float));
+            // for (auto& mesh_part: mesh.parts) {
+            //     std::memcpy(positions.data()    + vertices_offset * 3, mesh_part.positions.data(), mesh_part.positions.size() * sizeof(float));
+            //     std::memcpy(normals.data()      + vertices_offset * 3, mesh_part.normals.data(),   mesh_part.normals.size() * sizeof(float));
+            //     std::memcpy(uvs.data()          + vertices_offset * 2, mesh_part.uvs.data(),       mesh_part.uvs.size() * sizeof(float));
 
-                for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
-                    size_t i1 = mesh_part.indices[i];
-                    size_t i2 = mesh_part.indices[i + 1];
-                    size_t i3 = mesh_part.indices[i + 2];
+            //     for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
+            //         size_t i1 = mesh_part.indices[i];
+            //         size_t i2 = mesh_part.indices[i + 1];
+            //         size_t i3 = mesh_part.indices[i + 2];
 
-                    auto p1 = vec3(mesh_part.positions[i1 * 3], mesh_part.positions[i1 * 3 + 1], mesh_part.positions[i1 * 3 + 2]);
-                    auto p2 = vec3(mesh_part.positions[i2 * 3], mesh_part.positions[i2 * 3 + 1], mesh_part.positions[i2 * 3 + 2]);
-                    auto p3 = vec3(mesh_part.positions[i3 * 3], mesh_part.positions[i3 * 3 + 1], mesh_part.positions[i3 * 3 + 2]);
+            //         auto p1 = vec3(mesh_part.positions[i1 * 3], mesh_part.positions[i1 * 3 + 1], mesh_part.positions[i1 * 3 + 2]);
+            //         auto p2 = vec3(mesh_part.positions[i2 * 3], mesh_part.positions[i2 * 3 + 1], mesh_part.positions[i2 * 3 + 2]);
+            //         auto p3 = vec3(mesh_part.positions[i3 * 3], mesh_part.positions[i3 * 3 + 1], mesh_part.positions[i3 * 3 + 2]);
 
-                    indices[triangles_offset * 3 + i]        = (i1 + vertices_offset) | (0xff000000 & (materials.size() << 8));
-                    indices[triangles_offset * 3 + i + 1]    = (i2 + vertices_offset) | (0xff000000 & (materials.size() << 16));
-                    indices[triangles_offset * 3 + i + 2]    = (i3 + vertices_offset) | (0xff000000 & (materials.size() << 24));
+            //         indices[triangles_offset * 3 + i]        = (i1 + vertices_offset) | (0xff000000 & (materials.size() << 8));
+            //         indices[triangles_offset * 3 + i + 1]    = (i2 + vertices_offset) | (0xff000000 & (materials.size() << 16));
+            //         indices[triangles_offset * 3 + i + 2]    = (i3 + vertices_offset) | (0xff000000 & (materials.size() << 24));
 
-                    triangles.emplace_back(p1, p2, p3);
-                    materials.push_back(mesh_part.mat);
-                }
+            //         triangles.emplace_back(p1, p2, p3);
+            //         materials.push_back(mesh_part.mat);
+            //     }
 
-                triangles_offset += mesh_part.triangles_count;
-                vertices_offset += mesh_part.vertices_count;
-            }
-        }
+            //     triangles_offset += mesh_part.triangles_count;
+            //     vertices_offset += mesh_part.vertices_count;
+            // }
+        // }
 
-        for (auto &new_node: node.children) {
-            nodes_to_load.push(new_node);
-        }
+        // for (auto &new_node: node.children) {
+        //     nodes_to_load.push(new_node);
+        // }
 
-        nodes_to_load.pop();
-    }
+        // nodes_to_load.pop();
+    // }
 
     // random_scene();
 
     bvh builder(triangles, packed_nodes);
     // bvh builder(spheres, packed_nodes);
 
-    scene_buffer = renderer.create_buffer(sizeof(meta), false);
-    renderer.update_buffer(scene_buffer, &meta, 0, sizeof(meta));
+    scene_buffer = vkrenderer::create_buffer(sizeof(meta) * vkrenderer::virtual_frames_count);
+    // TODO: Write to correct offset
+    // vkrenderer::update_buffer(scene_buffer, &meta, 0, sizeof(meta));
 
-    indices_buffer = renderer.create_buffer(indices.size() * sizeof(indices[0]), true);
-    renderer.update_buffer(indices_buffer, indices.data(), 0, indices.size() * sizeof(indices[0]));
+    indices_buffer = vkrenderer::create_buffer(indices.size() * sizeof(indices[0]));
+    indices_buffer->write(indices.data(), 0, indices.size() * sizeof(indices[0]));
 
-    positions_buffer = renderer.create_buffer(positions.size() * sizeof(positions[0]), true);
-    renderer.update_buffer(positions_buffer, positions.data(), 0, positions.size() * sizeof(positions[0]));
+    positions_buffer = vkrenderer::create_buffer(positions.size() * sizeof(positions[0]));
+    positions_buffer->write(positions.data(), 0, positions.size() * sizeof(positions[0]));
 
-    normals_buffer = renderer.create_buffer(normals.size() * sizeof(normals[0]), true);
-    renderer.update_buffer(normals_buffer, normals.data(), 0, normals.size() * sizeof(normals[0]));
+    normals_buffer = vkrenderer::create_buffer(normals.size() * sizeof(normals[0]));
+    normals_buffer->write(normals.data(), 0, normals.size() * sizeof(normals[0]));
 
-    uvs_buffer = renderer.create_buffer(uvs.size() * sizeof(uvs[0]), true);
-    renderer.update_buffer(uvs_buffer, uvs.data(), 0, uvs.size() * sizeof(uvs[0]));
+    uvs_buffer = vkrenderer::create_buffer(uvs.size() * sizeof(uvs[0]));
+    uvs_buffer->write(uvs.data(), 0, uvs.size() * sizeof(uvs[0]));
 
-    bvh_buffer = renderer.create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]), true);
-    renderer.update_buffer(bvh_buffer, packed_nodes.data(), 0, packed_nodes.size() * sizeof(packed_nodes[0]));
+    bvh_buffer = vkrenderer::create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]));
+    bvh_buffer->write(packed_nodes.data(), 0, packed_nodes.size() * sizeof(packed_nodes[0]));
 
-    materials_buffer = renderer.create_buffer(materials.size() * sizeof(materials[0]), true);
-    renderer.update_buffer(materials_buffer, materials.data(), 0, materials.size() * sizeof(materials[0]));
+    materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
+    materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
 }

@@ -2,56 +2,48 @@
 #define __GLTF_HPP_
 
 #include <vector>
-#include <optional>
 
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
 #include "material.hpp"
-
-struct mesh_part {
-    std::vector<uint16_t> indices;
-    std::vector<float>    positions;
-    std::vector<float>    normals;
-    std::vector<float>    uvs;
-    material              mat;
-    uint32_t              triangles_count = 0;
-    uint32_t              vertices_count = 0;
-};
-
-struct mesh {
-    std::vector<mesh_part> parts;
-    uint32_t               triangles_count = 0;
-    uint32_t               vertices_count = 0;
-};
+#include "mesh.hpp"
 
 struct node {
     std::vector<node>   children;
-    std::optional<mesh> mesh;
+    Mesh*               mesh = nullptr;
 };
 
 namespace std::filesystem {
     class path;
 }
 
-class vkrenderer;
 class gltf {
     public:
-    static node load(std::filesystem::path &path, std::string &filename, vkrenderer &renderer);
+    gltf(const std::filesystem::path &filepath);
 
-    private:
-    static void load_node(json &gltf_json, uint32_t index, node &parent, std::vector<mesh> &meshes);
+    node root_node;
 
-    static std::vector<mesh> load_meshes(
-        json &gltf_json, std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials);
+private:
 
-    static std::vector<texture> load_textures(json &gltf_json, std::filesystem::path &path, vkrenderer &renderer);
+    void load_node(uint32_t index, node &parent);
 
-    static std::vector<material> load_materials(json &gltf_json, std::vector<texture> &textures);
+    void load_meshes();
 
-    static mesh_part load_primitive(json &gltf_json, json &primitive,
-        std::vector<std::vector<uint8_t>> &buffers_content, std::vector<material> &materials);
+    Mesh::submesh load_primitive(const json &primitive);
+
+    Mesh::attribute load_attribute(uint32_t accessor_index);
+
+    void load_textures(const std::filesystem::path &path);
+
+    void load_materials();
+
+    json gltf_json;
+    std::vector<Mesh> meshes;
+    std::vector<material> materials;
+    std::vector<texture> textures;
+    std::vector<std::vector<uint8_t>> buffers;
 };
 
 #endif

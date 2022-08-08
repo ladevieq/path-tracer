@@ -18,8 +18,10 @@
 #define VKRESULT(result) result;
 #endif
 
-vkrenderer::vkrenderer(window& wnd)
-    : api(context) {
+vkcontext vkrenderer::context = vkcontext();
+vkapi vkrenderer::api = vkapi(vkrenderer::context);
+
+vkrenderer::vkrenderer(window& wnd) {
     platform_surface = api.create_surface(wnd);
     swapchain = api.create_swapchain(
         platform_surface,
@@ -158,27 +160,18 @@ void vkrenderer::update_image(Texture* texture, void* data) {
     VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
 }
 
-void vkrenderer::update_buffer(Buffer* buffer, void* data, off_t offset, size_t size) {
-    auto device_buffer = api.get_buffer(buffer->device_buffer);
+Buffer* vkrenderer::create_buffer(size_t size) {
+    auto* buffer = new Buffer(size);
 
-    size_t dynamic_offset = buffer->isStatic ? 0 : buffer->size * virtual_frame_index;
-
-    std::memcpy((uint8_t*)device_buffer.device_ptr + dynamic_offset + offset, data, size);
-}
-
-
-Buffer* vkrenderer::create_buffer(size_t size, bool isStatic) {
-    auto* buffer = new Buffer(size, isStatic);
-
-    buffer->device_buffer = api.create_buffer(isStatic ? size : size * virtual_frames_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    buffer->device_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     return buffer;
 }
 
-Buffer* vkrenderer::create_index_buffer(size_t size, bool isStatic) {
-    auto* buffer = new Buffer(size, isStatic);
+Buffer* vkrenderer::create_index_buffer(size_t size) {
+    auto* buffer = new Buffer(size);
 
-    buffer->device_buffer = api.create_buffer(isStatic ? size : size * virtual_frames_count, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    buffer->device_buffer = api.create_buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     return buffer;
 }
@@ -221,11 +214,11 @@ PrimitiveRenderpass* vkrenderer::create_primitive_renderpass() {
 }
 
 Primitive* vkrenderer::create_primitive(PrimitiveRenderpass& primitive_render_pass) {
-    return new Primitive(api, primitive_render_pass);
+    return new Primitive(primitive_render_pass);
 }
 
 void vkrenderer::render() {
-    // begin_frame();
+    begin_frame();
 
     auto* cmd_buf = command_buffers[virtual_frame_index];
 
@@ -246,5 +239,10 @@ void vkrenderer::render() {
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, swapchain.images[swapchain_image_index]);
 
-    // finish_frame();
+    finish_frame();
 }
+
+Buffer::Buffer(size_t size)
+        : buffer_size(size) {
+        device_buffer = vkrenderer::api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    }

@@ -1,5 +1,7 @@
 #include "bvh.hpp"
 
+#include <cassert>
+
 #include <algorithm>
 #include <iostream>
 
@@ -45,6 +47,8 @@
 
 bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_nodes)
     :triangles(triangles) {
+
+    assert(!triangles.empty());
     packed_nodes.resize(2 * triangles.size() - 1);
     temp_nodes = std::vector<temp_node>(2 * triangles.size() - 1);
     leafs = std::vector<temp_node>(triangles.size());
@@ -125,7 +129,7 @@ int32_t bvh::traverse_depth_first_ordered(std::vector<bvh_node>& nodes, int32_t 
         if (next_id != -1) {
             return traverse_depth_first_ordered(nodes, id, next_id);
         }
-    } else if (nodes[id].primitive_id != -1 && nodes[id].next_id != -1) {
+    } else if (nodes[id].next_id != -1) {
         std::cout << "\t " << parent_id << " -> " << id << ";\n";
         return nodes[id].next_id;
     } else {
