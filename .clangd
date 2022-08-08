@@ -2,6 +2,6 @@ Diagnostics:
   UnusedIncludes: Strict
   ClangTidy:
     Add: [performance*, modernize*, readability*, bugprone*]
-    Remove: [modernize-avoid-c-arrays, modernize-use-trailing-return-type, readability-identifier-length, readability-uppercase-literal-suffix]
+    Remove: [modernize-avoid-c-arrays, modernize-use-trailing-return-type, readability-identifier-length, readability-uppercase-literal-suffix, readability-braces-around-statements]
 InlayHints:
   Enabled: Yes

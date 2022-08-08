@@ -52,9 +52,7 @@ class PrimitiveRenderpass : public Renderpass {
 class Primitive {
     public:
 
-    Primitive(vkapi& api, PrimitiveRenderpass& render_pass)
-        : api(api), primitive_render_pass(render_pass)
-    {};
+    Primitive(PrimitiveRenderpass& render_pass);
 
     void set_pipeline(const char* shader_name);
 

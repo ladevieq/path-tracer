@@ -3,6 +3,10 @@
 #include "vulkan-loader.hpp"
 
 
+Primitive::Primitive(PrimitiveRenderpass& render_pass)
+        : api(vkrenderer::api), primitive_render_pass(render_pass)
+    {};
+
 void Primitive::set_pipeline(const char* shader_name) {
     std::vector<VkDynamicState> dynamic_states {
         VK_DYNAMIC_STATE_VIEWPORT,

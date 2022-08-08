@@ -1,6 +1,7 @@
 #ifndef __VK_RENDERER_HPP_
 #define __VK_RENDERER_HPP_
 
+#include <cstdint>
 #include <vector>
 
 #include "vk-context.hpp"
@@ -31,17 +32,15 @@ class vkrenderer {
 
         void update_image(Texture* texture, void* data);
 
-        void update_buffer(Buffer* buffer, void* data, off_t offset, size_t size);
+        static Buffer* create_buffer(size_t size);
 
-        Buffer* create_buffer(size_t size, bool isStatic);
+        static Buffer* create_index_buffer(size_t size);
 
-        Buffer* create_index_buffer(size_t size, bool isStatic);
+        static Texture* create_2d_texture(size_t width, size_t height, VkFormat format);
 
-        Texture* create_2d_texture(size_t width, size_t height, VkFormat format);
+        static void destroy_2d_texture(Texture* texture);
 
-        void destroy_2d_texture(Texture* texture);
-
-        Sampler* create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
+        static Sampler* create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
 
         ComputeRenderpass* create_compute_renderpass();
 
@@ -59,9 +58,9 @@ class vkrenderer {
 
         static constexpr uint32_t       virtual_frames_count = 2;
 
-        vkcontext context;
+        static vkcontext                context;
 
-        vkapi                           api;
+        static vkapi                    api;
 
     private:
 
@@ -110,15 +109,46 @@ class Sampler {
 class Buffer {
     public:
 
-    Buffer(size_t size, bool isStatic)
-        : size(size), isStatic(isStatic) {}
+    Buffer(size_t size);
+
+    ~Buffer() {
+        vkrenderer::api.destroy_buffer(device_buffer);
+    }
+
+    void write(void* data, off_t alloc_offset, size_t data_size) const {
+        auto api_buffer = vkrenderer::api.get_buffer(device_buffer);
+
+        std::memcpy((uint8_t*)api_buffer.device_ptr + alloc_offset, data, data_size);
+    }
 
     handle device_buffer;
 
-    size_t size;
-    size_t element_size;
+    size_t buffer_size;
+};
 
-    bool isStatic;
+class RingBuffer {
+    public:
+    RingBuffer(size_t size)
+        : buffer_size(size) {}
+
+    [[nodiscard]]bool alloc(size_t alloc_size) const {
+        return ptr + alloc_size > buffer_size;
+    }
+
+    void write(void* data, off_t alloc_offset, size_t data_size) const {
+        auto api_buffer = vkrenderer::api.get_buffer(device_buffer);
+
+        std::memcpy((uint8_t*)api_buffer.device_ptr + alloc_offset, data, data_size);
+    }
+
+    void reset() {
+        ptr = 0;
+    }
+
+    handle device_buffer;
+
+    size_t buffer_size;
+    off_t ptr;
 };
 
 #endif // !__VK_RENDERER_HPP_

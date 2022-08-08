@@ -6,7 +6,6 @@
 #include "camera.hpp"
 
 class Buffer;
-class vkrenderer;
 
 class scene {
     struct metadata {
@@ -30,7 +29,7 @@ class scene {
     // void random_scene();
 
 public:
-    scene(const camera& cam, uint32_t width, uint32_t height, vkrenderer& renderer);
+    scene(const camera& cam, uint32_t width, uint32_t height);
 
     metadata meta;
 

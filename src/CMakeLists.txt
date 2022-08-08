@@ -28,6 +28,7 @@ add_executable(
     compute-renderpass.cpp
     primitive-renderpass.cpp
     bvh.cpp
+    mesh.cpp
     # ${Tracy_SOURCE_DIR}/TracyClient.cpp
 )
 
