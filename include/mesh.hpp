@@ -68,6 +68,14 @@ public:
     [[nodiscard]] inline uint32_t triangle_count() const { return index_count / 3; };
     [[nodiscard]] inline uint32_t vertices_count() const { return vertex_count; };
 
+    [[nodiscard]] inline const std::vector<submesh_info>& get_submeshes() const { return submeshes; };
+
+    [[nodiscard]] inline const std::vector<float>& get_attribute(enum ATTRIBUTE_TYPE attribute_type) const {
+        return attributes[(uint32_t)attribute_type];
+    };
+
+    [[nodiscard]] inline const std::vector<uint16_t>& get_indices() const { return indices; }
+
 
     static void register_mesh(const Mesh& mesh);
 

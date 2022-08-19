@@ -73,59 +73,80 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     std::vector<packed_bvh_node> packed_nodes;
 
     // auto root_node = gltf::load("../models/BistroInterior", "BistroInterior.gltf");
-    auto model = gltf("../models/sponza/Sponza.gltf");
+    auto gltf_model = gltf("../models/sponza/Sponza.gltf");
 
     std::vector<triangle> triangles;
-    // size_t triangles_offset = 0;
-    // size_t vertices_offset = 0;
-    // std::queue<node> nodes_to_load {};
-    // nodes_to_load.push(model.root_node);
+    size_t triangles_offset = 0;
+    size_t vertices_offset = 0;
+    std::queue<node> nodes_to_load {};
+    nodes_to_load.push(gltf_model.root_node);
 
-    // while(!nodes_to_load.empty()) {
-    //     auto &node = nodes_to_load.front();
+    while(!nodes_to_load.empty()) {
+        auto &node = nodes_to_load.front();
 
-        // if (node.mesh != nullptr) {
-            // auto &mesh = node.mesh.value();
+        if (node.mesh != nullptr) {
+            const auto* mesh = node.mesh;
+            const auto& mesh_positions = mesh->get_attribute(ATTRIBUTE_TYPE::POSITION);
+            const auto& mesh_indices = mesh->get_indices();
 
-            // indices.resize(indices.size()       + (size_t)mesh.triangle_count() * 3);
-            // positions.resize(positions.size()   + (size_t)mesh.vertex_count() * 3);
-            // normals.resize(normals.size()       + (size_t)mesh.vertex_count() * 3);
-            // uvs.resize(uvs.size()               + (size_t)mesh.vertex_count() * 2);
+            indices.resize(indices.size()      + (size_t)mesh->triangle_count() * 3);
+            positions.resize(vertices_offset   + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION));
+            normals.resize(vertices_offset     + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL));
+            uvs.resize(vertices_offset         + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0));
 
+            std::memcpy(
+               positions.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION),
+               positions.data(),
+               (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION)
+            );
 
-            // for (auto& mesh_part: mesh.parts) {
-            //     std::memcpy(positions.data()    + vertices_offset * 3, mesh_part.positions.data(), mesh_part.positions.size() * sizeof(float));
-            //     std::memcpy(normals.data()      + vertices_offset * 3, mesh_part.normals.data(),   mesh_part.normals.size() * sizeof(float));
-            //     std::memcpy(uvs.data()          + vertices_offset * 2, mesh_part.uvs.data(),       mesh_part.uvs.size() * sizeof(float));
+            std::memcpy(
+               normals.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL),
+               mesh->get_attribute(ATTRIBUTE_TYPE::NORMAL).data(),
+               (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL)
+            );
 
-            //     for (size_t i = 0; i < mesh_part.indices.size(); i += 3) {
-            //         size_t i1 = mesh_part.indices[i];
-            //         size_t i2 = mesh_part.indices[i + 1];
-            //         size_t i3 = mesh_part.indices[i + 2];
+            std::memcpy(
+                uvs.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0),
+                mesh->get_attribute(ATTRIBUTE_TYPE::UV_0).data(),
+                (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0)
+            );
 
-            //         auto p1 = vec3(mesh_part.positions[i1 * 3], mesh_part.positions[i1 * 3 + 1], mesh_part.positions[i1 * 3 + 2]);
-            //         auto p2 = vec3(mesh_part.positions[i2 * 3], mesh_part.positions[i2 * 3 + 1], mesh_part.positions[i2 * 3 + 2]);
-            //         auto p3 = vec3(mesh_part.positions[i3 * 3], mesh_part.positions[i3 * 3 + 1], mesh_part.positions[i3 * 3 + 2]);
+            // Add offset to indices in order to have absolute indices
+            for (const auto& submesh: mesh->get_submeshes()) {
+                for (size_t element_index = 0; element_index < submesh.element_count; element_index++) {
+                    auto global_index = submesh.index_offset + element_index * 3;
+                    size_t i1 = mesh_indices[global_index];
+                    size_t i2 = mesh_indices[global_index + 1];
+                    size_t i3 = mesh_indices[global_index + 2];
 
-            //         indices[triangles_offset * 3 + i]        = (i1 + vertices_offset) | (0xff000000 & (materials.size() << 8));
-            //         indices[triangles_offset * 3 + i + 1]    = (i2 + vertices_offset) | (0xff000000 & (materials.size() << 16));
-            //         indices[triangles_offset * 3 + i + 2]    = (i3 + vertices_offset) | (0xff000000 & (materials.size() << 24));
+                    triangles.emplace_back(
+                        vec3 { mesh_positions[i1 * 3], mesh_positions[i1 * 3 + 1], mesh_positions[i1 * 3 + 2] },
+                        vec3 { mesh_positions[i2 * 3], mesh_positions[i2 * 3 + 1], mesh_positions[i2 * 3 + 2] },
+                        vec3 { mesh_positions[i3 * 3], mesh_positions[i3 * 3 + 1], mesh_positions[i3 * 3 + 2] }
+                    );
 
-            //         triangles.emplace_back(p1, p2, p3);
-            //         materials.push_back(mesh_part.mat);
-            //     }
+                    auto triangle_offset = triangles_offset * 3 + global_index;
+                    auto vertex_offset = vertices_offset + submesh.vertex_offset;
 
-            //     triangles_offset += mesh_part.triangles_count;
-            //     vertices_offset += mesh_part.vertices_count;
-            // }
-        // }
+                    indices[triangle_offset]        = (i1 + vertex_offset); // | (0xff000000 & (materials.size() << 8));
+                    indices[triangle_offset + 1]    = (i2 + vertex_offset); // | (0xff000000 & (materials.size() << 16));
+                    indices[triangle_offset + 2]    = (i3 + vertex_offset); // | (0xff000000 & (materials.size() << 24));
 
-        // for (auto &new_node: node.children) {
-        //     nodes_to_load.push(new_node);
-        // }
+                    // materials.push_back(submesh.mat);
+                }
+            }
 
-        // nodes_to_load.pop();
-    // }
+            triangles_offset += mesh->triangle_count();
+            vertices_offset += mesh->vertices_count();
+        }
+
+        for (auto &new_node: node.children) {
+            nodes_to_load.push(new_node);
+        }
+
+        nodes_to_load.pop();
+    }
 
     // random_scene();
 
@@ -133,8 +154,9 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     // bvh builder(spheres, packed_nodes);
 
     scene_buffer = vkrenderer::create_buffer(sizeof(meta) * vkrenderer::virtual_frames_count);
-    // TODO: Write to correct offset
-    // vkrenderer::update_buffer(scene_buffer, &meta, 0, sizeof(meta));
+    scene_buffer->write(&meta, 0, sizeof(meta));
+    scene_buffer->write(&meta, sizeof(meta), sizeof(meta));
+    scene_buffer->write(&meta, sizeof(meta) * 2, sizeof(meta));
 
     indices_buffer = vkrenderer::create_buffer(indices.size() * sizeof(indices[0]));
     indices_buffer->write(indices.data(), 0, indices.size() * sizeof(indices[0]));

@@ -82,11 +82,11 @@ Mesh::submesh gltf::load_primitive(const json &primitive) {
     submesh.attributes[ATTRIBUTE_TYPE::POSITION] = load_attribute(primitive["attributes"]["POSITION"]);
 
     if (primitive["attributes"].contains("NORMAL")) {
-        submesh.attributes[ATTRIBUTE_TYPE::POSITION] = load_attribute(primitive["attributes"]["NORMAL"]);
+        submesh.attributes[ATTRIBUTE_TYPE::NORMAL] = load_attribute(primitive["attributes"]["NORMAL"]);
     }
 
     if (primitive["attributes"].contains("TEXCOORD_0")) {
-        submesh.attributes[ATTRIBUTE_TYPE::POSITION] = load_attribute(primitive["attributes"]["TEXCOORD_0"]);
+        submesh.attributes[ATTRIBUTE_TYPE::UV_0] = load_attribute(primitive["attributes"]["TEXCOORD_0"]);
     }
 
     submesh.index_count = gltf_json["accessors"][primitive["indices"].get<uint32_t>()]["count"].get<uint32_t>();
