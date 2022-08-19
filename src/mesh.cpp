@@ -7,7 +7,7 @@ void Mesh::add_submesh(const submesh& submesh) {
     submeshes.emplace_back(submesh_info {
         (uint32_t)attributes[ATTRIBUTE_TYPE::POSITION].size() / position_components,
         (uint32_t)indices.size(),
-        submesh.index_count,
+        submesh.index_count / 3,
         0
     });
 

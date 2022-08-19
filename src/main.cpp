@@ -71,7 +71,7 @@ void render(scene& main_scene, vkrenderer& renderer) {
     // capture from that device. See the documentation below for a longer
     // explanation if(rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 
-    main_scene.scene_buffer->write(&main_scene.meta, 0, sizeof(main_scene.meta));
+    main_scene.scene_buffer->write(&main_scene.meta, renderer.frame_index() * sizeof(main_scene.meta), sizeof(main_scene.meta));
 
 
     // ImDrawData* draw_data = ImGui::GetDrawData();
