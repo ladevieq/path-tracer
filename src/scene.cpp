@@ -89,32 +89,34 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             const auto& mesh_positions = mesh->get_attribute(ATTRIBUTE_TYPE::POSITION);
             const auto& mesh_indices = mesh->get_indices();
 
-            indices.resize(indices.size()      + (size_t)mesh->triangle_count() * 3);
-            positions.resize(vertices_offset   + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION));
+            indices.resize(indices.size()      + mesh_indices.size());
+            positions.resize(vertices_offset   + mesh_positions.size());
             normals.resize(vertices_offset     + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL));
             uvs.resize(vertices_offset         + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0));
 
             std::memcpy(
                positions.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION),
-               positions.data(),
-               (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION)
+               mesh_positions.data(),
+               mesh_positions.size() * sizeof(float)
             );
 
             std::memcpy(
                normals.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL),
                mesh->get_attribute(ATTRIBUTE_TYPE::NORMAL).data(),
-               (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL)
+               (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL) * sizeof(float)
             );
 
             std::memcpy(
                 uvs.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0),
                 mesh->get_attribute(ATTRIBUTE_TYPE::UV_0).data(),
-                (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0)
+                (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0) * sizeof(float)
             );
 
             // Add offset to indices in order to have absolute indices
             for (const auto& submesh: mesh->get_submeshes()) {
-                for (size_t element_index = 0; element_index < submesh.element_count; element_index++) {
+                auto vertex_offset = vertices_offset + submesh.vertex_offset;
+
+                for (size_t element_index { 0U }; element_index < submesh.element_count; element_index++) {
                     auto global_index = submesh.index_offset + element_index * 3;
                     size_t i1 = mesh_indices[global_index];
                     size_t i2 = mesh_indices[global_index + 1];
@@ -127,7 +129,6 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                     );
 
                     auto triangle_offset = triangles_offset * 3 + global_index;
-                    auto vertex_offset = vertices_offset + submesh.vertex_offset;
 
                     indices[triangle_offset]        = (i1 + vertex_offset); // | (0xff000000 & (materials.size() << 8));
                     indices[triangle_offset + 1]    = (i2 + vertex_offset); // | (0xff000000 & (materials.size() << 16));

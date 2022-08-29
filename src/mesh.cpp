@@ -4,12 +4,14 @@ static std::vector<Mesh> meshes {};
 
 void Mesh::add_submesh(const submesh& submesh) {
     auto position_components = attribute_components(ATTRIBUTE_TYPE::POSITION);
-    submeshes.emplace_back(submesh_info {
-        (uint32_t)attributes[ATTRIBUTE_TYPE::POSITION].size() / position_components,
-        (uint32_t)indices.size(),
-        submesh.index_count / 3,
-        0
-    });
+    submeshes.emplace_back(
+        submesh_info {
+            (uint32_t)attributes[ATTRIBUTE_TYPE::POSITION].size() / position_components,
+            (uint32_t)indices.size(),
+            submesh.index_count / 3,
+            0
+        }
+    );
 
     {
         auto indices_off = indices.size();
