@@ -150,15 +150,15 @@ aabb bvh::compute_bounds(uint32_t begin, uint32_t end) {
 }
 
 void bvh::subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
-    size_t count = end - begin;
+    const size_t count = end - begin;
 
      if (count == 1) {
         temp_nodes[parent_id] = std::move(leafs[begin]);
         return;
     }
 
-    auto left_id = ++next_node_id;
-    auto right_id = ++next_node_id;
+    const auto left_id = ++next_node_id;
+    const auto right_id = ++next_node_id;
 
     temp_nodes[parent_id].left_id = (int32_t)left_id;
 
@@ -168,7 +168,7 @@ void bvh::subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
         return;
     }
 
-    auto parent_bb = temp_nodes[parent_id].bounding_box;
+    const auto& parent_bb = temp_nodes[parent_id].bounding_box;
     int32_t split_axis = parent_bb.maximum_axis();
 
     if (count <= 4) {

@@ -9,7 +9,6 @@
 enum ATTRIBUTE_TYPE {
     POSITION,
     NORMAL,
-    TANGENT,
     UV_0,
     MAX_ATTRIBUTE,
 };
