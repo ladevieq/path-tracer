@@ -87,12 +87,14 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
         if (node.mesh != nullptr) {
             const auto* mesh = node.mesh;
             const auto& mesh_positions = mesh->get_attribute(ATTRIBUTE_TYPE::POSITION);
+            const auto& mesh_normals = mesh->get_attribute(ATTRIBUTE_TYPE::NORMAL);
+            const auto& mesh_uvs_0 = mesh->get_attribute(ATTRIBUTE_TYPE::UV_0);
             const auto& mesh_indices = mesh->get_indices();
 
             indices.resize(indices.size()      + mesh_indices.size());
             positions.resize(vertices_offset   + mesh_positions.size());
-            normals.resize(vertices_offset     + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL));
-            uvs.resize(vertices_offset         + (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0));
+            normals.resize(vertices_offset     + mesh_normals.size());
+            uvs.resize(vertices_offset         + mesh_uvs_0.size());
 
             std::memcpy(
                positions.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION),
@@ -102,14 +104,14 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
 
             std::memcpy(
                normals.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL),
-               mesh->get_attribute(ATTRIBUTE_TYPE::NORMAL).data(),
-               (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL) * sizeof(float)
+               mesh_normals.data(),
+               mesh_normals.size() * sizeof(float)
             );
 
             std::memcpy(
                 uvs.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0),
-                mesh->get_attribute(ATTRIBUTE_TYPE::UV_0).data(),
-                (size_t)mesh->vertices_count() * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0) * sizeof(float)
+                mesh_uvs_0.data(),
+                mesh_uvs_0.size() * sizeof(float)
             );
 
             // Add offset to indices in order to have absolute indices
@@ -118,9 +120,9 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
 
                 for (size_t element_index { 0U }; element_index < submesh.element_count; element_index++) {
                     auto global_index = submesh.index_offset + element_index * 3;
-                    size_t i1 = mesh_indices[global_index];
-                    size_t i2 = mesh_indices[global_index + 1];
-                    size_t i3 = mesh_indices[global_index + 2];
+                    size_t i1 = submesh.vertex_offset + mesh_indices[global_index];
+                    size_t i2 = submesh.vertex_offset + mesh_indices[global_index + 1];
+                    size_t i3 = submesh.vertex_offset + mesh_indices[global_index + 2];
 
                     triangles.emplace_back(
                         vec3 { mesh_positions[i1 * 3], mesh_positions[i1 * 3 + 1], mesh_positions[i1 * 3 + 2] },
@@ -174,6 +176,6 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     bvh_buffer = vkrenderer::create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]));
     bvh_buffer->write(packed_nodes.data(), 0, packed_nodes.size() * sizeof(packed_nodes[0]));
 
-    materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
-    materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
+    // materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
+    // materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
 }

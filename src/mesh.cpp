@@ -3,11 +3,10 @@
 static std::vector<Mesh> meshes {};
 
 void Mesh::add_submesh(const submesh& submesh) {
-    auto position_components = attribute_components(ATTRIBUTE_TYPE::POSITION);
     submeshes.emplace_back(
         submesh_info {
-            (uint32_t)attributes[ATTRIBUTE_TYPE::POSITION].size() / position_components,
-            (uint32_t)indices.size(),
+            (uint32_t)vertex_count,
+            (uint32_t)index_count,
             submesh.index_count / 3,
             0
         }

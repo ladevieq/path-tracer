@@ -408,7 +408,7 @@ int main() {
         raytracing_pass->set_ouput_texture(output_texture);
         raytracing_pass->set_constant(60, accumulation_texture);
 
-        update_ui(main_scene, delta_time);
+        // update_ui(main_scene, delta_time);
 
         if (can_render) {
             render(main_scene, renderer);

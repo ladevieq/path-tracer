@@ -83,32 +83,30 @@ bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_
             node.next_id = temp_nodes[old_node.next_id].df_id;
         }
     }
-
-    // exporter();
 }
 
 //-------------------------
 // BVH exporter for graphviz
 //-------------------------
 void bvh::exporter() {
-    std::cout << "digraph bvh {" << std::endl;
+    std::cout << "digraph bvh {\n";
 
     traverse_depth_first(temp_nodes, 0);
 
     // traverse_depth_first_ordered(-1, 0);
 
-    std::cout << "}" << std::endl;
+    std::cout << "}\n";
 }
 
 bool bvh::traverse_depth_first(std::vector<temp_node>& nodes, int32_t id) {
-    if (id <= 0) {
-        std::cout << ";" << std::endl;
+    if (id < 0) {
         return false;
     }
 
-    std::cout << " -> " << id;
     if (traverse_depth_first(nodes, nodes[id].left_id)) {
-        std::cout << "\t " << id;
+        std::cout << id << " -> " << nodes[id].left_id << ";\n";
+        std::cout << id << " -> " << nodes[id].left_id + 1 << ";\n";
+
         traverse_depth_first(nodes, nodes[id].left_id + 1);
     }
 
