@@ -22,7 +22,7 @@ struct packed_bvh_node {
 };
 
 struct temp_node : public bvh_node {
-    int32_t left_id;
+    int32_t left_id = -1;
     int32_t df_id;      // depth firt id
 };
 
