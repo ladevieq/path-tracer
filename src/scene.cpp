@@ -114,27 +114,31 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                 mesh_uvs_0.size() * sizeof(float)
             );
 
+            auto index_offset { 0U };
             // Add offset to indices in order to have absolute indices
             for (const auto& submesh: mesh->get_submeshes()) {
                 auto vertex_offset = vertices_offset + submesh.vertex_offset;
 
-                for (size_t element_index { 0U }; element_index < submesh.element_count; element_index++) {
-                    auto global_index = submesh.index_offset + element_index * 3;
-                    size_t i1 = submesh.vertex_offset + mesh_indices[global_index];
-                    size_t i2 = submesh.vertex_offset + mesh_indices[global_index + 1];
-                    size_t i3 = submesh.vertex_offset + mesh_indices[global_index + 2];
+                for (size_t element_index { 0U }; element_index < submesh.element_count; element_index++, index_offset += 3) {
+                    size_t submesh_level_index_1 = mesh_indices[index_offset];
+                    size_t submesh_level_index_2 = mesh_indices[index_offset + 1];
+                    size_t submesh_level_index_3 = mesh_indices[index_offset + 2];
+
+                    size_t mesh_level_index_1 = (submesh.vertex_offset + submesh_level_index_1) * 3;
+                    size_t mesh_level_index_2 = (submesh.vertex_offset + submesh_level_index_2) * 3;
+                    size_t mesh_level_index_3 = (submesh.vertex_offset + submesh_level_index_3) * 3;
 
                     triangles.emplace_back(
-                        vec3 { mesh_positions[i1 * 3], mesh_positions[i1 * 3 + 1], mesh_positions[i1 * 3 + 2] },
-                        vec3 { mesh_positions[i2 * 3], mesh_positions[i2 * 3 + 1], mesh_positions[i2 * 3 + 2] },
-                        vec3 { mesh_positions[i3 * 3], mesh_positions[i3 * 3 + 1], mesh_positions[i3 * 3 + 2] }
+                        vec3 { mesh_positions[mesh_level_index_1], mesh_positions[mesh_level_index_1 + 1], mesh_positions[mesh_level_index_1 + 2] },
+                        vec3 { mesh_positions[mesh_level_index_2], mesh_positions[mesh_level_index_2 + 1], mesh_positions[mesh_level_index_2 + 2] },
+                        vec3 { mesh_positions[mesh_level_index_3], mesh_positions[mesh_level_index_3 + 1], mesh_positions[mesh_level_index_3 + 2] }
                     );
 
-                    auto triangle_offset = triangles_offset * 3 + global_index;
+                    auto triangle_offset = triangles_offset * 3 + index_offset;
 
-                    indices[triangle_offset]        = (i1 + vertex_offset); // | (0xff000000 & (materials.size() << 8));
-                    indices[triangle_offset + 1]    = (i2 + vertex_offset); // | (0xff000000 & (materials.size() << 16));
-                    indices[triangle_offset + 2]    = (i3 + vertex_offset); // | (0xff000000 & (materials.size() << 24));
+                    indices[triangle_offset]        = (submesh_level_index_1 + vertex_offset); // | (0xff000000 & (materials.size() << 8));
+                    indices[triangle_offset + 1]    = (submesh_level_index_2 + vertex_offset); // | (0xff000000 & (materials.size() << 16));
+                    indices[triangle_offset + 2]    = (submesh_level_index_3 + vertex_offset); // | (0xff000000 & (materials.size() << 24));
 
                     // materials.push_back(submesh.mat);
                 }
