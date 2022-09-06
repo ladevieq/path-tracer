@@ -20,15 +20,7 @@
 
 vkapi::vkapi(vkcontext& context)
     : context(context) {
-    VkCommandPoolCreateInfo cmd_pool_create_info    = {};
-    cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmd_pool_create_info.pNext                      = nullptr;
-    cmd_pool_create_info.flags                      = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmd_pool_create_info.queueFamilyIndex           = context.queue_index;
-
-    VKRESULT(vkCreateCommandPool(context.device, &cmd_pool_create_info, nullptr, &command_pool))
-
-    std::vector<VkDescriptorPoolSize> descriptor_pools_sizes = {
+    VkDescriptorPoolSize descriptor_pools_sizes[] = {
         {
             .type                               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount                    = (uint32_t)global_descriptor::pool_size,
@@ -52,8 +44,8 @@ vkapi::vkapi(vkcontext& context)
     descriptor_pool_create_info.pNext                       = nullptr;
     descriptor_pool_create_info.flags                       = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     descriptor_pool_create_info.maxSets                     = 0xff;
-    descriptor_pool_create_info.poolSizeCount               = descriptor_pools_sizes.size();
-    descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes.data();
+    descriptor_pool_create_info.poolSizeCount               = sizeof(descriptor_pools_sizes) / sizeof(descriptor_pools_sizes[0]);
+    descriptor_pool_create_info.pPoolSizes                  = descriptor_pools_sizes;
 
     VKRESULT(vkCreateDescriptorPool(context.device, &descriptor_pool_create_info, nullptr, &descriptor_pool))
 
@@ -146,6 +138,7 @@ vkapi::vkapi(vkcontext& context)
 }
 
 vkapi::~vkapi() {
+    // Free resources
     for (handle buffer_handle = 0; buffer_handle < buffers.size(); buffer_handle++) {
         destroy_buffer(buffer_handle);
     }
@@ -163,7 +156,6 @@ vkapi::~vkapi() {
     vkDestroyPipelineLayout(context.device, bindless_descriptor.pipeline_layout, nullptr);
     vkFreeDescriptorSets(context.device, descriptor_pool, 1, &bindless_descriptor.set);
 
-    vkDestroyCommandPool(context.device, command_pool, nullptr);
     vkDestroyDescriptorPool(context.device, descriptor_pool, nullptr);
 }
 
@@ -309,8 +301,14 @@ handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags u
 }
 void vkapi::destroy_image(handle image) {
     auto* current_image = images[image];
-    bindless_descriptor.free(current_image->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    bindless_descriptor.free(current_image->bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+
+    if (current_image->bindless_storage_index != 0U) {
+        bindless_descriptor.free(current_image->bindless_storage_index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    }
+
+    if (current_image->bindless_sampled_index != 0U) {
+        bindless_descriptor.free(current_image->bindless_sampled_index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    }
 
     vmaDestroyImage(context.allocator, current_image->handle, current_image->alloc);
     vkDestroyImageView(context.device, current_image->view, nullptr);
@@ -437,7 +435,7 @@ handle vkapi::create_sampler(VkFilter filter, VkSamplerAddressMode address_mode)
 }
 
 void vkapi::destroy_sampler(handle sampler) {
-    auto current_sampler = samplers[sampler];
+    auto* current_sampler = samplers[sampler];
     bindless_descriptor.free(current_sampler->bindless_index, VK_DESCRIPTOR_TYPE_SAMPLER);
 
     vkDestroySampler(context.device, current_sampler->handle, VK_NULL_HANDLE);
@@ -446,24 +444,30 @@ void vkapi::destroy_sampler(handle sampler) {
 }
 
 
-std::vector<VkCommandBuffer> vkapi::create_command_buffers(size_t command_buffers_count) {
+VkCommandPool vkapi::create_command_pool() const {
+    VkCommandPoolCreateInfo cmd_pool_create_info    = {};
+    cmd_pool_create_info.sType                      = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmd_pool_create_info.pNext                      = nullptr;
+    cmd_pool_create_info.flags                      = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmd_pool_create_info.queueFamilyIndex           = context.graphics_queue.index;
+
+    VkCommandPool command_pool;
+    VKRESULT(vkCreateCommandPool(context.device, &cmd_pool_create_info, nullptr, &command_pool))
+
+    return command_pool;
+}
+
+
+void vkapi::allocate_command_buffers(VkCommandPool command_pool, VkCommandBuffer* command_buffers, size_t count) const {
     VkCommandBufferAllocateInfo cmd_buf_allocate_info   = {};
     cmd_buf_allocate_info.sType                         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     cmd_buf_allocate_info.pNext                         = VK_NULL_HANDLE;
     cmd_buf_allocate_info.commandPool                   = command_pool;
     cmd_buf_allocate_info.level                         = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_buf_allocate_info.commandBufferCount            = command_buffers_count;
+    cmd_buf_allocate_info.commandBufferCount            = count;
 
-    std::vector<VkCommandBuffer> command_buffers { command_buffers_count };
-    vkAllocateCommandBuffers(context.device, &cmd_buf_allocate_info, command_buffers.data());
-
-    return command_buffers;
+    vkAllocateCommandBuffers(context.device, &cmd_buf_allocate_info, command_buffers);
 }
-
-void vkapi::destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers) {
-    vkFreeCommandBuffers(context.device, command_pool, command_buffers.size(), command_buffers.data());
-}
-
 
 // TODO: attachment structure
 VkRenderPass vkapi::create_render_pass(std::vector<VkFormat>& color_attachments_format, VkImageLayout initial_layout, VkImageLayout final_layout) {
@@ -621,7 +625,7 @@ pipeline vkapi::create_compute_pipeline(const char* shader_name) const {
 
     auto shader_filename = std::string(shader_name) + ".comp.spv";
     auto shader_path = std::filesystem::path{ "./shaders" } / shader_filename;
-    std::vector<uint8_t> shader_code = read_file(shader_path.string().c_str());
+    auto shader_code = read_file(shader_path.string().c_str());
     assert(!shader_code.empty());
 
     pipeline.shader_modules.resize(1);
@@ -799,27 +803,6 @@ void vkapi::destroy_pipeline(pipeline &pipeline) const {
 }
 
 
-std::vector<VkDescriptorSet> vkapi::create_descriptor_sets(VkDescriptorSetLayout descriptor_sets_layout, size_t descriptor_sets_count) {
-    std::vector<VkDescriptorSetLayout> sets_layouts = { descriptor_sets_count, descriptor_sets_layout };
-
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info    = {};
-    descriptor_set_allocate_info.sType                          = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptor_set_allocate_info.pNext                          = nullptr;
-    descriptor_set_allocate_info.descriptorPool                 = descriptor_pool;
-    descriptor_set_allocate_info.descriptorSetCount             = sets_layouts.size();
-    descriptor_set_allocate_info.pSetLayouts                    = sets_layouts.data();
-
-    std::vector<VkDescriptorSet> descriptor_sets { descriptor_sets_count };
-    vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, descriptor_sets.data());
-
-    return descriptor_sets;
-}
-
-void vkapi::destroy_descriptor_sets(std::vector<VkDescriptorSet> &descriptor_sets) {
-    vkFreeDescriptorSets(context.device, descriptor_pool, descriptor_sets.size(), descriptor_sets.data());
-}
-
-
 VkSurfaceKHR vkapi::create_surface(window& wnd) const {
     VkSurfaceKHR surface;
 
@@ -863,7 +846,7 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     swapchain swapchain;
 
     VkBool32 queue_support_presentation = VK_FALSE;
-    VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.queue_index, surface, &queue_support_presentation))
+    VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device, context.graphics_queue.index, surface, &queue_support_presentation))
 
     assert(queue_support_presentation == VK_TRUE);
 
@@ -944,7 +927,7 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
     };
 
     for (size_t image_index = 0; image_index < swapchain.image_count; image_index++) {
-        struct image* current_image = new struct image();
+        auto* current_image = new struct image();
 
         current_image->handle = vk_images[image_index];
         current_image->size = image_size;
@@ -973,12 +956,12 @@ swapchain vkapi::create_swapchain(VkSurfaceKHR surface, size_t min_image_count, 
 
         auto current_image_handle = images.size() - 1;
 
-        if (usages & VK_IMAGE_USAGE_STORAGE_BIT) {
+        if ((usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) {
             current_image->bindless_storage_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
             update_descriptor_image(current_image_handle, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
         }
 
-        if (usages & VK_IMAGE_USAGE_SAMPLED_BIT) {
+        if ((usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0U) {
             current_image->bindless_sampled_index = bindless_descriptor.allocate(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
             update_descriptor_image(current_image_handle, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
         }
@@ -1117,19 +1100,19 @@ void vkapi::start_record(VkCommandBuffer command_buffer) {
 }
 
 void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layout, VkPipelineStageFlagBits dst_stage, VkAccessFlags dst_access, handle image) {
-    auto current_image = images[image];
+    auto *current_image = images[image];
 
-    VkImageMemoryBarrier undefined_to_general_barrier   = {};
-    undefined_to_general_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    undefined_to_general_barrier.pNext                  = nullptr;
-    undefined_to_general_barrier.srcAccessMask          = current_image->previous_access;
-    undefined_to_general_barrier.dstAccessMask          = dst_access;
-    undefined_to_general_barrier.oldLayout              = current_image->previous_layout;
-    undefined_to_general_barrier.newLayout              = dst_layout;
-    undefined_to_general_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    undefined_to_general_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
-    undefined_to_general_barrier.image                  = current_image->handle;
-    undefined_to_general_barrier.subresourceRange       = current_image->subresource_range;
+    VkImageMemoryBarrier image_barrier   = {};
+    image_barrier.sType                  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_barrier.pNext                  = nullptr;
+    image_barrier.srcAccessMask          = current_image->previous_access;
+    image_barrier.dstAccessMask          = dst_access;
+    image_barrier.oldLayout              = current_image->previous_layout;
+    image_barrier.newLayout              = dst_layout;
+    image_barrier.srcQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    image_barrier.dstQueueFamilyIndex    = VK_QUEUE_FAMILY_IGNORED;
+    image_barrier.image                  = current_image->handle;
+    image_barrier.subresourceRange       = current_image->subresource_range;
 
     vkCmdPipelineBarrier(
         command_buffer,
@@ -1141,7 +1124,7 @@ void vkapi::image_barrier(VkCommandBuffer command_buffer, VkImageLayout dst_layo
         0,
         nullptr,
         1,
-        &undefined_to_general_barrier
+        &image_barrier
     );
 
     current_image->previous_layout = dst_layout;
@@ -1242,21 +1225,21 @@ void vkapi::end_record(VkCommandBuffer command_buffer) {
     VKRESULT(vkEndCommandBuffer(command_buffer))
 }
 
-VkResult vkapi::submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const {
+VkResult vkapi::submit_graphics(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const {
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     VkSubmitInfo submit_info            = {};
     submit_info.sType                   = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.pNext                   = nullptr;
-    submit_info.waitSemaphoreCount      = wait_semaphore ? 1 : 0;
+    submit_info.waitSemaphoreCount      = wait_semaphore != nullptr ? 1 : 0;
     submit_info.pWaitSemaphores         = &wait_semaphore;
-    submit_info.pWaitDstStageMask       = wait_semaphore ? &wait_stage : VK_NULL_HANDLE;
-    submit_info.signalSemaphoreCount    = signal_semaphore ? 1 : 0;
+    submit_info.pWaitDstStageMask       = wait_semaphore != nullptr ? &wait_stage : VK_NULL_HANDLE;
+    submit_info.signalSemaphoreCount    = signal_semaphore != nullptr ? 1 : 0;
     submit_info.pSignalSemaphores       = &signal_semaphore;
     submit_info.commandBufferCount      = 1;
     submit_info.pCommandBuffers         = &command_buffer;
 
-    return vkQueueSubmit(context.queue, 1, &submit_info, submission_fence);
+    return vkQueueSubmit(context.graphics_queue.handle, 1, &submit_info, submission_fence);
 }
 
 VkResult vkapi::present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) const {
@@ -1270,7 +1253,7 @@ VkResult vkapi::present(swapchain& swapchain, uint32_t image_index, VkSemaphore 
     present_info.pImageIndices      = &image_index;
     present_info.pResults           = nullptr;
 
-    return vkQueuePresentKHR(context.queue, &present_info);
+    return vkQueuePresentKHR(context.graphics_queue.handle, &present_info);
 }
 
 

@@ -1,10 +1,14 @@
-#ifndef __VK_CONTEXT_HPP_
-#define __VK_CONTEXT_HPP_
+#pragma once
 
-#include <vector>
 #include "vulkan-loader.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
+
+struct queue {
+    VkQueue         handle;
+    uint32_t        index;
+    VkQueueFlags    usages;
+};
 
 class vkcontext {
     public:
@@ -19,8 +23,7 @@ class vkcontext {
 
         VmaAllocator        allocator;
 
-        uint32_t            queue_index;
-        VkQueue             queue;
+        queue               graphics_queue;
 
     private:
         void create_instance();
@@ -33,16 +36,14 @@ class vkcontext {
 
         void select_physical_device();
 
-        void select_queue(VkQueueFlags queueUsage);
+        [[nodiscard]] uint32_t select_queue(VkQueueFlags queue_usage) const;
 
-        static void check_available_instance_layers(std::vector<const char*>& needed_layers);
+        static void check_available_instance_layers(const char* needed_layers[], size_t needed_layers_count);
 
-        static void check_available_instance_extensions(std::vector<const char*>& needed_extensions);
+        static void check_available_instance_extensions(const char* needed_extensions[], size_t needed_extensions_count);
 
         static bool support_required_features(VkPhysicalDevice physical_device);
 
 
         VkDebugUtilsMessengerEXT        debugMessenger;
 };
-
-#endif // !__VK_CONTEXT_HPP_

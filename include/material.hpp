@@ -1,11 +1,12 @@
-#ifndef __MATERIAL_HPP_
-#define __MATERIAL_HPP_
+#pragma once
 
 #include <cstdint>
 
 #include "vec3.hpp"
 
-struct texture {
+class Texture;
+
+struct gpu_texture {
     uint32_t image_id;
     uint32_t sampler_id;
     uint32_t padding[2];
@@ -13,10 +14,8 @@ struct texture {
 
 struct material {
     color base_color;
-    texture base_color_texture;
-    texture metallic_roughness_texture;
+    Texture* base_color_texture;
+    Texture* metallic_roughness_texture;
     float metalness = 1.f;
     float roughness = 1.f;
 };
-
-#endif // !__MATERIAL_HPP_

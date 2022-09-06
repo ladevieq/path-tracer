@@ -14,8 +14,6 @@
 #include "window.hpp"
 #include "utils.hpp"
 
-#include "Tracy.hpp"
-
 #if defined(LINUX)
 #include <dlfcn.h>
 #include <unistd.h>

@@ -18,10 +18,11 @@ gltf::gltf(const std::filesystem::path &filepath) {
     auto& scene = gltf_json["scenes"][0];
 
     auto &gltf_buffers = gltf_json["buffers"];
-    buffers.reserve(gltf_buffers.size());
-    for (auto& gltf_buffer : gltf_buffers) {
-        auto buffer_path = parent_path / gltf_buffer["uri"].get<std::string>();
-        buffers.emplace_back(read_file(buffer_path.string().c_str()));
+    auto buffer_count = gltf_buffers.size();
+    buffers.resize(gltf_buffers.size());
+    for (auto buffer_index { 0U }; buffer_index < buffer_count; buffer_index++) {
+        auto buffer_path = parent_path / gltf_buffers[buffer_index]["uri"].get<std::string>();
+        buffers[buffer_index] = read_file(buffer_path.string().c_str());
     }
 
     load_textures(parent_path);
@@ -68,7 +69,8 @@ void gltf::load_meshes() {
         const auto &primitives = gltf_meshes[mesh_index]["primitives"];
 
         for (const auto &primitive : primitives) {
-            mesh.add_submesh(load_primitive(primitive));
+            auto material = materials[primitive["material"].get<uint32_t>()];
+            mesh.add_submesh(load_primitive(primitive), material);
         }
 
         Mesh::register_mesh(mesh);
@@ -91,7 +93,6 @@ Mesh::submesh gltf::load_primitive(const json &primitive) {
 
     submesh.index_count = gltf_json["accessors"][primitive["indices"].get<uint32_t>()]["count"].get<uint32_t>();
     submesh.vertex_count = gltf_json["accessors"][primitive["attributes"]["POSITION"].get<uint32_t>()]["count"].get<uint32_t>();
-    // submesh.mat = materials[gltf_primitive["material"].get<uint32_t>()];
 
     return submesh;
 }
@@ -111,22 +112,13 @@ Mesh::attribute gltf::load_attribute(uint32_t accessor_index) {
 void gltf::load_textures(const std::filesystem::path &path) {
     const auto &gltf_images = gltf_json["images"];
     auto images_count = gltf_images.size();
-    std::vector<Texture *> images{images_count};
+    std::vector<raw_image> images{images_count};
 
     for (size_t image_index = 0; image_index < images_count; image_index++) {
         const auto &gltf_image = gltf_images[image_index];
-        int x;
-        int y;
-        int n;
         auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
-        unsigned char *data = stbi_load(filepath.c_str(), &x, &y, &n, 4);
-        auto *img = vkrenderer::create_2d_texture(static_cast<uint32_t>(x), static_cast<uint32_t>(y), VK_FORMAT_R8G8B8A8_UNORM);
-
-        // renderer.update_image(img, data);
-
-        stbi_image_free(data);
-
-        images[image_index] = img;
+        auto& image = images[image_index];
+        image.data = stbi_load(filepath.c_str(), &image.x, &image.y, &image.n, 4);
     }
 
     const auto &gltf_samplers = gltf_json["samplers"];
@@ -144,19 +136,20 @@ void gltf::load_textures(const std::filesystem::path &path) {
     for (size_t texture_index = 0; texture_index < textures_count; texture_index++) {
         auto gltf_texture = gltf_textures[texture_index];
 
-        auto image_index = gltf_texture["source"].get<uint32_t>();
-        auto &image = images[image_index];
-
-        uint32_t image_id = vkrenderer::api.get_image(image->device_image).bindless_sampled_index;
-        uint32_t sampler_id = 0;
+        auto& image = images[gltf_texture["source"].get<uint32_t>()];
+        Sampler *sampler = nullptr;
         if (gltf_texture.contains("sampler")) {
             auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
-            auto &sampler = samplers[sampler_index];
-            sampler_id = vkrenderer::api.get_sampler(sampler->device_sampler).bindless_index;
+            sampler = samplers[sampler_index];
         }
 
-        textures[texture_index] =
-            texture{.image_id = image_id, .sampler_id = sampler_id};
+        auto *texture = vkrenderer::create_2d_texture(static_cast<uint32_t>(image.x), static_cast<uint32_t>(image.y), VK_FORMAT_R8G8B8A8_UNORM, sampler);
+
+        texture->write(image.data);
+
+        stbi_image_free(image.data);
+
+        textures[texture_index] = texture;
     }
 }
 

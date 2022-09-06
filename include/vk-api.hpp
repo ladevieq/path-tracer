@@ -140,8 +140,9 @@ class vkapi {
         void destroy_sampler(handle sampler);
 
 
-        std::vector<VkCommandBuffer> create_command_buffers(size_t command_buffers_count);
-        void destroy_command_buffers(std::vector<VkCommandBuffer> &command_buffers);
+        [[nodiscard]] VkCommandPool create_command_pool() const;
+
+        void allocate_command_buffers(VkCommandPool command_pool, VkCommandBuffer* command_buffers, size_t count) const;
 
 
         VkRenderPass create_render_pass(std::vector<VkFormat>& color_attachments_format, VkImageLayout initial_layout, VkImageLayout final_layout);
@@ -158,10 +159,6 @@ class vkapi {
         pipeline create_compute_pipeline(const char* shader_name) const;
         pipeline create_graphics_pipeline(const char* shader_name, VkShaderStageFlagBits shader_stages, VkRenderPass render_pass, std::vector<VkDynamicState>& dynamic_states) const;
         void destroy_pipeline(pipeline &pipeline) const;
-
-
-        std::vector<VkDescriptorSet> create_descriptor_sets(VkDescriptorSetLayout descriptor_sets_layout, size_t descriptor_sets_count);
-        void destroy_descriptor_sets(std::vector<VkDescriptorSet> &descriptor_sets);
 
 
         VkSurfaceKHR create_surface(window& wnd) const;
@@ -195,7 +192,8 @@ class vkapi {
 
         void end_record(VkCommandBuffer command_buffer);
 
-        VkResult submit(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
+        VkResult submit_graphics(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
+        VkResult submit_copy(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
 
         VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) const;
 
@@ -216,7 +214,6 @@ class vkapi {
         std::vector<image*>      images;
         std::vector<sampler*>    samplers;
 
-        VkCommandPool           command_pool;
         VkDescriptorPool        descriptor_pool;
 
 };

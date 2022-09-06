@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <cassert>
+#include <vector>
+#include <array>
 
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
@@ -83,15 +85,16 @@ void vkcontext::create_instance() {
     app_info.engineVersion       = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion          = VK_API_VERSION_1_2;
 
-    std::vector<const char*> needed_layers = {
+    const char* needed_layers[] = {
 #if defined(_DEBUG)
         "VK_LAYER_KHRONOS_validation",
 #endif
     };
+    auto needed_layers_count = sizeof(needed_layers) / sizeof(needed_layers[0]);
 
-    check_available_instance_layers(needed_layers);
+    check_available_instance_layers(needed_layers, needed_layers_count);
 
-    std::vector<const char*> needed_extensions = {
+    const char* needed_extensions[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         "VK_KHR_surface",
 #if defined(LINUX)
@@ -102,16 +105,17 @@ void vkcontext::create_instance() {
         "VK_EXT_metal_surface"
 #endif
     };
+    auto needed_extensions_count = sizeof(needed_extensions) / sizeof(needed_extensions[0]);
 
-    check_available_instance_extensions(needed_extensions);
+    check_available_instance_extensions(needed_extensions, needed_extensions_count);
 
     VkInstanceCreateInfo instance_create_info       = {};
     instance_create_info.sType                      = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instance_create_info.pApplicationInfo           = &app_info;
-    instance_create_info.enabledLayerCount          = needed_layers.size();
-    instance_create_info.ppEnabledLayerNames        = needed_layers.data();
-    instance_create_info.enabledExtensionCount      = needed_extensions.size();
-    instance_create_info.ppEnabledExtensionNames    = needed_extensions.data();
+    instance_create_info.enabledLayerCount          = needed_layers_count;
+    instance_create_info.ppEnabledLayerNames        = needed_layers;
+    instance_create_info.enabledExtensionCount      = needed_extensions_count;
+    instance_create_info.ppEnabledExtensionNames    = needed_extensions;
 
     VKRESULT(vkCreateInstance(&instance_create_info, nullptr, &instance))
 
@@ -142,15 +146,19 @@ void vkcontext::create_debugger() {
 
 void vkcontext::create_device() {
     select_physical_device();
-    select_queue(VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT);
 
-    VkDeviceQueueCreateInfo queue_create_info   = {};
-    queue_create_info.sType                     = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_create_info.queueFamilyIndex          = queue_index;
-    queue_create_info.queueCount                = 1;
+    graphics_queue = {
+        .usages = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT,
+    };
+    auto queue_priority = 1.f;
+    graphics_queue.index = select_queue(graphics_queue.usages);
+    auto queue_create_info  = VkDeviceQueueCreateInfo {
+        .sType              = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .queueFamilyIndex   = graphics_queue.index,
+        .queueCount         = 1,
 
-    float queue_priority                        = 1.f;
-    queue_create_info.pQueuePriorities          = &queue_priority;
+        .pQueuePriorities   = &queue_priority
+    };
 
     VkPhysicalDeviceVulkan12Features physical_device_12_features            = {};
     physical_device_12_features.sType                                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -168,7 +176,7 @@ void vkcontext::create_device() {
     device_features.sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     device_features.pNext                       = &physical_device_12_features;
 
-    std::vector<const char*> device_ext         = {
+    const char* device_ext[]                    = {
         "VK_KHR_swapchain",
     };
 
@@ -177,15 +185,15 @@ void vkcontext::create_device() {
     device_create_info.pNext                    = &device_features;
     device_create_info.pQueueCreateInfos        = &queue_create_info;
     device_create_info.queueCreateInfoCount     = 1;
-    device_create_info.ppEnabledExtensionNames  = device_ext.data();
-    device_create_info.enabledExtensionCount    = device_ext.size();
+    device_create_info.ppEnabledExtensionNames  = device_ext;
+    device_create_info.enabledExtensionCount    = sizeof(device_ext) / sizeof(device_ext[0]);
     device_create_info.enabledLayerCount        = 0; // Deprecated https://www.khronos.org/registry/vulkan/specs/1.2/html/chap31.html#extendingvulkan-layers-devicelayerdeprecation
 
     VKRESULT(vkCreateDevice(physical_device, &device_create_info, nullptr, &device))
 
     load_device_functions(device);
 
-    vkGetDeviceQueue(device, queue_index, 0, &queue);
+    vkGetDeviceQueue(device, graphics_queue.index, 0, &graphics_queue.handle);
 
     std::cerr << "Device ready" << std::endl;
 }
@@ -208,7 +216,6 @@ void vkcontext::select_physical_device() {
 
     if (physical_devices_count < 1) {
         std::cerr << "No physical device found !" << std::endl;
-        exit(1);
     }
 
     std::vector<VkPhysicalDevice> physical_devices { physical_devices_count };
@@ -224,7 +231,7 @@ void vkcontext::select_physical_device() {
     assert(physical_device != VK_NULL_HANDLE);
 }
 
-void vkcontext::select_queue(VkQueueFlags queueUsage) {
+uint32_t vkcontext::select_queue(VkQueueFlags queue_usage) const {
     uint32_t queue_properties_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, nullptr);
 
@@ -232,17 +239,16 @@ void vkcontext::select_queue(VkQueueFlags queueUsage) {
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, queue_properties.data());
 
     for (uint32_t properties_index = 0; properties_index < queue_properties_count; properties_index++) {
-        if ((queue_properties[properties_index].queueFlags & queueUsage) != 0U) {
-            queue_index = properties_index;
-            return;
+        if ((queue_properties[properties_index].queueFlags & queue_usage) != 0U) {
+            return properties_index;
         }
     }
 
-    std::cerr << "No compute queue found !" << std::endl;
-    exit(1);
+    assert(true);
+    return UINT_MAX;
 }
 
-void vkcontext::check_available_instance_layers(std::vector<const char*>& needed_layers) {
+void vkcontext::check_available_instance_layers(const char* needed_layers[], size_t needed_layers_count) {
     uint32_t property_count = 0;
     vkEnumerateInstanceLayerProperties(&property_count, VK_NULL_HANDLE);
 
@@ -251,18 +257,18 @@ void vkcontext::check_available_instance_layers(std::vector<const char*>& needed
 
     uint32_t available_needed_layers_count = 0;
 
-    for (auto& layer_property: layer_properties) {
-        for (auto& needed_layer: needed_layers) {
-            if (strcmp(layer_property.layerName, needed_layer) == 0) {
+    for (auto layer_property: layer_properties) {
+        for (auto layer_index { 0U }; layer_index < needed_layers_count; layer_index++) {
+            if (strcmp(layer_property.layerName, needed_layers[layer_index]) == 0) {
                 available_needed_layers_count++;
             }
         }
     }
 
-    assert(available_needed_layers_count == needed_layers.size());
+    assert(available_needed_layers_count == needed_layers_count);
 }
 
-void vkcontext::check_available_instance_extensions(std::vector<const char*>& needed_extensions) {
+void vkcontext::check_available_instance_extensions(const char* needed_extensions[], size_t needed_extensions_count) {
     uint32_t vulkan_extensions_count = 0;
     vkEnumerateInstanceExtensionProperties(VK_NULL_HANDLE, &vulkan_extensions_count, VK_NULL_HANDLE);
 
@@ -271,14 +277,14 @@ void vkcontext::check_available_instance_extensions(std::vector<const char*>& ne
 
     uint32_t available_needed_extensions_count = 0;
     for (auto& extension: vulkan_extensions_properties) {
-        for (auto& needed_extension: needed_extensions) {
-            if (strcmp(extension.extensionName, needed_extension) == 0) {
+        for (auto extension_index { 0U }; extension_index < needed_extensions_count; extension_index++) {
+            if (strcmp(extension.extensionName, needed_extensions[extension_index]) == 0) {
                 available_needed_extensions_count++;
             }
         }
     }
 
-    assert(available_needed_extensions_count == needed_extensions.size());
+    assert(available_needed_extensions_count == needed_extensions_count);
 }
 
 bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {
