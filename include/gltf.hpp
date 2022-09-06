@@ -15,6 +15,13 @@ struct node {
     Mesh*               mesh = nullptr;
 };
 
+struct raw_image {
+    int32_t x;
+    int32_t y;
+    int32_t n;
+    uint8_t *data;
+};
+
 namespace std::filesystem {
     class path;
 }
@@ -42,7 +49,7 @@ private:
     json gltf_json;
     std::vector<Mesh> meshes;
     std::vector<material> materials;
-    std::vector<texture> textures;
+    std::vector<Texture*> textures;
     std::vector<std::vector<uint8_t>> buffers;
 };
 

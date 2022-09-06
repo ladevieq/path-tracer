@@ -20,7 +20,7 @@ class Mesh {
         uint32_t    vertex_offset;
         uint32_t    index_offset;
         size_t      element_count;
-        uint32_t    mat_id;
+        material&   material;
     };
 
 public:
@@ -39,14 +39,14 @@ public:
         std::array<attribute, ATTRIBUTE_TYPE::MAX_ATTRIBUTE> attributes;
         uint32_t vertex_count = 0;
         uint32_t index_count = 0;
-        // material& mat;
+        // material& material;
     };
 
     Mesh() = default;
 
     [[nodiscard]] mesh_instance instantiate () const;
 
-    void add_submesh(const submesh& submesh);
+    void add_submesh(const submesh& submesh, material& material);
 
     static inline uint32_t attribute_components(enum ATTRIBUTE_TYPE attribute_type) {
         switch(attribute_type) {

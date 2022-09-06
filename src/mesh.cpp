@@ -2,13 +2,13 @@
 
 static std::vector<Mesh> meshes {};
 
-void Mesh::add_submesh(const submesh& submesh) {
+void Mesh::add_submesh(const submesh& submesh, material& material) {
     submeshes.emplace_back(
         submesh_info {
             (uint32_t)vertex_count,
             (uint32_t)index_count,
             submesh.index_count / 3,
-            0
+            material
         }
     );
 

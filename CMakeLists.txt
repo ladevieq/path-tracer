@@ -5,31 +5,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Release)
 
 project(path-tracer VERSION 1.0 LANGUAGES CXX)
 
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-add_compile_options(
-    # -fsanitize=address TODO: Enable once compilation with the flag work on windows
-    -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
-    -ftime-trace
-    -msse4.1
-    # https://github.com/cpp-best-practices/cppbestpractices/blob/master/02-Use_the_Tools_Available.md#gcc--clang
-    -Wall
-    -Wextra
-    -Wshadow
-    -Wcast-align
-    -Wnon-virtual-dtor
-    -Wpedantic
-    -Wunused
-)
-endif()
 
 find_package(imgui CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
-find_package(Tracy CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 if(UNIX AND NOT APPLE)

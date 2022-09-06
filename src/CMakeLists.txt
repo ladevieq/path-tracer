@@ -1,4 +1,4 @@
-set(LIBRARIES imgui::imgui nlohmann_json::nlohmann_json Tracy::TracyClient)
+set(LIBRARIES imgui::imgui)
 
 set(DEFINES -DNOMINMAX -D_USE_MATH_DEFINES -DVK_NO_PROTOTYPES)
 
@@ -29,8 +29,30 @@ add_executable(
     primitive-renderpass.cpp
     bvh.cpp
     mesh.cpp
-    # ${Tracy_SOURCE_DIR}/TracyClient.cpp
 )
+
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    target_compile_options(
+        path-tracer
+        PRIVATE
+        # -fsanitize=address TODO: enable once compiling with the flag works
+        -fcolor-diagnostics -fansi-escape-codes # colored output when using ninja
+        -ftime-trace
+        -msse4.1
+        # https://github.com/cpp-best-practices/cppbestpractices/blob/master/02-Use_the_Tools_Available.md#gcc--clang
+        -Wall
+        -Wextra
+        -Wshadow
+        -Wcast-align
+        -Wnon-virtual-dtor
+        -Wpedantic
+        -Wunused
+    )
+
+# target_link_options(path-tracer PRIVATE -fsanitize=address)
+endif()
+
+target_link_directories(path-tracer PRIVATE "C:\\Program Files\\LLVM\\lib\\clang\\14.0.6\\lib\\windows")
 
 target_compile_definitions(path-tracer PUBLIC ${DEFINES})
 
@@ -42,7 +64,6 @@ target_include_directories(path-tracer PUBLIC ${Vulkan_INCLUDE_DIRS})
 if(UNIX AND NOT APPLE)
     target_include_directories(path-tracer PUBLIC ${X11_xcb_INCLUDE_PATH})
 endif()
-
 
 if(UNIX AND NOT APPLE)
     list(APPEND LIBRARIES ${CMAKE_DL_LIBS} ${X11_xcb_LIB} ${X11_xkbcommon_LIB} ${X11_xkbcommon_X11_LIB})
