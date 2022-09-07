@@ -145,7 +145,7 @@ void gltf::load_textures(const std::filesystem::path &path) {
 
         auto *texture = vkrenderer::create_2d_texture(static_cast<uint32_t>(image.x), static_cast<uint32_t>(image.y), VK_FORMAT_R8G8B8A8_UNORM, sampler);
 
-        texture->write(image.data);
+        texture->update(image.data);
 
         stbi_image_free(image.data);
 

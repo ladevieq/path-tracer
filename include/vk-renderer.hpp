@@ -2,6 +2,7 @@
 #define __VK_RENDERER_HPP_
 
 #include <cstdint>
+#include <format>
 #include <vector>
 
 #include "vk-context.hpp"
@@ -15,9 +16,27 @@ class Primitive;
 class window;
 
 class Texture;
-class Buffer;
 class Sampler;
 class RingBuffer;
+
+
+class Buffer {
+    public:
+
+    Buffer(size_t size, VkBufferUsageFlagBits usage);
+    ~Buffer();
+
+    void write(void* data, off_t alloc_offset, size_t data_size) const;
+
+    void resize(size_t new_size);
+
+    handle device_buffer;
+
+    size_t buffer_size;
+
+    VkBufferUsageFlagBits usage;
+};
+
 
 class vkrenderer {
     public:
@@ -28,9 +47,15 @@ class vkrenderer {
         void recreate_swapchain();
 
 
+        void update_images();
+
+        static void queue_image_update(Texture* texture);
+
         static Buffer* create_buffer(size_t size);
 
         static Buffer* create_index_buffer(size_t size);
+
+        static Buffer* create_staging_buffer(size_t size);
 
         static Texture* create_2d_texture(size_t width, size_t height, VkFormat format, Sampler *sampler = nullptr);
 
@@ -46,8 +71,6 @@ class vkrenderer {
         Primitive* create_primitive(PrimitiveRenderpass& primitive_render_pass);
 
         void render();
-
-        RingBuffer* get_staging_buffer() { return staging_buffer; }
 
         [[nodiscard]]uint32_t frame_index() const { return this->virtual_frame_index; }
 
@@ -72,14 +95,13 @@ class vkrenderer {
 
         std::vector<Renderpass*>        renderpasses;
 
-        static constexpr uint32_t       initial_copy_command_buffers = 10U;
         uint32_t                        virtual_frame_index = 0;
         uint32_t                        swapchain_image_index = 0;
 
         VkCommandBuffer                 graphics_command_buffers[virtual_frames_count];
-        std::vector<VkCommandBuffer>    copy_command_buffers[virtual_frames_count];
+        VkCommandBuffer                 copy_command_buffers[virtual_frames_count];
 
-        RingBuffer*                     staging_buffer;
+        RingBuffer*                     staging_buffers[virtual_frames_count];
 
 
         pipeline                        tonemapping_pipeline;
@@ -96,20 +118,24 @@ class vkrenderer {
         std::vector<Texture*>           swapchain_textures;
 
         const uint32_t                  min_swapchain_image_count = 3;
+
+        static std::vector<Texture*>    upload_queue;
 };
 
 class RingBuffer {
     public:
-    RingBuffer(size_t size)
-        : buffer_size(size) {}
 
-    [[nodiscard]]size_t alloc(size_t alloc_size) const {
+    static const off_t invalid_alloc = -1;
+
+    RingBuffer(size_t size);
+
+    [[nodiscard]]off_t alloc(size_t alloc_size) const {
         assert(alloc_size > 0);
 
         if (ptr + alloc_size < buffer_size) {
             return ptr;
         }
-        return 0;
+        return invalid_alloc;
     }
 
     void write(void* data, off_t alloc_offset, size_t data_size) const {
@@ -134,66 +160,59 @@ class Sampler {
     handle device_sampler;
 };
 
-// TODO: Move those to there own files
 class Texture {
     public:
 
-    void write(void* data) const {
-        auto image = vkrenderer::api.get_image(device_image);
-        auto texture_size = image.size.width * image.size.height * 4;
+    Texture(handle image_handle) {
+        auto image = vkrenderer::api.get_image(image_handle);
+        width = image.size.width;
+        height = image.size.height;
+        depth = image.size.depth;
 
-        // TODO: Do all this inside vkrenderer
-        // auto* buffer =  vkrenderer::get_staging_buffer();
-        // auto alloc_offset = buffer->alloc(texture_size);
-        // assert(alloc_offset > 0);
-
-        // // std::memcpy(buffer.device_ptr, data, texture_size);
-        // buffer->write(data, alloc_offset, texture_size);
-
-        // vkrenderer::api.create_command_buffers
-        // submit upload work
-        // VKRESULT(vkWaitForFences(vkrenderer::context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
-        // VKRESULT(vkResetFences(vkrenderer::context.device, 1, &submission_fences[virtual_frame_index]))
-
-        // auto* cmd_buf = command_buffers[virtual_frame_index];
-        // api.start_record(cmd_buf);
-
-        // api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, device_image);
-
-        // api.copy_buffer(cmd_buf, buffer, device_image);
-
-        // api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, device_image);
-
-        // api.end_record(cmd_buf);
-
-
-
-        // VKRESULT(vkWaitForFences(vkrenderer::context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
+        device_image = image_handle;
     }
 
-    Sampler* sampler = nullptr;
+    Texture(size_t width, size_t height, size_t depth, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM, Sampler* texture_sampler = nullptr)
+        : width(width), height(height), depth(depth) {
+        sampler = texture_sampler;
+        device_image = vkrenderer::api.create_image(
+            { .width = (uint32_t)width, .height = (uint32_t)height, .depth = 1 },
+            format,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+        );
+    }
+
+    void update(void* new_data) {
+        if (data == nullptr) {
+            free(data);
+        }
+        data = new_data;
+
+        // vkrenderer::update_image(this);
+    }
+
+    size_t size() const {
+        auto image = vkrenderer::api.get_image(device_image);
+        return width * height * depth * pixel_size(image.format);
+    }
+
+    static size_t pixel_size(VkFormat format) {
+        switch (format) {
+            case VK_FORMAT_R8G8B8A8_UNORM:
+                return 4;
+            default:
+                return 0;
+        }
+    }
+
+    Sampler* sampler    = nullptr;
+
+    void* data          = nullptr;
+
+    size_t width        = 0;
+    size_t height       = 0;
+    size_t depth        = 0;
 
     handle device_image;
 };
-
-class Buffer {
-    public:
-
-    Buffer(size_t size);
-
-    ~Buffer() {
-        vkrenderer::api.destroy_buffer(device_buffer);
-    }
-
-    void write(void* data, off_t alloc_offset, size_t data_size) const {
-        auto api_buffer = vkrenderer::api.get_buffer(device_buffer);
-
-        std::memcpy((uint8_t*)api_buffer.device_ptr + alloc_offset, data, data_size);
-    }
-
-    handle device_buffer;
-
-    size_t buffer_size;
-};
-
 #endif // !__VK_RENDERER_HPP_
