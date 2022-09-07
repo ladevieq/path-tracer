@@ -20,6 +20,7 @@
 
 auto vkrenderer::context = vkcontext();
 auto vkrenderer::api = vkapi(vkrenderer::context);
+auto vkrenderer::upload_queue = std::vector<Texture*>();
 
 vkrenderer::vkrenderer(window& wnd) {
     platform_surface = api.create_surface(wnd);
@@ -34,8 +35,7 @@ vkrenderer::vkrenderer(window& wnd) {
 
     swapchain_textures.resize(swapchain.image_count);
     for (size_t index = 0; index < swapchain.image_count; index++) {
-        swapchain_textures[index] = new Texture();
-        swapchain_textures[index]->device_image = swapchain.images[index];
+        swapchain_textures[index] = new Texture(swapchain.images[index]);
     }
 
     tonemapping_pipeline = api.create_compute_pipeline("tonemapping");
@@ -49,12 +49,10 @@ vkrenderer::vkrenderer(window& wnd) {
         acquire_semaphores[index] = api.create_semaphore();
 
         copy_command_pools[index] = api.create_command_pool();
-        copy_command_buffers[index].resize(initial_copy_command_buffers);
-        api.allocate_command_buffers(copy_command_pools[index], copy_command_buffers[index].data(), copy_command_buffers[index].size());
+        api.allocate_command_buffers(copy_command_pools[index], &copy_command_buffers[index], 1);
+
+        // staging_buffers[index] = create_staging_buffer(4096 * 4096 * sizeof(uint32_t));
     }
-
-
-    // staging_buffer = api.create_buffer(4096 * 4096 * 4 * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 }
 
 vkrenderer::~vkrenderer() {
@@ -65,12 +63,7 @@ vkrenderer::~vkrenderer() {
     }
 
     for(size_t index { 0 }; index < virtual_frames_count; index++) {
-        vkFreeCommandBuffers(
-            context.device,
-            copy_command_pools[index],
-            copy_command_buffers[index].size(),
-            copy_command_buffers[index].data()
-        );
+        vkFreeCommandBuffers(context.device, copy_command_pools[index], 1, &copy_command_buffers[index]);
     }
 
     api.destroy_fences(submission_fences, virtual_frames_count);
@@ -102,45 +95,50 @@ void vkrenderer::recreate_swapchain() {
 
     swapchain_textures.resize(swapchain.image_count);
     for (size_t index = 0; index < swapchain.image_count; index++) {
-        swapchain_textures[index] = new Texture();
-        swapchain_textures[index]->device_image = swapchain.images[index];
+        swapchain_textures[index] = new Texture(swapchain.images[index]);
     }
 }
 
-void upload_image(void* data, size_t size) {
-    // copy to staging buffer
+void vkrenderer::queue_image_update(Texture* texture) {
+    upload_queue.push_back(texture);
+}
 
-    // allocate command buffers
-    // get command buffer
-    // copy to gpu resident texture
+void vkrenderer::update_images() {
+    auto* staging_buffer = staging_buffers[virtual_frame_index];
+
+    VkCommandBuffer command_buffer = copy_command_buffers[virtual_frame_index];
+    vkrenderer::api.start_record(command_buffer);
+
+    for (auto* texture : upload_queue) {
+        auto texture_size = texture->size();
+        auto offset = staging_buffer->alloc(texture_size);
+
+        if (offset == RingBuffer::invalid_alloc) {
+            break;
+        }
+
+        staging_buffer->write(texture->data, offset, texture_size);
+
+        vkrenderer::api.copy_buffer(command_buffer, staging_buffer->device_buffer, texture->device_image, offset);
+    }
+
+    vkrenderer::api.end_record(command_buffer);
 }
 
 Buffer* vkrenderer::create_buffer(size_t size) {
-    auto* buffer = new Buffer(size);
-
-    buffer->device_buffer = api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    return buffer;
+    return new Buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 }
 
 Buffer* vkrenderer::create_index_buffer(size_t size) {
-    auto* buffer = new Buffer(size);
+    return new Buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+}
 
-    buffer->device_buffer = api.create_buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    return buffer;
+Buffer* vkrenderer::create_staging_buffer(size_t size) {
+    return new Buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 }
 
 Texture* vkrenderer::create_2d_texture(size_t width, size_t height, VkFormat format, Sampler *sampler) {
-     auto* texture = new Texture();
-    texture->sampler = sampler;
-    texture->device_image = api.create_image(
-        { .width = (uint32_t)width, .height = (uint32_t)height, .depth = 1 },
-        format,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
-    );
-
-    return texture;
+    return new Texture(width, height, 1, format, sampler);
 }
 
 void vkrenderer::destroy_2d_texture(Texture* texture) {
@@ -218,8 +216,8 @@ void vkrenderer::finish_frame() {
 
     api.end_record(cmd_buf);
 
-    // wait for acquire + copy semaphores
 
+    //  TODO: Submit copy command buffer
     api.submit_graphics(cmd_buf, acquire_semaphores[virtual_frame_index], execution_semaphores[virtual_frame_index], submission_fences[virtual_frame_index]);
 
     auto present_result = api.present(swapchain, swapchain_image_index, execution_semaphores[virtual_frame_index]);
@@ -241,8 +239,39 @@ void vkrenderer::handle_swapchain_result(VkResult function_result) {
 }
 
 
-Buffer::Buffer(size_t size)
-        : buffer_size(size) {
-        device_buffer = vkrenderer::api.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    }
 
+Buffer::Buffer(size_t size, VkBufferUsageFlagBits usage)
+    : buffer_size(size), usage(usage) {
+    device_buffer = vkrenderer::api.create_buffer(size, usage, VMA_MEMORY_USAGE_CPU_TO_GPU);
+}
+
+Buffer::~Buffer() {
+    vkrenderer::api.destroy_buffer(device_buffer);
+}
+
+void Buffer::write(void* data, off_t alloc_offset, size_t data_size) const {
+    auto api_buffer = vkrenderer::api.get_buffer(device_buffer);
+
+    std::memcpy((uint8_t*)api_buffer.device_ptr + alloc_offset, data, data_size);
+}
+
+void Buffer::resize(size_t new_size) {
+    auto old_device_buffer = device_buffer;
+    new_size = static_cast<uint32_t>(exp2(ceil(log2((double)new_size))));
+
+    device_buffer = vkrenderer::api.create_buffer(new_size, usage, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    auto old_buffer = vkrenderer::api.get_buffer(device_buffer);
+    auto new_buffer = vkrenderer::api.get_buffer(device_buffer);
+    std::memcpy(new_buffer.device_ptr, old_buffer.device_ptr, buffer_size);
+
+    buffer_size = new_size;
+
+    vkrenderer::api.destroy_buffer(old_device_buffer);
+}
+
+
+RingBuffer::RingBuffer(size_t size)
+        : buffer_size(size) {
+        device_buffer = vkrenderer::api.create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    }
