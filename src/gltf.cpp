@@ -69,7 +69,7 @@ void gltf::load_meshes() {
         const auto &primitives = gltf_meshes[mesh_index]["primitives"];
 
         for (const auto &primitive : primitives) {
-            auto material = materials[primitive["material"].get<uint32_t>()];
+            auto& material = materials[primitive["material"].get<uint32_t>()];
             mesh.add_submesh(load_primitive(primitive), material);
         }
 
@@ -121,13 +121,14 @@ void gltf::load_textures(const std::filesystem::path &path) {
         image.data = stbi_load(filepath.c_str(), &image.x, &image.y, &image.n, 4);
     }
 
-    const auto &gltf_samplers = gltf_json["samplers"];
-    auto samplers_count = gltf_samplers.size();
-    std::vector<Sampler *> samplers{samplers_count};
+    // const auto &gltf_samplers = gltf_json["samplers"];
+    // auto samplers_count = gltf_samplers.size();
+    // std::vector<Sampler *> samplers{samplers_count};
 
-    for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
-        samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    }
+    Sampler* sampler = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    // for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
+    //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    // }
 
     const auto &gltf_textures = gltf_json["textures"];
     auto textures_count = gltf_textures.size();
@@ -137,17 +138,14 @@ void gltf::load_textures(const std::filesystem::path &path) {
         auto gltf_texture = gltf_textures[texture_index];
 
         auto& image = images[gltf_texture["source"].get<uint32_t>()];
-        Sampler *sampler = nullptr;
-        if (gltf_texture.contains("sampler")) {
-            auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
-            sampler = samplers[sampler_index];
-        }
+        // if (gltf_texture.contains("sampler")) {
+        //     auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
+        //     sampler = samplers[sampler_index];
+        // }
 
         auto *texture = vkrenderer::create_2d_texture(static_cast<uint32_t>(image.x), static_cast<uint32_t>(image.y), VK_FORMAT_R8G8B8A8_UNORM, sampler);
 
         texture->update(image.data);
-
-        stbi_image_free(image.data);
 
         textures[texture_index] = texture;
     }

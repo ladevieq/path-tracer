@@ -52,6 +52,7 @@ vkrenderer::vkrenderer(window& wnd) {
         api.allocate_command_buffers(copy_command_pools[index], &copy_command_buffers[index], 1);
 
         // staging_buffers[index] = create_staging_buffer(4096 * 4096 * sizeof(uint32_t));
+        staging_buffers[index] = new RingBuffer(4096ULL * 4096ULL * sizeof(uint32_t));
     }
 }
 
@@ -64,15 +65,16 @@ vkrenderer::~vkrenderer() {
 
     for(size_t index { 0 }; index < virtual_frames_count; index++) {
         vkFreeCommandBuffers(context.device, copy_command_pools[index], 1, &copy_command_buffers[index]);
+        vkDestroyCommandPool(context.device, copy_command_pools[index], nullptr);
     }
 
     api.destroy_fences(submission_fences, virtual_frames_count);
     api.destroy_semaphores(execution_semaphores, virtual_frames_count);
     api.destroy_semaphores(acquire_semaphores, virtual_frames_count);
 
+    vkFreeCommandBuffers(context.device, graphics_command_pool, virtual_frames_count, graphics_command_buffers);
     vkDestroyCommandPool(context.device, graphics_command_pool, nullptr);
 
-    vkFreeCommandBuffers(context.device, graphics_command_pool, virtual_frames_count, graphics_command_buffers);
 
     api.destroy_pipeline(tonemapping_pipeline);
 
@@ -109,7 +111,9 @@ void vkrenderer::update_images() {
     VkCommandBuffer command_buffer = copy_command_buffers[virtual_frame_index];
     vkrenderer::api.start_record(command_buffer);
 
-    for (auto* texture : upload_queue) {
+    while(!upload_queue.empty()) {
+        auto* texture = upload_queue.back();
+        upload_queue.pop_back();
         auto texture_size = texture->size();
         auto offset = staging_buffer->alloc(texture_size);
 
@@ -119,10 +123,14 @@ void vkrenderer::update_images() {
 
         staging_buffer->write(texture->data, offset, texture_size);
 
+        vkrenderer::api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, texture->device_image);
         vkrenderer::api.copy_buffer(command_buffer, staging_buffer->device_buffer, texture->device_image, offset);
+        vkrenderer::api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, texture->device_image);
     }
 
     vkrenderer::api.end_record(command_buffer);
+
+    recorded_command_buffers.push_back(command_buffer);
 }
 
 Buffer* vkrenderer::create_buffer(size_t size) {
@@ -139,11 +147,6 @@ Buffer* vkrenderer::create_staging_buffer(size_t size) {
 
 Texture* vkrenderer::create_2d_texture(size_t width, size_t height, VkFormat format, Sampler *sampler) {
     return new Texture(width, height, 1, format, sampler);
-}
-
-void vkrenderer::destroy_2d_texture(Texture* texture) {
-    api.destroy_image(texture->device_image);
-    delete texture;
 }
 
 // TODO: Check if a similar sampler has been allocated
@@ -172,9 +175,15 @@ Primitive* vkrenderer::create_primitive(PrimitiveRenderpass& primitive_render_pa
 }
 
 void vkrenderer::render() {
-    begin_frame();
+    swapchain_image_index = 0;
+    auto acquire_result = vkAcquireNextImageKHR(context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[virtual_frame_index], VK_NULL_HANDLE, &swapchain_image_index);
+    handle_swapchain_result(acquire_result);
+
+    api.start_record(graphics_command_buffers[virtual_frame_index]);
 
     auto* cmd_buf = graphics_command_buffers[virtual_frame_index];
+
+    // wait for transfer operations
 
     for (auto& renderpass: renderpasses) {
         renderpass->execute(*this, cmd_buf);
@@ -193,32 +202,22 @@ void vkrenderer::render() {
 
     api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, swapchain.images[swapchain_image_index]);
 
-    finish_frame();
+    api.end_record(cmd_buf);
+
+    recorded_command_buffers.push_back(cmd_buf);
 }
 
-// private functions
 void vkrenderer::begin_frame() {
+    recorded_command_buffers.clear();
 
     VKRESULT(vkWaitForFences(context.device, 1, &submission_fences[virtual_frame_index], VK_TRUE, UINT64_MAX))
     VKRESULT(vkResetFences(context.device, 1, &submission_fences[virtual_frame_index]))
 
-    swapchain_image_index = 0;
-    auto acquire_result = vkAcquireNextImageKHR(context.device, swapchain.handle, UINT64_MAX, acquire_semaphores[virtual_frame_index], VK_NULL_HANDLE, &swapchain_image_index);
-    handle_swapchain_result(acquire_result);
-
-    api.start_record(graphics_command_buffers[virtual_frame_index]);
+    update_images();
 }
 
 void vkrenderer::finish_frame() {
-    auto* cmd_buf = graphics_command_buffers[virtual_frame_index];
-
-    // api.image_barrier(cmd_buf, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, swapchain.images[swapchain_image_index]);
-
-    api.end_record(cmd_buf);
-
-
-    //  TODO: Submit copy command buffer
-    api.submit_graphics(cmd_buf, acquire_semaphores[virtual_frame_index], execution_semaphores[virtual_frame_index], submission_fences[virtual_frame_index]);
+    api.submit(recorded_command_buffers.data(), recorded_command_buffers.size(), acquire_semaphores[virtual_frame_index], execution_semaphores[virtual_frame_index], submission_fences[virtual_frame_index]);
 
     auto present_result = api.present(swapchain, swapchain_image_index, execution_semaphores[virtual_frame_index]);
     handle_swapchain_result(present_result);
@@ -227,6 +226,8 @@ void vkrenderer::finish_frame() {
 }
 
 
+
+// private functions
 void vkrenderer::handle_swapchain_result(VkResult function_result) {
     switch(function_result) {
         case VK_ERROR_OUT_OF_DATE_KHR:

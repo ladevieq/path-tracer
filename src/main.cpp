@@ -319,8 +319,8 @@ int main() {
                     renderer.recreate_swapchain();
                     main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
 
-                    vkrenderer::destroy_2d_texture(accumulation_texture);
-                    vkrenderer::destroy_2d_texture(output_texture);
+                    delete accumulation_texture;
+                    delete output_texture;
                     accumulation_texture = vkrenderer::create_2d_texture(event.width, event.height, VK_FORMAT_R32G32B32A32_SFLOAT);
                     output_texture = vkrenderer::create_2d_texture(event.width, event.height, VK_FORMAT_R32G32B32A32_SFLOAT);
                     raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
@@ -406,6 +406,8 @@ int main() {
         raytracing_pass->set_ouput_texture(output_texture);
         raytracing_pass->set_constant(60, accumulation_texture);
 
+        renderer.begin_frame();
+
         // update_ui(main_scene, delta_time);
 
         if (can_render) {
@@ -413,6 +415,8 @@ int main() {
 
             std::swap(output_texture, accumulation_texture);
         }
+
+        renderer.finish_frame();
 
         frame_count++;
     }

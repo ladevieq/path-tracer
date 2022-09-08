@@ -42,5 +42,5 @@ void Mesh::add_submesh(const submesh& submesh, material& material) {
 }
 
 void Mesh::register_mesh(const Mesh& mesh) {
-    meshes.emplace_back(mesh);
+    meshes.push_back(mesh);
 }

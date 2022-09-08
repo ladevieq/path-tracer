@@ -192,8 +192,7 @@ class vkapi {
 
         void end_record(VkCommandBuffer command_buffer);
 
-        VkResult submit_graphics(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
-        VkResult submit_copy(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
+        VkResult submit(VkCommandBuffer command_buffers[], size_t command_buffers_count, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const;
 
         VkResult present(swapchain& swapchain, uint32_t image_index, VkSemaphore wait_semaphore) const;
 

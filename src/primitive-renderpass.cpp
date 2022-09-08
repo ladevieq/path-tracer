@@ -25,18 +25,18 @@ void Primitive::set_constant(off_t offset, uint64_t* constant) {
 }
 
 void Primitive::set_constant(off_t offset, Texture* texture) {
-    auto image = api.get_image(texture->device_image);
+    const auto& image = api.get_image(texture->device_image);
 
     memcpy(constants + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
 }
 
 void Primitive::set_constant(off_t offset, Buffer* buffer) {
-    auto device_buffer = api.get_buffer(buffer->device_buffer);
+    const auto& device_buffer = api.get_buffer(buffer->device_buffer);
     memcpy(constants + offset, (void*)&device_buffer.device_address, sizeof(VkDeviceAddress));
 }
 
 void Primitive::set_constant(off_t offset, Sampler* sampler) {
-    auto device_sampler = api.get_sampler(sampler->device_sampler);
+    const auto& device_sampler = api.get_sampler(sampler->device_sampler);
     memcpy(constants + offset, (void*)&device_sampler.bindless_index, sizeof(bindless_index));
 }
 
@@ -93,7 +93,7 @@ void PrimitiveRenderpass::set_viewport(float x, float y, float width, float heig
 }
 
 void PrimitiveRenderpass::set_color_attachment(uint32_t index, Texture* attachment) {
-    auto device_image = api.get_image(attachment->device_image);
+    const auto& device_image = api.get_image(attachment->device_image);
 
     if (device_image.size.width != framebuffers[0].size.width ||
         device_image.size.height != framebuffers[0].size.height) {

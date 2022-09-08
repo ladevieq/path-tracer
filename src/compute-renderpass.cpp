@@ -19,7 +19,7 @@ void ComputeRenderpass::set_pipeline(const char* shader_name) {
 void ComputeRenderpass::set_ouput_texture(Texture* out_texture) {
     this->output_texture = out_texture;
 
-    auto image = api.get_image(output_texture->device_image);
+    const auto& image = api.get_image(output_texture->device_image);
 
     // TODO: Remove hardcoded offset
     memcpy(constants + 56, &image.bindless_storage_index, sizeof(bindless_index));
@@ -36,7 +36,7 @@ void ComputeRenderpass::set_constant(off_t offset, uint64_t* constant) {
 }
 
 void ComputeRenderpass::set_constant(off_t offset, Texture* texture) {
-    auto image = api.get_image(texture->device_image);
+    const auto& image = api.get_image(texture->device_image);
 
     memcpy(constants + offset, (void*)&image.bindless_storage_index, sizeof(bindless_index));
 
