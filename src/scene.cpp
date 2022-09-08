@@ -65,11 +65,11 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     :meta(cam, width, height){
 
     // Geometry & BVH
-    std::vector<uint32_t>   indices;
-    std::vector<float>      positions;
-    std::vector<float>      normals;
-    std::vector<float>      uvs;
-    std::vector<material>   materials;
+    std::vector<uint32_t>       indices;
+    std::vector<float>          positions;
+    std::vector<float>          normals;
+    std::vector<float>          uvs;
+    std::vector<gpu_material>   materials;
     std::vector<packed_bvh_node> packed_nodes;
 
     // auto root_node = gltf::load("../models/BistroInterior", "BistroInterior.gltf");
@@ -140,7 +140,26 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                     indices[triangle_offset + 1]    = (submesh_level_index_2 + vertex_offset); // | (0xff000000 & (materials.size() << 16));
                     indices[triangle_offset + 2]    = (submesh_level_index_3 + vertex_offset); // | (0xff000000 & (materials.size() << 24));
 
-                    // materials.push_back(submesh.mat);
+                    const auto& material = submesh.material;
+                    const auto& albedo_image = vkrenderer::api.get_image(material.base_color_texture->device_image);
+                    const auto& albedo_sampler = vkrenderer::api.get_sampler(material.base_color_texture->sampler->device_sampler);
+
+                    materials.emplace_back(gpu_material {
+                        .base_color = material.base_color,
+                        .albedo_texture_id = albedo_image.bindless_sampled_index,
+                        .albedo_texture_sampler_id = albedo_sampler.bindless_index,
+                        .metalness = material.metalness,
+                        .roughness = material.roughness
+                    });
+
+                    if (material.metallic_roughness_texture != nullptr) {
+                        auto& gpu_material = materials.back();
+                        const auto& metallic_roughness_image = vkrenderer::api.get_image(material.metallic_roughness_texture->device_image);
+                        const auto& metallic_roughness_sampler = vkrenderer::api.get_sampler(material.metallic_roughness_texture->sampler->device_sampler);
+
+                        gpu_material.metallic_roughness_texture_id = metallic_roughness_image.bindless_sampled_index;
+                        gpu_material.metallic_roughness_texture_sampler_id = metallic_roughness_sampler.bindless_index;
+                    }
                 }
             }
 
@@ -180,6 +199,6 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     bvh_buffer = vkrenderer::create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]));
     bvh_buffer->write(packed_nodes.data(), 0, packed_nodes.size() * sizeof(packed_nodes[0]));
 
-    // materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
-    // materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
+    materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
+    materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
 }

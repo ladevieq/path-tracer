@@ -281,6 +281,7 @@ handle vkapi::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags u
 
     VKRESULT(vkCreateImageView(context.device, &image_view_create_info, VK_NULL_HANDLE, &image->view))
 
+    image->format = format;
     image->usages = usages;
     image->device_ptr = alloc_info.pMappedData;
 
@@ -1226,7 +1227,7 @@ void vkapi::end_record(VkCommandBuffer command_buffer) {
     VKRESULT(vkEndCommandBuffer(command_buffer))
 }
 
-VkResult vkapi::submit_graphics(VkCommandBuffer command_buffer, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const {
+VkResult vkapi::submit(VkCommandBuffer command_buffers[], size_t command_buffers_count, VkSemaphore wait_semaphore, VkSemaphore signal_semaphore, VkFence submission_fence) const {
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     VkSubmitInfo submit_info            = {};
@@ -1237,8 +1238,8 @@ VkResult vkapi::submit_graphics(VkCommandBuffer command_buffer, VkSemaphore wait
     submit_info.pWaitDstStageMask       = wait_semaphore != nullptr ? &wait_stage : VK_NULL_HANDLE;
     submit_info.signalSemaphoreCount    = signal_semaphore != nullptr ? 1 : 0;
     submit_info.pSignalSemaphores       = &signal_semaphore;
-    submit_info.commandBufferCount      = 1;
-    submit_info.pCommandBuffers         = &command_buffer;
+    submit_info.commandBufferCount      = command_buffers_count;
+    submit_info.pCommandBuffers         = command_buffers;
 
     return vkQueueSubmit(context.graphics_queue.handle, 1, &submit_info, submission_fence);
 }

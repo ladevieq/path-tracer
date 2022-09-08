@@ -49,6 +49,10 @@ class vkrenderer {
 
         void update_images();
 
+        void begin_frame();
+
+        void finish_frame();
+
         static void queue_image_update(Texture* texture);
 
         static Buffer* create_buffer(size_t size);
@@ -58,8 +62,6 @@ class vkrenderer {
         static Buffer* create_staging_buffer(size_t size);
 
         static Texture* create_2d_texture(size_t width, size_t height, VkFormat format, Sampler *sampler = nullptr);
-
-        static void destroy_2d_texture(Texture* texture);
 
         static Sampler* create_sampler(VkFilter filter, VkSamplerAddressMode address_mode);
 
@@ -85,10 +87,6 @@ class vkrenderer {
         static vkapi                    api;
 
     private:
-
-        void begin_frame();
-
-        void finish_frame();
 
 
         void handle_swapchain_result(VkResult function_result);
@@ -116,6 +114,7 @@ class vkrenderer {
         VkSurfaceKHR                    platform_surface;
         swapchain                       swapchain;
         std::vector<Texture*>           swapchain_textures;
+        std::vector<VkCommandBuffer>    recorded_command_buffers;
 
         const uint32_t                  min_swapchain_image_count = 3;
 
@@ -151,7 +150,7 @@ class RingBuffer {
     handle device_buffer;
 
     size_t buffer_size;
-    off_t ptr;
+    off_t ptr = 0;
 };
 
 class Sampler {
@@ -164,7 +163,7 @@ class Texture {
     public:
 
     Texture(handle image_handle) {
-        auto image = vkrenderer::api.get_image(image_handle);
+        const auto &image = vkrenderer::api.get_image(image_handle);
         width = image.size.width;
         height = image.size.height;
         depth = image.size.depth;
@@ -188,11 +187,19 @@ class Texture {
         }
         data = new_data;
 
-        // vkrenderer::update_image(this);
+        vkrenderer::queue_image_update(this);
     }
 
-    size_t size() const {
-        auto image = vkrenderer::api.get_image(device_image);
+    ~Texture() {
+        vkrenderer::api.destroy_image(device_image);
+
+        if (data == nullptr) {
+            free(data);
+        }
+    }
+
+    [[nodiscard]]size_t size() const {
+        const auto& image = vkrenderer::api.get_image(device_image);
         return width * height * depth * pixel_size(image.format);
     }
 

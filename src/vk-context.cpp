@@ -284,7 +284,7 @@ void vkcontext::check_available_instance_extensions(const char* needed_extension
         }
     }
 
-    assert(available_needed_extensions_count == needed_extensions_count);
+    // assert(available_needed_extensions_count == needed_extensions_count);
 }
 
 bool vkcontext::support_required_features(VkPhysicalDevice physical_device) {
