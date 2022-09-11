@@ -106,26 +106,31 @@ void vkrenderer::queue_image_update(Texture* texture) {
 }
 
 void vkrenderer::update_images() {
+    if(upload_queue.empty())
+        return;
+
     auto* staging_buffer = staging_buffers[virtual_frame_index];
+    staging_buffer->reset();
 
     VkCommandBuffer command_buffer = copy_command_buffers[virtual_frame_index];
     vkrenderer::api.start_record(command_buffer);
 
     while(!upload_queue.empty()) {
         auto* texture = upload_queue.back();
-        upload_queue.pop_back();
         auto texture_size = texture->size();
         auto offset = staging_buffer->alloc(texture_size);
 
-        if (offset == RingBuffer::invalid_alloc) {
+        if (offset == RingBuffer::invalid_alloc)
             break;
-        }
+
+        upload_queue.pop_back();
 
         staging_buffer->write(texture->data, offset, texture_size);
 
         vkrenderer::api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, texture->device_image);
-        vkrenderer::api.copy_buffer(command_buffer, staging_buffer->device_buffer, texture->device_image, offset);
+        vkrenderer::api.copy_buffer(command_buffer, staging_buffer->device_buffer, texture->device_image, 0, offset);
         vkrenderer::api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, texture->device_image);
+        break;
     }
 
     vkrenderer::api.end_record(command_buffer);

@@ -115,7 +115,7 @@ class vkapi {
 
         handle create_buffer(size_t data_size, VkBufferUsageFlags buffer_usage, uint32_t mem_usage);
         void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t size);
-        void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, off_t buffer_offset = 0);
+        void copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t size, size_t buffer_offset = 0);
         void destroy_buffer(handle buffer);
 
 
