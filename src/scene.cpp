@@ -118,6 +118,7 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             // Add offset to indices in order to have absolute indices
             for (const auto& submesh: mesh->get_submeshes()) {
                 auto vertex_offset = vertices_offset + submesh.vertex_offset;
+                const auto& material = submesh.material;
 
                 for (size_t element_index { 0U }; element_index < submesh.element_count; element_index++, index_offset += 3) {
                     size_t submesh_level_index_1 = mesh_indices[index_offset];
@@ -136,31 +137,31 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
 
                     auto triangle_offset = triangles_offset * 3 + index_offset;
 
-                    indices[triangle_offset]        = (submesh_level_index_1 + vertex_offset); // | (0xff000000 & (materials.size() << 8));
-                    indices[triangle_offset + 1]    = (submesh_level_index_2 + vertex_offset); // | (0xff000000 & (materials.size() << 16));
-                    indices[triangle_offset + 2]    = (submesh_level_index_3 + vertex_offset); // | (0xff000000 & (materials.size() << 24));
-
-                    const auto& material = submesh.material;
-                    const auto& albedo_image = vkrenderer::api.get_image(material.base_color_texture->device_image);
-                    const auto& albedo_sampler = vkrenderer::api.get_sampler(material.base_color_texture->sampler->device_sampler);
-
-                    materials.emplace_back(gpu_material {
-                        .base_color = material.base_color,
-                        .albedo_texture_id = albedo_image.bindless_sampled_index,
-                        .albedo_texture_sampler_id = albedo_sampler.bindless_index,
-                        .metalness = material.metalness,
-                        .roughness = material.roughness
-                    });
-
-                    if (material.metallic_roughness_texture != nullptr) {
-                        auto& gpu_material = materials.back();
-                        const auto& metallic_roughness_image = vkrenderer::api.get_image(material.metallic_roughness_texture->device_image);
-                        const auto& metallic_roughness_sampler = vkrenderer::api.get_sampler(material.metallic_roughness_texture->sampler->device_sampler);
-
-                        gpu_material.metallic_roughness_texture_id = metallic_roughness_image.bindless_sampled_index;
-                        gpu_material.metallic_roughness_texture_sampler_id = metallic_roughness_sampler.bindless_index;
-                    }
+                    indices[triangle_offset]        = (submesh_level_index_1 + vertex_offset) | (0xff000000 & (materials.size() << 8));
+                    indices[triangle_offset + 1]    = (submesh_level_index_2 + vertex_offset) | (0xff000000 & (materials.size() << 16));
+                    indices[triangle_offset + 2]    = (submesh_level_index_3 + vertex_offset) | (0xff000000 & (materials.size() << 24));
                 }
+
+                const auto& albedo_image = vkrenderer::api.get_image(material.base_color_texture->device_image);
+                const auto& albedo_sampler = vkrenderer::api.get_sampler(material.base_color_texture->sampler->device_sampler);
+
+                materials.emplace_back(gpu_material {
+                    .base_color = material.base_color,
+                    .albedo_texture_id = albedo_image.bindless_sampled_index,
+                    .albedo_texture_sampler_id = albedo_sampler.bindless_index,
+                    .metalness = material.metalness,
+                    .roughness = material.roughness
+                });
+
+                if (material.metallic_roughness_texture != nullptr) {
+                    auto& gpu_material = materials.back();
+                    const auto& metallic_roughness_image = vkrenderer::api.get_image(material.metallic_roughness_texture->device_image);
+                    const auto& metallic_roughness_sampler = vkrenderer::api.get_sampler(material.metallic_roughness_texture->sampler->device_sampler);
+
+                    gpu_material.metallic_roughness_texture_id = metallic_roughness_image.bindless_sampled_index;
+                    gpu_material.metallic_roughness_texture_sampler_id = metallic_roughness_sampler.bindless_index;
+                }
+
             }
 
             triangles_offset += mesh->triangle_count();

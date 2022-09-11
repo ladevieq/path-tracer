@@ -124,20 +124,22 @@ class vkrenderer {
 class RingBuffer {
     public:
 
-    static const off_t invalid_alloc = -1;
+    static const size_t invalid_alloc = -1;
 
     RingBuffer(size_t size);
 
-    [[nodiscard]]off_t alloc(size_t alloc_size) const {
-        assert(alloc_size > 0);
+    [[nodiscard]]size_t alloc(size_t alloc_size) {
+        assert(alloc_size > 0 && alloc_size <= buffer_size);
 
-        if (ptr + alloc_size < buffer_size) {
+        if (ptr <= buffer_size - alloc_size) {
+            ptr += alloc_size;
             return ptr;
         }
+
         return invalid_alloc;
     }
 
-    void write(void* data, off_t alloc_offset, size_t data_size) const {
+    void write(void* data, size_t alloc_offset, size_t data_size) const {
         auto api_buffer = vkrenderer::api.get_buffer(device_buffer);
 
         std::memcpy((uint8_t*)api_buffer.device_ptr + alloc_offset, data, data_size);
@@ -150,7 +152,7 @@ class RingBuffer {
     handle device_buffer;
 
     size_t buffer_size;
-    off_t ptr = 0;
+    size_t ptr = 0;
 };
 
 class Sampler {

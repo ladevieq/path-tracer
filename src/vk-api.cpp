@@ -201,7 +201,7 @@ void vkapi::copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t 
 }
 
 // TODO: Change handle type, here we don't know what type of ressources we are working with
-void vkapi::copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, off_t buffer_offset) {
+void vkapi::copy_buffer(VkCommandBuffer cmd_buf, handle src, handle dst, size_t size, size_t buffer_offset) {
     auto& dst_image = images[dst];
 
     VkImageSubresourceLayers image_subresource_layers   = {};

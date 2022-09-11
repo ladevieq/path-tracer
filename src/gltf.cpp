@@ -118,7 +118,7 @@ void gltf::load_textures(const std::filesystem::path &path) {
         const auto &gltf_image = gltf_images[image_index];
         auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
         auto& image = images[image_index];
-        image.data = stbi_load(filepath.c_str(), &image.x, &image.y, &image.n, 4);
+        image.data = stbi_load(filepath.c_str(), &image.x, &image.y, &image.channels, 4);
     }
 
     // const auto &gltf_samplers = gltf_json["samplers"];

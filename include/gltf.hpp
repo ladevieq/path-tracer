@@ -18,7 +18,7 @@ struct node {
 struct raw_image {
     int32_t x;
     int32_t y;
-    int32_t n;
+    int32_t channels;
     uint8_t *data;
 };
 
