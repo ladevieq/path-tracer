@@ -130,7 +130,6 @@ void vkrenderer::update_images() {
         vkrenderer::api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, texture->device_image);
         vkrenderer::api.copy_buffer(command_buffer, staging_buffer->device_buffer, texture->device_image, 0, offset);
         vkrenderer::api.image_barrier(command_buffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, texture->device_image);
-        break;
     }
 
     vkrenderer::api.end_record(command_buffer);

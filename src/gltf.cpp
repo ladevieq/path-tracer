@@ -118,7 +118,7 @@ void gltf::load_textures(const std::filesystem::path &path) {
         const auto &gltf_image = gltf_images[image_index];
         auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
         auto& image = images[image_index];
-        image.data = stbi_load(filepath.c_str(), &image.x, &image.y, &image.channels, 4);
+        image.data = stbi_load(filepath.c_str(), &image.width, &image.height, &image.channels, 4);
     }
 
     // const auto &gltf_samplers = gltf_json["samplers"];
@@ -143,7 +143,7 @@ void gltf::load_textures(const std::filesystem::path &path) {
         //     sampler = samplers[sampler_index];
         // }
 
-        auto *texture = vkrenderer::create_2d_texture(static_cast<uint32_t>(image.x), static_cast<uint32_t>(image.y), VK_FORMAT_R8G8B8A8_UNORM, sampler);
+        auto *texture = vkrenderer::create_2d_texture(static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), VK_FORMAT_R8G8B8A8_UNORM, sampler);
 
         texture->update(image.data);
 
