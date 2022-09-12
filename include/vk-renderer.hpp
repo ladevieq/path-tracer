@@ -131,9 +131,11 @@ class RingBuffer {
     [[nodiscard]]size_t alloc(size_t alloc_size) {
         assert(alloc_size > 0 && alloc_size <= buffer_size);
 
-        if (ptr <= buffer_size - alloc_size) {
+        auto alloc_offset = ptr;
+
+        if (alloc_offset <= buffer_size - alloc_size) {
             ptr += alloc_size;
-            return ptr;
+            return alloc_offset;
         }
 
         return invalid_alloc;
