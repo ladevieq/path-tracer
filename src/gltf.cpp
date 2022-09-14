@@ -2,6 +2,8 @@
 
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
+#include <execution>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -114,12 +116,15 @@ void gltf::load_textures(const std::filesystem::path &path) {
     auto images_count = gltf_images.size();
     std::vector<raw_image> images{images_count};
 
-    for (size_t image_index = 0; image_index < images_count; image_index++) {
+    std::vector<size_t> v(images_count);
+    std::iota(v.begin(), v.end(), 0);
+
+    std::for_each(std::execution::par, v.begin(), v.end(), [&](const size_t image_index) {
         const auto &gltf_image = gltf_images[image_index];
         auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
         auto& image = images[image_index];
         image.data = stbi_load(filepath.c_str(), &image.width, &image.height, &image.channels, 4);
-    }
+    });
 
     // const auto &gltf_samplers = gltf_json["samplers"];
     // auto samplers_count = gltf_samplers.size();
