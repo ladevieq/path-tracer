@@ -1,3 +1,12 @@
+AccessModifierOffset: 0
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: true
+  AlignCompound: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: true
+AlignOperands: Align
 AlignEscapedNewlines: Right
 AlignTrailingComments: true
 ColumnLimit: 0

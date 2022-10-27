@@ -1,0 +1,264 @@
+enum CMD_BUF_TYPE {
+    GRAPHICS,
+    COPY,
+    ASYNC_COMPUTE,
+}
+
+class command_buffer {
+    void start();
+    void stop();
+
+    VkCommandBuffer handle;
+    queue           owner;
+}
+
+class graphics_command_buffer : command_buffer {
+    void image_barrier(handle tex, State new_state) {
+        texture = rm::get_texture(tex);
+
+        cmd.barrier(texture.img.device_image, texture.current_state, new_state);
+
+        texture.current_state = new_state;
+    }
+}
+
+class device_swapchain {
+    VkSurfaceKHR surface;
+    VkFormat surface_format;
+    VkExtent extent;
+    VkSwapchain swapchain;
+}
+
+class device_buffer {
+    VkBuffer handle;
+    VmaAllocation allocation;
+    VkDeviceAddr gpu_address;
+}
+
+class device_image {
+    VkImage handle;
+    VmaAllocation allocation;
+    array<uint, max_usage> bindless_id; // TODO: Handle this in a higher level ?
+
+    VkImageView whole_image_view;
+    vector<VkImageView> mips_view;
+
+    const uint invalid_id = -1;
+}
+
+class device_command_buffer {
+    CMD_BUF_TYPE buf_type = CMD_BUF_TYPE::MAX;
+    VkCommandBuffer handle;
+}
+
+class global_descriptor_set {
+    VkDescritptorSetLayout layout;
+    VkDescriptorSet set;
+};
+
+class device {
+    device_image create_image(TextureDesc desc) {
+        img {};
+        img.handle = vmaCreateImage(&img.alloc);
+    }
+
+    device_buffer create_buffer(BufferDesc desc);
+
+    device_command_buffer allocate_command_buffer(uint32_t count);
+
+    submit(span<device_command_buffer> cmd_buffers, semaphore)
+
+    wait(fence);
+    wait_idle();
+
+    private:
+
+    create_surface();
+    create_swapchain();
+
+    device_swapchain sc;
+
+    array<device_image> sc_images;
+    array<queue, CMD_BUF_TYPE::MAX> queues;
+
+    global_descriptor_set global_set;
+    // bindless
+    // set 0 global, textures, samplers
+    // set 1 materials buffer addr, camera, etc
+    // set 2 per mesh vertex attributes buffers addr
+    // set 2 per instance (transforms, etc)
+    pipeline_layout compute; // set 0 & 1
+    pipeline_layout graphics; // set 0, 1, 2
+}
+
+class renderer {
+    renderer() {
+        device_images = device::get_swapchain_images();
+
+        for (device_images) {
+            sc_images.push(ressourcemanager::create_texture(desc, images[i]))
+        }
+    }
+
+    void start_frame() {
+        vframe_index++;
+        device::wait(finish);
+
+        img_index = device::get_image(sc)
+        cur_image = images[img_index];
+    }
+    void finish_frame() {
+        device::submit(to_submit, wait_submit);
+        device::present(wait_submit, finish);
+    }
+
+    command_buffer start_record() {
+        auto buf = frames[current].command_buffers.pop();
+        buf.start();
+        device::submit(span(command_buffers[vframe_index][0...last_cmd_buf_index[vframe_index]]), wait_submit);
+        device::present();
+    }
+
+    void stop_record(command_buffer buf) {
+        buf.stop();
+        auto buf = frames[current][buf_type][++last_cmd_buf_index[vframe_index]];
+    }
+
+    private:
+
+    vector<handle> sc_images;
+
+    // Virtual frames stuff
+    array<semaphore, vframes_count> wait_image;
+    array<semaphore, vframes_count> wait_present;
+    array<fence, vframes_count> finish;
+    array<fence, vframes_count> command_pool;
+    // One per queue type
+    array<array<command_buffer, vframe_max_buf>, vframes_count> command_buffers;
+
+    array<uint, vframes_count> last_cmd_buf_index = { 0 };
+
+    uint vframe_index;
+    constexpr uint vframe_max_buf = 10;
+    constexpr uint vframes_count = 3;
+}
+
+class ressourcemanager {
+    handle create_texture(TextureDesc desc) {
+        new_image = device::create_image(desc);
+
+        return textures.push({
+            .desc = desc,
+            .img = new_image,
+        })
+    }
+
+    handle create_texture(TextureDesc desc, device_image img) {
+        return textures.push({
+            .desc = desc,
+            .img = img,
+        })
+    }
+
+    handle create_pipeline(PipelineDesc desc)
+
+    const Texture& get_texture(handle texture_handle);
+
+private:
+    FreeList textures;
+}
+
+class PipelineDesc {
+    // TODO: Where to store views ?
+    span<Texture> color_textures;
+    Texture depth_texture;
+}
+
+class TextureDesc {
+    Vector size;
+    UsageFlag usages;
+    Format format;
+}
+
+class BufferDesc {
+    uint size;
+    UsageFlag usages;
+}
+
+class Texture {
+    const TextureDesc desc;
+    const device_image img;
+    Layout current_layout = initial_layout;
+}
+
+class Buffer {
+    const BufferDesc desc;
+    const device_buffer buffer;
+}
+
+class mesh {
+    array<attribute_buffer> attributes;
+    buffer index;
+}
+
+class mesh_instance {
+    handle mesh;
+    mat4 transform;
+}
+
+class renderpass { // shadow example
+    renderpass() {
+        shadow_tex = rm::create_texture({
+            .size = { 1024, 1024 },
+            .usages = DEPTH_STENCIL_ATTACHMENT,
+            .format = VK_FORMAT_D24,
+        });
+
+        pso = rm::create_pipeline({
+            .color = null,
+            .depth = scene_depth, // contains format
+        })
+    }
+
+    render() {
+        handle meshes[] = scene.get_meshes(FILTER_NONE);
+        buf = renderer::start_record();
+        buf.start_renderpass({
+            .color_attachments
+            .depth_attachment = shadow_tex,
+        });
+
+        buf.bind_pipeline(pso);
+
+        foreach(mesh : meshes) {
+            buf.draw_index(mesh);
+        }
+
+        buf.stop_renderpass();
+    }
+
+    std::vector<Texture> color_attachments;
+
+    shadow_tex;
+    pipeline pso;
+}
+
+renderer::add_render_pass()
+
+TODOS :
+1. implement :
+   * image loading
+   * resizing
+   * mesh drawing
+
+IDEAS :
+1. Manage device resources with handles instead of having immutable ones in high level resources
+    PROS:
+        * Allows to manage (swap, create, delete, invalide) device resources easily
+    CONS:
+        * Can loose track of a resource easily
+
+RESOURCES :
+* SEED Halcyon presentation https://www.ea.com/seed/news/syysgraph-2018-modern-graphics-abstractions-real-time-ray-tracing
+* Cryengine master class https://www.youtube.com/watch?v=34S3onEr3r8
+* Nicebyte tweet api https://twitter.com/nice_byte/status/1579187394880090112
