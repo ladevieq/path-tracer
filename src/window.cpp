@@ -214,13 +214,14 @@ window::window(uint32_t desired_width, uint32_t desired_height)
     RECT rect { 0, 0, (int32_t)desired_width, (int32_t)desired_height };
     DWORD style = WS_OVERLAPPEDWINDOW;
 
-    if (FAILED(AdjustWindowRect(&rect, style, FALSE)))
+    if (FAILED(AdjustWindowRect(&rect, style, FALSE))) {
         log_last_error();
+    }
 
     main_fiber = ConvertThreadToFiber(nullptr);
     message_loop_fiber = CreateFiber(0, &::message_loop, this);
 
-    window_handle = CreateWindowA(
+    handle = CreateWindowA(
         "default-window",
         "path-tracer",
         style,
@@ -234,13 +235,13 @@ window::window(uint32_t desired_width, uint32_t desired_height)
         this
     );
 
-    ShowWindow(window_handle, SW_SHOW);
+    ShowWindow(handle, SW_SHOW);
 
     isOpen = true;
 }
 
 window::~window() {
-    DestroyWindow(window_handle);
+    DestroyWindow(handle);
     UnregisterClassA(window_class.lpszClassName, GetModuleHandleA(nullptr));
 }
 

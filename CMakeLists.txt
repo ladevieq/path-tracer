@@ -13,7 +13,6 @@ project(path-tracer VERSION 1.0 LANGUAGES CXX)
 find_package(imgui CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
-find_package(Threads REQUIRED)
 
 if(UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)
@@ -33,4 +32,5 @@ endif()
 # endif()
 
 add_subdirectory(src)
+add_subdirectory(api-test)
 add_subdirectory(shaders)

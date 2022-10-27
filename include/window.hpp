@@ -146,7 +146,7 @@ class window {
 
         static LRESULT CALLBACK window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
-        HWND                window_handle {};
+        HWND                handle {};
         WNDCLASS            window_class {};
         LPVOID              main_fiber;
         LPVOID              message_loop_fiber;
