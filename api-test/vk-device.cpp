@@ -1,9 +1,7 @@
 #include "vk-device.hpp"
-#include "color.hpp"
 
 #include <cassert>
 #include <iostream>
-#include <thread>
 #include <vector>
 
 #define VMA_IMPLEMENTATION
@@ -61,11 +59,18 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBit
 
 vkdevice::vkdevice(const window& window)
         : queues{
-              {
-                  .usages = VK_QUEUE_GRAPHICS_BIT,
-              },
-              // { .usages = VK_QUEUE_TRANSFER_BIT, },
-          } {
+        {
+            .usages = VK_QUEUE_GRAPHICS_BIT |
+                      VK_QUEUE_COMPUTE_BIT  |
+                      VK_QUEUE_TRANSFER_BIT,
+        },
+        {
+            .usages = VK_QUEUE_COMPUTE_BIT,
+        },
+        {
+            .usages = VK_QUEUE_TRANSFER_BIT,
+        },
+    } {
     load_vulkan();
     create_instance();
 
@@ -83,40 +88,43 @@ vkdevice::vkdevice(const window& window)
 }
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
-    device_texture device_texture = {};
-    device_texture.desc           = desc;
+    device_texture device_texture {
+        .desc = desc,
+    };
 
     assert(desc.mips <= texture_desc::max_mips);
 
-    VkImageCreateInfo create_info = {};
-    create_info.sType             = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    create_info.pNext             = nullptr;
-    create_info.flags             = 0U;
-    create_info.imageType         = desc.type;
-    create_info.format            = desc.format;
-    create_info.extent            = {
-                   .width  = desc.width,
-                   .height = desc.height,
-                   .depth  = desc.depth
+    VkImageCreateInfo create_info {
+        .sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0U,
+        .imageType             = desc.type,
+        .format                = desc.format,
+        .extent                = {
+            .width  = desc.width,
+            .height = desc.height,
+            .depth  = desc.depth
+        },
+        .mipLevels             = desc.mips,
+        .arrayLayers           = 1,
+        .samples               = VK_SAMPLE_COUNT_1_BIT,
+        .tiling                = VK_IMAGE_TILING_OPTIMAL,
+        .usage                 = desc.usages,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr,
+        .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    create_info.mipLevels                     = desc.mips;
-    create_info.arrayLayers                   = 1;
-    create_info.samples                       = VK_SAMPLE_COUNT_1_BIT;
-    create_info.tiling                        = VK_IMAGE_TILING_OPTIMAL;
-    create_info.usage                         = desc.usages;
-    create_info.sharingMode                   = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.queueFamilyIndexCount         = 0;
-    create_info.pQueueFamilyIndices           = nullptr;
-    create_info.initialLayout                 = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.flags                   = 0U;
-    alloc_create_info.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
-    alloc_create_info.requiredFlags           = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    alloc_create_info.preferredFlags          = 0U;
-    alloc_create_info.memoryTypeBits          = 0U;
-    alloc_create_info.pool                    = nullptr;
-    alloc_create_info.pUserData               = nullptr;
+    VmaAllocationCreateInfo alloc_create_info {
+        .flags                   = 0U,
+        .usage                   = VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags           = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .preferredFlags          = 0U,
+        .memoryTypeBits          = 0U,
+        .pool                    = nullptr,
+        .pUserData               = nullptr,
+    };
 
     VKCHECK(vmaCreateImage(gpu_allocator, &create_info, &alloc_create_info, &device_texture.handle, &device_texture.alloc, nullptr))
 
@@ -129,33 +137,36 @@ handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
 }
 
 handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
-    device_buffer device_buffer       = {};
-    device_buffer.desc                = desc;
+    device_buffer device_buffer {
+        .desc = desc,
+    };
 
-    VkBufferCreateInfo create_info    = {};
-    create_info.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    create_info.pNext                 = nullptr;
-    create_info.flags                 = 0U;
-    create_info.size                  = desc.size;
-    create_info.usage                 = desc.usages;
-    create_info.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.queueFamilyIndexCount = 0;
-    create_info.pQueueFamilyIndices   = nullptr;
+    VkBufferCreateInfo create_info {
+        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0U,
+        .size                  = desc.size,
+        .usage                 = desc.usages,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices   = nullptr,
+    };
 
     VmaAllocatorCreateFlags alloc_create_flags = 
         desc.memory_usage != VMA_MEMORY_USAGE_GPU_ONLY ?
         VMA_ALLOCATION_CREATE_MAPPED_BIT : 0U;
-        
-    VmaAllocationCreateInfo alloc_create_info = {};
-    alloc_create_info.flags                   = alloc_create_flags;
-    alloc_create_info.usage                   = static_cast<VmaMemoryUsage>(desc.memory_usage);
-    alloc_create_info.requiredFlags           = desc.memory_properties;
-    alloc_create_info.preferredFlags          = 0U;
-    alloc_create_info.memoryTypeBits          = 0U;
-    alloc_create_info.pool                    = nullptr;
-    alloc_create_info.pUserData               = nullptr;
 
-    VmaAllocationInfo alloc_info              = {};
+    VmaAllocationCreateInfo alloc_create_info {
+        .flags          = alloc_create_flags,
+        .usage          = static_cast<VmaMemoryUsage>(desc.memory_usage),
+        .requiredFlags  = desc.memory_properties,
+        .preferredFlags = 0U,
+        .memoryTypeBits = 0U,
+        .pool           = nullptr,
+        .pUserData      = nullptr,
+    };
+
+    VmaAllocationInfo alloc_info {};
 
     VKCHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.handle, &device_buffer.alloc, &alloc_info))
 
@@ -164,47 +175,77 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     return { buffers.add(device_buffer) };
 }
 
-void vkdevice::submit(std::span<graphics_command_buffer> command_buffers) {
-    VkSubmitInfo submit_info = {};
-    submit_info.sType               = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.pNext               = nullptr;
-    submit_info.waitSemaphoreCount;
-    submit_info.pWaitSemaphores;
-    submit_info.pWaitDstStageMask;
-    submit_info.commandBufferCount;
-    submit_info.pCommandBuffers;
-    submit_info.signalSemaphoreCount;
-    submit_info.pSignalSemaphores;
+void vkdevice::submit(command_buffer* buffers, size_t count) {
+    assert((count - max_submitable_command_buffers) <= 0);
+    const auto queue_type = buffers[0].queue_type;
+    VkCommandBuffer to_submit[max_submitable_command_buffers];
 
-    vkQueueSubmit()
+    for (auto index { 0U }; index < count; index++) {
+        assert(queue_type == buffers[index].queue_type);
+        to_submit[index] = buffers[index].handle;
+    }
+
+    VkSubmitInfo submit_info {
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext                = nullptr,
+        .waitSemaphoreCount   = 0U,
+        .pWaitSemaphores      = nullptr,
+        .pWaitDstStageMask    = nullptr,
+        .commandBufferCount   = static_cast<uint32_t>(count),
+        .pCommandBuffers      = to_submit,
+        .signalSemaphoreCount = 0U,
+        .pSignalSemaphores    = nullptr,
+    };
+
+    VKCHECK(vkQueueSubmit(queues[static_cast<uint32_t>(queue_type)].handle, 1, &submit_info, nullptr))
 }
 
 
 // private
+void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type) {
+    assert((count - max_allocable_command_buffers) <= 0);
+    const auto& queue = queues[static_cast<uint32_t>(type)];
+    VkCommandBuffer command_buffers[max_allocable_command_buffers];
+
+    VkCommandBufferAllocateInfo allocate_info {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext              = nullptr,
+        .commandPool        = queue.command_pool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = static_cast<uint32_t>(count),
+    };
+
+    VKCHECK(vkAllocateCommandBuffers(device, &allocate_info, command_buffers))
+
+    for (auto index { 0U }; index < count; index++) {
+        buffers[index].handle = command_buffers[index];
+    }
+}
 
 void vkdevice::create_views(device_texture& texture) {
     VkImageAspectFlags aspect_mask = ((texture.desc.usages & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0U)
         ? VK_IMAGE_ASPECT_COLOR_BIT
         : VK_IMAGE_ASPECT_DEPTH_BIT;
-    VkImageViewCreateInfo create_info = {};
-    create_info.sType                 = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    create_info.pNext                 = nullptr;
-    create_info.flags                 = 0U;
-    create_info.image                 = texture.handle;
-    create_info.viewType              = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format                = texture.desc.format;
-    create_info.components            = {
-                   .r = VK_COMPONENT_SWIZZLE_R,
-                   .g = VK_COMPONENT_SWIZZLE_G,
-                   .b = VK_COMPONENT_SWIZZLE_B,
-                   .a = VK_COMPONENT_SWIZZLE_A,
-    };
-    create_info.subresourceRange = {
-        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT, // TODO: Choose either color or depth based on format ?
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = 1,
+    VkImageViewCreateInfo create_info {
+        .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = 0U,
+        .image            = texture.handle,
+        .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+        .format           = texture.desc.format,
+        .components       = {
+           .r = VK_COMPONENT_SWIZZLE_R,
+           .g = VK_COMPONENT_SWIZZLE_G,
+           .b = VK_COMPONENT_SWIZZLE_B,
+           .a = VK_COMPONENT_SWIZZLE_A,
+        },
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT, // TODO: Choose either color or depth based on format ?
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
     };
 
     for (auto mip_index{ 0 }; mip_index < texture.desc.mips; mip_index++) {
@@ -218,19 +259,20 @@ void vkdevice::create_views(device_texture& texture) {
 }
 
 void vkdevice::create_surface(const window& window) {
-    VkWin32SurfaceCreateInfoKHR create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    create_info.pNext = nullptr;
-    create_info.flags = 0U;
-    create_info.hinstance = GetModuleHandle(nullptr);
-    create_info.hwnd = window.handle;
+    VkWin32SurfaceCreateInfoKHR create_info {
+        .sType      = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        .pNext      = nullptr,
+        .flags      = 0U,
+        .hinstance  = GetModuleHandle(nullptr),
+        .hwnd       = window.handle,
+    };
 
     VKCHECK(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &surface))
 }
 
 void vkdevice::create_swapchain() {
     VkBool32 supported = VK_FALSE;
-    for (auto index{ 0U }; index < QueueTypes::MAX; index++) {
+    for (auto index{ 0U }; index < static_cast<uint32_t>(QueueType::MAX); index++) {
         auto& queue = queues[index];
         VKCHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue.index, surface, &supported))
 
@@ -268,25 +310,26 @@ void vkdevice::create_swapchain() {
 
     VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &supported_present_modes_count, supported_present_modes.data()))
 
-    VkSwapchainCreateInfoKHR create_info = {};
-    create_info.sType                   = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.pNext                   = nullptr;
-    create_info.flags                   = 0U;
-    create_info.surface                 = surface;
-    create_info.minImageCount           = surface_capabilities.minImageCount;
-    create_info.imageFormat             = supported_formats[0].format;
-    create_info.imageColorSpace         = supported_formats[0].colorSpace;
-    create_info.imageExtent             = extent;
-    create_info.imageArrayLayers        = 1U;
-    create_info.imageUsage              = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    create_info.imageSharingMode        = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.queueFamilyIndexCount   = 0U;
-    create_info.pQueueFamilyIndices     = nullptr;
-    create_info.preTransform            = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    create_info.compositeAlpha          = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode             = supported_present_modes[0];
-    create_info.clipped                 = VK_TRUE;
-    create_info.oldSwapchain            = nullptr;
+    VkSwapchainCreateInfoKHR create_info = {
+        .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext                 = nullptr,
+        .flags                 = 0U,
+        .surface               = surface,
+        .minImageCount         = surface_capabilities.minImageCount,
+        .imageFormat           = supported_formats[0].format,
+        .imageColorSpace       = supported_formats[0].colorSpace,
+        .imageExtent           = extent,
+        .imageArrayLayers      = 1U,
+        .imageUsage            = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0U,
+        .pQueueFamilyIndices   = nullptr,
+        .preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+        .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode           = supported_present_modes[0],
+        .clipped               = VK_TRUE,
+        .oldSwapchain          = nullptr,
+    };
 
     VKCHECK(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain))
 }
@@ -294,33 +337,35 @@ void vkdevice::create_swapchain() {
 // ----------------- vkadapter -----------------
 
 void vkdevice::create_instance() {
-    VkApplicationInfo app_info              = {};
-    app_info.sType                          = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName               = "path-tracer";
-    app_info.applicationVersion             = VK_MAKE_VERSION(1, 0, 0);
-    app_info.pEngineName                    = "gpu-path-tracer";
-    app_info.engineVersion                  = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion                     = VK_API_VERSION_1_3;
+    VkApplicationInfo app_info {
+        .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName   = "path-tracer",
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName        = "gpu-path-tracer",
+        .engineVersion      = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion         = VK_API_VERSION_1_3,
+    };
 
-    constexpr const char* instance_layers[] = {
+    constexpr const char* instance_layers[] {
         "VK_LAYER_KHRONOS_validation",
     };
 
-    constexpr const char* instance_extensions[] = {
+    constexpr const char* instance_extensions[] {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         "VK_KHR_surface",
         "VK_KHR_win32_surface"
     };
 
-    VkInstanceCreateInfo create_info    = {};
-    create_info.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pNext                   = nullptr;
-    create_info.flags                   = 0U;
-    create_info.pApplicationInfo        = &app_info;
-    create_info.enabledLayerCount       = sizeof(instance_layers) / sizeof(instance_layers[0]);
-    create_info.ppEnabledLayerNames     = instance_layers;
-    create_info.enabledExtensionCount   = sizeof(instance_extensions) / sizeof(instance_extensions[0]);
-    create_info.ppEnabledExtensionNames = instance_extensions;
+    VkInstanceCreateInfo create_info {
+        .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = 0U,
+        .pApplicationInfo        = &app_info,
+        .enabledLayerCount       = sizeof(instance_layers) / sizeof(instance_layers[0]),
+        .ppEnabledLayerNames     = instance_layers,
+        .enabledExtensionCount   = sizeof(instance_extensions) / sizeof(instance_extensions[0]),
+        .ppEnabledExtensionNames = instance_extensions,
+    };
 
     VKCHECK(vkCreateInstance(&create_info, nullptr, &instance))
 
@@ -330,56 +375,58 @@ void vkdevice::create_instance() {
 void vkdevice::create_device() {
     pick_physical_device();
 
-    VkDeviceQueueCreateInfo queue_create_infos[QueueTypes::MAX] = {};
-    float                   queue_priority                       = 1.f;
+    float                   queue_priority = 1.f;
+    VkDeviceQueueCreateInfo queue_create_infos[static_cast<uint32_t>(QueueType::MAX)] {
+        VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        nullptr,
+        0U,
+        0,
+        1,
+        &queue_priority,
+    };
 
-    for (auto index{ 0U }; index < QueueTypes::MAX; index++) {
-        auto& queue                                = queues[index];
-        auto  queue_index                          = pick_queue(queue.usages);
+    for (auto index{ 0U }; index < static_cast<uint32_t>(QueueType::MAX); index++) {
+        auto& queue       = queues[index];
+        auto  queue_index = pick_queue(queue.usages);
 
-        queue_create_infos[index].sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queue_create_infos[index].pNext            = nullptr;
-        queue_create_infos[index].flags            = 0U;
-        queue_create_infos[index].queueFamilyIndex = 0;
-        queue_create_infos[index].queueCount       = 1;
-        queue_create_infos[index].pQueuePriorities = &queue_priority;
-
-        queue.index                                = queue_index;
+        queue.index       = queue_index;
     }
 
     constexpr const char* device_extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };
 
-    VkPhysicalDeviceVulkan12Features physical_device_12_features          = {};
-    physical_device_12_features.sType                                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    physical_device_12_features.pNext                                     = VK_NULL_HANDLE;
-    physical_device_12_features.bufferDeviceAddress                       = VK_TRUE;
-    physical_device_12_features.runtimeDescriptorArray                    = VK_TRUE;
-    physical_device_12_features.shaderStorageImageArrayNonUniformIndexing = VK_TRUE;
-    physical_device_12_features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-    physical_device_12_features.descriptorBindingPartiallyBound           = VK_TRUE;
-    physical_device_12_features.descriptorBindingPartiallyBound           = VK_TRUE;
-    physical_device_12_features.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
-    physical_device_12_features.imagelessFramebuffer                      = VK_TRUE;
+    VkPhysicalDeviceVulkan12Features physical_device_12_features {
+        .sType                                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext                                     = VK_NULL_HANDLE,
+        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+        .shaderStorageImageArrayNonUniformIndexing = VK_TRUE,
+        .descriptorBindingUpdateUnusedWhilePending = VK_TRUE,
+        .descriptorBindingPartiallyBound           = VK_TRUE,
+        .runtimeDescriptorArray                    = VK_TRUE,
+        .imagelessFramebuffer                      = VK_TRUE,
+        .bufferDeviceAddress                       = VK_TRUE,
+    };
 
-    VkPhysicalDeviceVulkan13Features physical_device_13_features          = {};
-    physical_device_13_features.sType                                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    physical_device_13_features.pNext                                     = &physical_device_12_features;
-    physical_device_13_features.synchronization2                          = VK_TRUE;
-    physical_device_13_features.dynamicRendering                          = VK_TRUE;
+    VkPhysicalDeviceVulkan13Features physical_device_13_features {
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext            = &physical_device_12_features,
+        .synchronization2 = VK_TRUE,
+        .dynamicRendering = VK_TRUE,
+    };
 
-    VkDeviceCreateInfo create_info                                        = {};
-    create_info.sType                                                     = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    create_info.pNext                                                     = &physical_device_13_features;
-    create_info.flags                                                     = 0U;
-    create_info.queueCreateInfoCount                                      = QueueTypes::MAX;
-    create_info.pQueueCreateInfos                                         = queue_create_infos;
-    create_info.enabledLayerCount                                         = 0;
-    create_info.ppEnabledLayerNames                                       = nullptr;
-    create_info.enabledExtensionCount                                     = sizeof(device_extensions) / sizeof(device_extensions[0]);
-    create_info.ppEnabledExtensionNames                                   = device_extensions;
-    create_info.pEnabledFeatures                                          = nullptr;
+    VkDeviceCreateInfo create_info {
+        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext                   = &physical_device_13_features,
+        .flags                   = 0U,
+        .queueCreateInfoCount    = static_cast<uint32_t>(QueueType::MAX),
+        .pQueueCreateInfos       = queue_create_infos,
+        .enabledLayerCount       = 0,
+        .ppEnabledLayerNames     = nullptr,
+        .enabledExtensionCount   = sizeof(device_extensions) / sizeof(device_extensions[0]),
+        .ppEnabledExtensionNames = device_extensions,
+        .pEnabledFeatures        = nullptr,
+    };
 
     VKCHECK(vkCreateDevice(physical_device, &create_info, nullptr, &device))
 
@@ -393,21 +440,23 @@ void vkdevice::create_device() {
 }
 
 void vkdevice::create_memory_allocator() {
-    VmaAllocatorCreateInfo create_info = {};
-    create_info.flags                  = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-    create_info.physicalDevice         = physical_device;
-    create_info.device                 = device;
-    create_info.instance               = instance;
-    create_info.vulkanApiVersion       = VK_API_VERSION_1_2;
+    VmaAllocatorCreateInfo create_info {
+        .flags                  = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+        .physicalDevice         = physical_device,
+        .device                 = device,
+        .instance               = instance,
+        .vulkanApiVersion       = VK_API_VERSION_1_2,
+    };
 
     VKCHECK(vmaCreateAllocator(&create_info, &gpu_allocator))
 }
 
 void vkdevice::create_command_pools() {
-    VkCommandPoolCreateInfo create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    create_info.pNext = nullptr;
-    create_info.flags = 0U;
+    VkCommandPoolCreateInfo create_info {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0U,
+    };
 
     for (auto& queue : queues) {
         create_info.queueFamilyIndex = queue.index;
@@ -420,7 +469,7 @@ uint32_t vkdevice::pick_queue(VkQueueFlags queue_usages) const {
     auto queue_properties_count = 0U;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, nullptr);
 
-    std::vector<VkQueueFamilyProperties> queue_properties{ queue_properties_count };
+    std::vector<VkQueueFamilyProperties> queue_properties { queue_properties_count };
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, queue_properties.data());
 
     for (auto properties_index{ 0U }; properties_index < queue_properties_count; properties_index++) {
@@ -439,7 +488,7 @@ void vkdevice::pick_physical_device() {
 
     assert(physical_devices_count > 0);
 
-    std::vector<VkPhysicalDevice> physical_devices{ physical_devices_count };
+    std::vector<VkPhysicalDevice> physical_devices { physical_devices_count };
     vkEnumeratePhysicalDevices(instance, &physical_devices_count, physical_devices.data());
 
     for (auto& physical_dev : physical_devices) {
@@ -453,18 +502,16 @@ void vkdevice::pick_physical_device() {
 }
 
 bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
-    VkPhysicalDeviceProperties physical_device_properties = {};
-
-    vkGetPhysicalDeviceProperties(physical_dev, &physical_device_properties);
-
     // Vulkan 1.2 physical device features support
     {
-        VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
-        vulkan_12_features.sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        VkPhysicalDeviceVulkan12Features vulkan_12_features {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        };
 
-        VkPhysicalDeviceFeatures2 physical_device_features  = {};
-        physical_device_features.sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        physical_device_features.pNext                      = &vulkan_12_features;
+        VkPhysicalDeviceFeatures2 physical_device_features {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext = &vulkan_12_features,
+        };
 
         vkGetPhysicalDeviceFeatures2(physical_dev, &physical_device_features);
 
@@ -484,12 +531,14 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
 
     // Vulkan 1.3 physical device features support
     {
-        VkPhysicalDeviceVulkan13Features vulkan_13_features = {};
-        vulkan_13_features.sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        VkPhysicalDeviceVulkan13Features vulkan_13_features {
+            .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        };
 
-        VkPhysicalDeviceFeatures2 physical_device_features  = {};
-        physical_device_features.sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        physical_device_features.pNext                      = &vulkan_13_features;
+        VkPhysicalDeviceFeatures2 physical_device_features {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext = &vulkan_13_features,
+        };
 
         vkGetPhysicalDeviceFeatures2(physical_dev, &physical_device_features);
 
@@ -503,17 +552,18 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
 }
 
 void vkdevice::create_debug_layer_callback() {
-    VkDebugUtilsMessengerCreateInfoEXT create_info = {};
-    create_info.sType                              = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    create_info.pNext                              = nullptr;
-    create_info.flags                              = 0U;
-    create_info.messageSeverity                    = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-    create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                              VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-    create_info.pfnUserCallback = debug_callback;
-    create_info.pUserData       = nullptr;
+    VkDebugUtilsMessengerCreateInfoEXT create_info {
+        .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .pNext           = nullptr,
+        .flags           = 0U,
+        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+        .messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+        .pfnUserCallback = debug_callback,
+        .pUserData       = nullptr,
+    };
 
     VKCHECK(vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger))
 }

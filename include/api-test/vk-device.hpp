@@ -8,27 +8,10 @@
 #include "freelist.hpp"
 #include "texture.hpp"
 #include "buffer.hpp"
+#include "command-buffer.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
 using VmaAllocation = struct VmaAllocation_T*;
-
-// typedef struct VkInstance_T*                VkInstance;
-// typedef struct VkDevice_T*                  VkDevice;
-// typedef struct VkPhysicalDevice_T*          VkPhysicalDevice;
-// typedef struct VkQueue_T*                   VkQueue;
-// typedef uint32_t                            VkFlags;
-// typedef VkFlags                             VkQueueUsageFlags;
-// typedef struct VkImage_T*                   VkImage;
-// typedef struct VkImageView_T*               VkImageView;
-// typedef struct VkBuffer_T*                  VkBuffer;
-// typedef enum VkImageType                    VkImageType;
-// typedef enum VkFormat                       VkFormat;
-// typedef VkFlags                             VkImageUsageFlags;
-// 
-// #ifdef _DEBUG
-// typedef struct VkDebugUtilsMessengerEXT_T*  VkDebugUtilsMessengerEXT;
-// #endif // _DEBUG
-
 
 struct device_texture {
     VkImage         handle;
@@ -51,6 +34,13 @@ struct device_buffer {
 class window;
 
 class vkdevice {
+    struct queue {
+        VkQueue         handle;
+        uint32_t        index;
+        VkQueueFlags    usages;
+        VkCommandPool   command_pool;
+    };
+
 public:
 
     vkdevice(const window& window);
@@ -59,17 +49,24 @@ public:
 
     handle<device_buffer> create_buffer(const buffer_desc& desc);
 
+    template<typename cmd_buf_type>
+    void allocate_command_buffers(cmd_buf_type* buffers, size_t count, QueueType queue_type) {
+        allocate_command_buffers(buffers, count, queue_type);
+    }
+
     const device_texture& get_texture(handle<device_texture> handle) {
-        return textures[handle.handle];
+        return textures[handle.id];
     }
 
     const device_buffer& get_buffer(handle<device_buffer> handle) {
-        return buffers[handle.handle];
+        return buffers[handle.id];
     }
 
-    void submit(/*std::span<command_buffer>*/);
+    void submit(command_buffer* buffers, size_t count);
 
 private:
+
+    void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type);
 
     void create_views(device_texture& texture);
 
@@ -98,29 +95,19 @@ private:
     void create_debug_layer_callback();
 
 
-    enum QueueTypes : uint32_t {
-        GRAPHICS,
-        // COPY,
-        MAX,
-    };
+    queue                       queues[static_cast<uint32_t>(QueueType::MAX)];
 
-    struct queue {
-        VkQueue         handle;
-        uint32_t        index;
-        VkQueueFlags    usages;
-        VkCommandPool   command_pool;
-    };
+    VkInstance                  instance;
+    VkPhysicalDevice            physical_device;
+    VkDevice                    device;
 
-    queue               queues[QueueTypes::MAX];
+    VmaAllocator                gpu_allocator;
 
-    VkInstance          instance;
-    VkPhysicalDevice    physical_device;
-    VkDevice            device;
-
-    VmaAllocator        gpu_allocator;
+    static constexpr size_t     max_allocable_command_buffers = 16;
+    static constexpr size_t     max_submitable_command_buffers = 16;
 
 #ifdef _DEBUG
-    VkDebugUtilsMessengerEXT debug_messenger;
+    VkDebugUtilsMessengerEXT    debug_messenger;
 #endif // _DEBUG
 
     freelist<device_texture>    textures;

@@ -4,7 +4,7 @@
 #include <xmmintrin.h>
 
 class vec3 {
-    public:
+  public:
     vec3();
 
     vec3(float x);
@@ -12,7 +12,7 @@ class vec3 {
     vec3(__m128& v);
     vec3(__m128&& v);
     vec3(const vec3& vec);
-    vec3(const vec3&& vec);
+    vec3(const vec3&& vec) noexcept;
 
     vec3 operator-() const;
 
@@ -26,21 +26,21 @@ class vec3 {
 
     float operator[](int axis);
 
-    float length() const;
+    [[nodiscard]] float length() const;
 
-    float length_sq() const;
+    [[nodiscard]] float length_sq() const;
 
-    float dot(const vec3& vec) const;
+    [[nodiscard]] float dot(const vec3& vec) const;
 
-    vec3 cross(const vec3& vec) const;
+    [[nodiscard]] vec3 cross(const vec3& vec) const;
 
-    vec3 min(const vec3& vec) const;
+    [[nodiscard]] vec3 min(const vec3& vec) const;
 
-    vec3 max(const vec3& vec) const;
+    [[nodiscard]] vec3 max(const vec3& vec) const;
 
     vec3& normalize();
 
-    bool near_zero() const;
+    [[nodiscard]] bool near_zero() const;
 
     void print() const;
 
@@ -72,4 +72,4 @@ vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat);
 using point3 = vec3;
 using color = vec3;
 
-#endif // !__VEC3_HPP_
+#endif // !_

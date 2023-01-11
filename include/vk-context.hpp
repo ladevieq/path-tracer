@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkan-loader.hpp"
+#include <vulkan/vulkan_core.h>
 
 using VmaAllocator = struct VmaAllocator_T*;
 

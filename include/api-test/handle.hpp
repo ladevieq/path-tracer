@@ -4,5 +4,5 @@
 
 template<typename T>
 struct handle {
-    const uint32_t handle;
+    const uint32_t id;
 };

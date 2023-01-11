@@ -94,7 +94,7 @@ void vkcontext::create_instance() {
 
     check_available_instance_layers(needed_layers, needed_layers_count);
 
-    const char* needed_extensions[] = {
+    constexpr const char* needed_extensions[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         "VK_KHR_surface",
 #if defined(LINUX)
@@ -105,7 +105,7 @@ void vkcontext::create_instance() {
         "VK_EXT_metal_surface"
 #endif
     };
-    auto needed_extensions_count = sizeof(needed_extensions) / sizeof(needed_extensions[0]);
+    constexpr auto needed_extensions_count = sizeof(needed_extensions) / sizeof(needed_extensions[0]);
 
     check_available_instance_extensions(needed_extensions, needed_extensions_count);
 
