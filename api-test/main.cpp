@@ -34,7 +34,7 @@ int main() {
 
     vkdevice device { wnd };
 
-    auto gpu_texture = device.create_texture({
+    auto gpu_texture_handle = device.create_texture({
         .width = 1024U,
         .height = 1024U,
         .usages = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -49,21 +49,27 @@ int main() {
         .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
     }));
 
-    auto staging_buffer = device.get_buffer(device.create_buffer({
+    auto staging_buffer_handle = device.create_buffer({
         .size = 1024U * sizeof(uint32_t),
         .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    }));
+    });
+    auto staging_buffer = device.get_buffer(staging_buffer_handle);
 
     uint64_t t = 7;
     (*(uint64_t*)staging_buffer.mapped_ptr) = t;
 
-    auto command_buffer = device.get_command_buffer();
+    transfer_command_buffer command_buffer;
+    device.allocate_command_buffers(&command_buffer, 1, QueueType::GRAPHICS);
 
-    command_buffer.copy(staging_buffer, gpu_texture);
+    command_buffer.start();
 
-    device.submit(command_buffer);
+    command_buffer.copy(staging_buffer_handle, gpu_texture_handle);
+
+    command_buffer.stop();
+
+    device.submit(&command_buffer, 1);
 
 #ifdef ENABLE_RENDERDOC
     if(rdoc_api != nullptr) rdoc_api->EndFrameCapture(nullptr, nullptr);

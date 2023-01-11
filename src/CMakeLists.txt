@@ -29,6 +29,7 @@ add_executable(
     primitive-renderpass.cpp
     bvh.cpp
     mesh.cpp
+    resource-manager.cpp
 )
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -58,8 +59,9 @@ target_compile_definitions(path-tracer PUBLIC ${DEFINES})
 
 target_include_directories(path-tracer SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty)
 
+target_include_directories(path-tracer SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
+
 target_include_directories(path-tracer PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_include_directories(path-tracer PUBLIC ${Vulkan_INCLUDE_DIRS})
 
 if(UNIX AND NOT APPLE)
     target_include_directories(path-tracer PUBLIC ${X11_xcb_INCLUDE_PATH})

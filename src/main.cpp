@@ -320,7 +320,7 @@ int main() {
                     main_scene.meta.cam.set_aspect_ratio((float)event.width / (float)event.height);
 
                     delete accumulation_texture;
-                    delete output_texture;
+                    delete output_texture);
                     accumulation_texture = vkrenderer::create_2d_texture(event.width, event.height, VK_FORMAT_R32G32B32A32_SFLOAT);
                     output_texture = vkrenderer::create_2d_texture(event.width, event.height, VK_FORMAT_R32G32B32A32_SFLOAT);
                     raytracing_pass->set_dispatch_size(event.width / 8 + 1, event.height / 8 + 1, 1);
