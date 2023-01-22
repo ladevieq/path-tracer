@@ -3,6 +3,7 @@ add_executable(
     main.cpp
     vk-device.cpp
     command-buffer.cpp
+    vk-bindless.cpp
     ${CMAKE_SOURCE_DIR}/src/window.cpp
     ${CMAKE_SOURCE_DIR}/src/utils.cpp
     ${CMAKE_SOURCE_DIR}/src/vulkan-loader.cpp

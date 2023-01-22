@@ -2,6 +2,14 @@
 #define __VEC3_HPP_
 
 #include <xmmintrin.h>
+#include <cstdint>
+
+struct vec3u {
+    union {
+        uint32_t vec[3];
+        uint32_t x, y, z;
+    };
+};
 
 class vec3 {
   public:
@@ -24,6 +32,10 @@ class vec3 {
 
     vec3& operator/=(float numerator);
 
+    vec3 operator<(const vec3& vec) const;
+
+    vec3 operator>(const vec3& vec) const;
+
     float operator[](int axis);
 
     [[nodiscard]] float length() const;
@@ -33,10 +45,6 @@ class vec3 {
     [[nodiscard]] float dot(const vec3& vec) const;
 
     [[nodiscard]] vec3 cross(const vec3& vec) const;
-
-    [[nodiscard]] vec3 min(const vec3& vec) const;
-
-    [[nodiscard]] vec3 max(const vec3& vec) const;
 
     vec3& normalize();
 

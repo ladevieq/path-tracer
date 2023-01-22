@@ -1,115 +1,137 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 #include <vulkan/vulkan_core.h>
 
-#include "handle.hpp"
-#include "freelist.hpp"
-#include "texture.hpp"
-#include "buffer.hpp"
 #include "command-buffer.hpp"
+#include "freelist.hpp"
+#include "handle.hpp"
+#include "vk-bindless.hpp"
+#include "vk-device-types.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
-using VmaAllocation = struct VmaAllocation_T*;
-
-struct device_texture {
-    VkImage         handle;
-    VkImageView     whole_view;
-    VkImageView     mips_views[texture_desc::max_mips] = { VK_NULL_HANDLE };
-    VmaAllocation   alloc;
-
-    texture_desc    desc;
-};
-
-struct device_buffer {
-    VkBuffer        handle;
-    VmaAllocation   alloc;
-    VkDeviceAddress device_address;
-    void*           mapped_ptr;
-
-    buffer_desc desc;
-};
 
 class window;
 
 class vkdevice {
     struct queue {
-        VkQueue         handle;
-        uint32_t        index;
-        VkQueueFlags    usages;
-        VkCommandPool   command_pool;
+        VkQueue       vk_queue;
+        uint32_t      index;
+        VkQueueFlags  usages;
+        VkCommandPool command_pool;
     };
 
-public:
+    public:
+    static vkdevice*        init_device(const window& window);
 
-    vkdevice(const window& window);
+    static void             free_device();
 
-    handle<device_texture> create_texture(const texture_desc& desc);
+    static inline vkdevice* get_device() {
+        return render_device;
+    }
 
-    handle<device_buffer> create_buffer(const buffer_desc& desc);
+    handle<device_texture>  create_texture(const texture_desc& desc);
+
+    handle<device_buffer>   create_buffer(const buffer_desc& desc);
+
+    handle<device_pipeline> create_pipeline(const pipeline_desc& desc);
+
+    void                    destroy_texture(const device_texture& texture);
+    void                    destroy_texture(handle<device_texture> handle);
+
+    void                    destroy_buffer(const device_buffer& buffer);
+    void                    destroy_buffer(handle<device_buffer> handle);
+
+    void                    destroy_pipeline(const device_pipeline& pipeline);
+    void                    destroy_pipeline(handle<device_pipeline> handle);
 
     template<typename cmd_buf_type>
     void allocate_command_buffers(cmd_buf_type* buffers, size_t count, QueueType queue_type) {
-        allocate_command_buffers(buffers, count, queue_type);
+        allocate_command_buffers(static_cast<command_buffer*>(buffers), count, queue_type);
     }
 
-    const device_texture& get_texture(handle<device_texture> handle) {
+    inline device_texture& get_texture(handle<device_texture> handle) {
         return textures[handle.id];
     }
 
-    const device_buffer& get_buffer(handle<device_buffer> handle) {
+    inline const device_buffer& get_buffer(handle<device_buffer> handle) {
         return buffers[handle.id];
+    }
+
+    inline const device_pipeline& get_pipeline(handle<device_pipeline> handle) {
+        return pipelines[handle.id];
+    }
+
+    inline const bindless_model& get_bindingmodel() {
+        return bindless;
     }
 
     void submit(command_buffer* buffers, size_t count);
 
-private:
+    void present();
+
+    private:
+    vkdevice(const window& window);
+    ~vkdevice();
 
     void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type);
 
     void create_views(device_texture& texture);
 
-    void create_surface(const window& window);
+    // Presentation stuff
+    void           create_surface(const window& window);
 
-    void create_swapchain();
+    void           create_swapchain();
 
-    VkSurfaceKHR    surface;
-    VkSwapchainKHR  swapchain;
+    void           create_virtual_frames();
+
+    VkSurfaceKHR   surface   = nullptr;
+    VkSwapchainKHR swapchain = nullptr;
 
     // TODO: Wrap in a struct called adapter ?
-    void create_instance();
+    void        create_instance();
 
-    void create_device();
+    void        create_device();
 
-    void create_memory_allocator();
+    void        create_memory_allocator();
 
-    void create_command_pools();
+    void        create_command_pools();
 
-    void pick_physical_device();
-
-    [[nodiscard]] uint32_t pick_queue(VkQueueFlags usages) const;
+    void        pick_physical_device();
 
     static bool device_support_features(VkPhysicalDevice physical_dev);
 
-    void create_debug_layer_callback();
+    void        create_debug_layer_callback();
 
+    // Virtual frames resources
+    static constexpr uint32_t virtual_frames_count = 3U;
+    VkSemaphore               semaphores[virtual_frames_count];
 
-    queue                       queues[static_cast<uint32_t>(QueueType::MAX)];
+    queue                     queues[static_cast<uint32_t>(QueueType::MAX)];
 
-    VkInstance                  instance;
-    VkPhysicalDevice            physical_device;
-    VkDevice                    device;
+    VkInstance                instance;
+    VkPhysicalDevice          physical_device;
+    VkDevice                  device;
 
-    VmaAllocator                gpu_allocator;
+    VmaAllocator              gpu_allocator;
 
-    static constexpr size_t     max_allocable_command_buffers = 16;
-    static constexpr size_t     max_submitable_command_buffers = 16;
+    bindless_model            bindless;
+
+    static constexpr size_t   max_allocable_command_buffers  = 16;
+    static constexpr size_t   max_submitable_command_buffers = 16;
+
+    freelist<device_texture*> storage_indices;
+    freelist<device_texture*> sampled_indices;
+
+    freelist<device_texture>  textures;
+    freelist<device_buffer>   buffers;
+    freelist<device_pipeline> pipelines;
+
+    static vkdevice*          render_device;
 
 #ifdef _DEBUG
-    VkDebugUtilsMessengerEXT    debug_messenger;
+    VkDebugUtilsMessengerEXT debug_messenger;
 #endif // _DEBUG
-
-    freelist<device_texture>    textures;
-    freelist<device_buffer>     buffers;
 };

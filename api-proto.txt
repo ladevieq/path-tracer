@@ -9,6 +9,8 @@ class device_command_buffer {
     void stop();
 
     VkCommandBuffer handle;
+    queue           owner;
+    CMD_BUF_TYPE buf_type = CMD_BUF_TYPE::MAX;
 }
 
 class graphics_device_command_buffer : device_command_buffer {
@@ -63,7 +65,10 @@ class device {
         vkAllocate(ptr, count, queue[type]);
     }
 
-    fence submit(span<device_command_buffer> cmd_buffers, CMD_BUF_TYPE type);
+    submit(span<device_command_buffer> cmd_buffers, semaphore) {
+        
+        vkSubmit();
+    }
 
     wait(fence);
     wait_idle();

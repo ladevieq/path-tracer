@@ -84,6 +84,7 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkDestroyCommandPool)           \
     X(vkBeginCommandBuffer)           \
     X(vkCmdPipelineBarrier)           \
+    X(vkCmdPipelineBarrier2)          \
     X(vkCmdPushConstants)             \
     X(vkCmdClearColorImage)           \
     X(vkCmdBeginRenderPass)           \
