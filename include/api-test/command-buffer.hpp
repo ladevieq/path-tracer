@@ -6,6 +6,8 @@
 
 #include "handle.hpp"
 
+#include "vec3.hpp"
+
 enum class QueueType : uint32_t {
     GRAPHICS,
     ASYNC_COMPUTE,
@@ -14,31 +16,36 @@ enum class QueueType : uint32_t {
 };
 
 
-struct device_buffer;
 struct device_texture;
+struct device_buffer;
+struct device_pipeline;
+
+struct dispatch_params {
+    handle<device_pipeline> pipeline;
+    vec3u                   group_size;
+    vec3u                   local_group_size;
+};
 
 struct command_buffer {
-    void start() const;
-    void stop() const;
+    void            start() const;
+    void            stop() const;
 
-    void barrier();
+    void            barrier(handle<device_texture> texture_handle, VkPipelineStageFlags2 stage, VkAccessFlags2 access, VkImageLayout layout) const;
 
-    VkCommandBuffer handle;
+    void            copy(handle<device_buffer> buffer_handle, handle<device_texture> texture_handle, VkDeviceSize offset = 0) const;
+
+    VkCommandBuffer vk_command_buffer;
     QueueType       queue_type;
 };
 
-struct graphics_command_buffer : public command_buffer {
-    void set_pipeline();
-
-    void dispatch();
+// General purpose queue
+struct graphics_command_buffer: public command_buffer {
+    void dispatch(const dispatch_params& params);
 };
 
-struct compute_command_buffer : public command_buffer {
-    void set_pipeline();
-
-    void dispatch();
+struct compute_command_buffer: public command_buffer {
+    void dispatch(const dispatch_params& params);
 };
 
-struct transfer_command_buffer : public command_buffer {
-    void copy(::handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle);
+struct transfer_command_buffer: public command_buffer {
 };
