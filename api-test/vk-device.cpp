@@ -1,7 +1,6 @@
 #include "vk-device.hpp"
 
 #include <cassert>
-#include <iostream>
 #include <vector>
 
 #define VMA_IMPLEMENTATION
@@ -12,47 +11,6 @@
 #include "vk-utils.hpp"
 
 vkdevice* vkdevice::render_device = nullptr;
-
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
-                                              VkDebugUtilsMessageTypeFlagsEXT             type,
-                                              const VkDebugUtilsMessengerCallbackDataEXT* data,
-                                              void*) {
-    const char* severity_cstr = nullptr;
-    switch (severity) {
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-        severity_cstr = "VERBOSE";
-        break;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-        severity_cstr = "INFO";
-        break;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-        severity_cstr = "WARNING";
-        break;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-        severity_cstr = "ERROR";
-        break;
-    default:
-        break;
-    }
-
-    const char* type_cstr = nullptr;
-    switch (type) {
-    case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-        type_cstr = "GENERAL";
-        break;
-    case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-        type_cstr = "VALIDATION";
-        break;
-    case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-        type_cstr = "PERFORMANCE";
-        break;
-    default:
-        break;
-    }
-
-    std::cerr << "[" << severity_cstr << "_" << type_cstr << "]: " << data->pMessage << std::endl;
-    return VK_FALSE;
-}
 
 vkdevice::vkdevice(const window& window)
         : queues{
@@ -84,11 +42,12 @@ vkdevice::vkdevice(const window& window)
 
     create_swapchain();
 
-    bindless = bindless_model::create_bindless_model(device);
+    bindless = bindless_model::create_bindless_model();
 }
 
 vkdevice* vkdevice::init_device(const window& window) {
-    vkdevice::render_device = new vkdevice(window);
+    vkdevice::render_device = static_cast<vkdevice*>(malloc(sizeof(vkdevice)));
+    vkdevice::render_device = new (vkdevice::render_device) vkdevice(window);
     return render_device;
 }
 
@@ -100,7 +59,7 @@ void vkdevice::free_device() {
 vkdevice::~vkdevice() {
     vkDeviceWaitIdle(device);
 
-    bindless_model::destroy_bindless_model(device, bindless);
+    bindless_model::destroy_bindless_model(bindless);
 
     for (auto& texture : textures) {
         destroy_texture(texture);
@@ -271,17 +230,19 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
         .bindless = &bindless,
     };
     if (!desc.cs_code.empty()) {
-        const auto& code = desc.cs_code;
         VkShaderModule shader_module;
-        VkShaderModuleCreateInfo module_create_info {
-            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0U,
-            .codeSize = code.size(),
-            .pCode = (uint32_t*)code.data(),
-        };
+        {
+            const auto& code = desc.cs_code;
+            VkShaderModuleCreateInfo create_info {
+                .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0U,
+                .codeSize = code.size(),
+                .pCode = (uint32_t*)code.data(),
+            };
 
-        VKCHECK(vkCreateShaderModule(device, &module_create_info, nullptr, &shader_module));
+            VKCHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+        }
 
         VkPipelineShaderStageCreateInfo stage_create_info {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -308,12 +269,127 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
 
         vkDestroyShaderModule(device, shader_module, nullptr);
     } else {
+        VkPipelineShaderStageCreateInfo shader_stages_create_info[2U] {
+            {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0U,
+                .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .pName = "main",
+                .pSpecializationInfo = nullptr,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0U,
+                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pName = "main",
+                .pSpecializationInfo = nullptr,
+            },
+        };
+
+        {
+            const auto& code = desc.vs_code;
+            VkShaderModuleCreateInfo module_create_info {
+                .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0U,
+                .codeSize = code.size(),
+                .pCode = (uint32_t*)code.data(),
+            };
+
+            VKCHECK(vkCreateShaderModule(device, &module_create_info, nullptr, &shader_stages_create_info[0U].module));
+
+        }
+        {
+            const auto& code = desc.fs_code;
+            VkShaderModuleCreateInfo module_create_info {
+                .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0U,
+                .codeSize = code.size(),
+                .pCode = (uint32_t*)code.data(),
+            };
+
+            VKCHECK(vkCreateShaderModule(device, &module_create_info, nullptr, &shader_stages_create_info[1U].module));
+        }
+
+        VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        };
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0U,
+            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            .primitiveRestartEnable = VK_FALSE,
+        };
+
+        VkPipelineViewportStateCreateInfo viewport_state_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0U,
+            .viewportCount = 0U,
+            .pViewports = nullptr,
+            .scissorCount = 0U,
+            .pScissors = nullptr,
+        };
+
+        VkPipelineRasterizationStateCreateInfo rasterization_state_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0U,
+            .depthClampEnable = VK_FALSE,
+            .rasterizerDiscardEnable = VK_FALSE,
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullMode = VK_CULL_MODE_NONE,
+            .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            .depthBiasEnable = VK_FALSE,
+            .lineWidth = 1.f,
+        };
+
+        VkDynamicState dynamic_states[] {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR,
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamic_state_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0U,
+            .dynamicStateCount = sizeof(dynamic_states) / sizeof(VkDynamicState),
+            .pDynamicStates = dynamic_states,
+        };
+
+        VkPipelineRenderingCreateInfo pipeline_rendering_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .pNext = nullptr,
+            .viewMask = 0U,
+            .colorAttachmentCount = 0U,
+            .pColorAttachmentFormats = nullptr,
+            .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+            .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+        };
 
         VkGraphicsPipelineCreateInfo create_info {
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-            .pNext = nullptr,
+            .pNext = &pipeline_rendering_create_info,
             .flags = 0U,
+            .stageCount = sizeof(shader_stages_create_info) / sizeof(VkPipelineShaderStageCreateInfo),
+            .pStages = shader_stages_create_info,
+            .pVertexInputState = &vertex_input_state_create_info,
+            .pInputAssemblyState = &input_assembly_create_info,
+            .pTessellationState = nullptr,
+            .pViewportState = &viewport_state_create_info,
+            .pRasterizationState = &rasterization_state_create_info,
+            .pMultisampleState = nullptr,
+            .pDepthStencilState = nullptr,
+            .pColorBlendState = nullptr,
+            .pDynamicState = &dynamic_state_create_info,
             .layout = bindless.layout, 
+            .renderPass = nullptr,
+            .subpass = 0U,
             .basePipelineHandle = nullptr,
             .basePipelineIndex = 0,
         };

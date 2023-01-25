@@ -18,12 +18,13 @@ void command_buffer::start() const {
 
     VKCHECK(vkBeginCommandBuffer(vk_command_buffer, &begin_info));
 
-    const auto& bindless = vkdevice::get_device()->get_bindingmodel();
+    const auto& bindless = vkdevice::get_render_device()->get_bindingmodel();
+    const auto* global_set = &bindless.sets[BindlessSetType::GLOBAL];
     if (queue_type == QueueType::GRAPHICS) {
-        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.layout, 0, BindlessSetType::MAX, bindless.sets, 0, nullptr);
-        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, 0, BindlessSetType::MAX, bindless.sets, 0, nullptr);
+        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.layout, 0, 1U, global_set, 0U, nullptr);
+        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, 0, 1U, global_set, 0U, nullptr);
     } else if (queue_type == QueueType::ASYNC_COMPUTE) {
-        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, 0, BindlessSetType::MAX, bindless.sets, 0, nullptr);
+        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, 0, 1U, global_set, 0U, nullptr);
     }
 }
 
@@ -32,7 +33,7 @@ void command_buffer::stop() const {
 }
 
 void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineStageFlags2 stage, VkAccessFlags2 access, VkImageLayout layout) const {
-    auto&                   texture     = vkdevice::get_device()->get_texture(texture_handle);
+    auto&                   texture     = vkdevice::get_render_device()->get_texture(texture_handle);
     VkImageAspectFlags      aspect_mask = ((texture.desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
                                               ? VK_IMAGE_ASPECT_DEPTH_BIT
                                               : VK_IMAGE_ASPECT_COLOR_BIT;
@@ -79,7 +80,7 @@ void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineSt
 }
 
 void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle, VkDeviceSize offset) const {
-    auto* device = vkdevice::get_device();
+    auto* device = vkdevice::get_render_device();
     const auto&              buffer      = device->get_buffer(buffer_handle);
     const auto&              texture     = device->get_texture(texture_handle);
     VkImageAspectFlags       aspect_mask = ((texture.desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
@@ -109,7 +110,9 @@ void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_t
 }
 
 void graphics_command_buffer::dispatch(const dispatch_params& params) {
-    const auto& pipeline = vkdevice::get_device()->get_pipeline(params.pipeline);
+    const auto& pipeline = vkdevice::get_render_device()->get_pipeline(params.pipeline);
+    const auto& bindless = vkdevice::get_render_device()->get_bindingmodel();
+    vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, static_cast<uint32_t>(BindlessSetType::UNIFORMS), 1U, &bindless.sets[BindlessSetType::UNIFORMS], 1U, &params.uniforms_offset);
 
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
 

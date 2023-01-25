@@ -28,7 +28,7 @@ class vkdevice {
 
     static void             free_device();
 
-    static inline vkdevice* get_device() {
+    static inline vkdevice* get_render_device() {
         return render_device;
     }
 
@@ -66,6 +66,10 @@ class vkdevice {
 
     inline const bindless_model& get_bindingmodel() {
         return bindless;
+    }
+
+    inline VkDevice get_device() {
+        return device;
     }
 
     void submit(command_buffer* buffers, size_t count);

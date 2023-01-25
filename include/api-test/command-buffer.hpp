@@ -24,6 +24,7 @@ struct dispatch_params {
     handle<device_pipeline> pipeline;
     vec3u                   group_size;
     vec3u                   local_group_size;
+    uint32_t                uniforms_offset;
 };
 
 struct command_buffer {
