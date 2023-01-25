@@ -4,8 +4,11 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include "handle.hpp"
+
 enum BindlessSetType : uint32_t {
     GLOBAL,
+    UNIFORMS,
     MAX,
 };
 
@@ -15,21 +18,27 @@ enum SamplerType : uint32_t {
     MAX_SAMPLER,
 };
 
+struct device_buffer;
+
 struct bindless_model {
 #ifndef USE_VK_DESCRIPTOR_BUFFERS
+    [[nodiscard]] const device_buffer& get_uniform_buffer() const;
+
+    static bindless_model     create_bindless_model();
+
+    static void               destroy_bindless_model(bindless_model& bindless);
+
     VkPipelineLayout          layout;
-    VkDescriptorSetLayout     sets_layout[BindlessSetType::MAX];
     VkDescriptorSet           sets[BindlessSetType::MAX];
+
+private:
+    VkDescriptorSetLayout     sets_layout[BindlessSetType::MAX];
     VkDescriptorPool          descriptor_pool;
+    handle<device_buffer>     uniform_buffer;
 
     static constexpr size_t   descriptor_pool_allocable_sets_count = 64U;
     static constexpr uint32_t set_descriptors_count[BindlessSetType::MAX]{ 1024U };
 
-    static bindless_model     create_bindless_model(VkDevice device);
-
-    static void               destroy_bindless_model(VkDevice device, bindless_model& bindless);
-
-    private:
     void create_layout(VkDevice device);
     void create_descriptor_pool(VkDevice device);
     void allocate_sets(VkDevice device);

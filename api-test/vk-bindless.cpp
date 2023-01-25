@@ -1,15 +1,53 @@
 #include "vk-bindless.hpp"
 
+#include <vma/vk_mem_alloc.h>
+
+#include "vk-device.hpp"
 #include "vk-utils.hpp"
 #include "vulkan-loader.hpp"
 
-bindless_model bindless_model::create_bindless_model(VkDevice device) {
+const device_buffer& bindless_model::get_uniform_buffer() const {
+    auto* render_device = vkdevice::get_render_device();
+    return render_device->get_buffer(uniform_buffer);
+}
+
+bindless_model bindless_model::create_bindless_model() {
     bindless_model bindless;
+    auto* render_device = vkdevice::get_render_device();
+    auto* device = render_device->get_device();
 #ifndef USE_VK_DESCRIPTOR_BUFFER
     bindless.create_immutable_samplers(device);
     bindless.create_layout(device);
     bindless.create_descriptor_pool(device);
     bindless.allocate_sets(device);
+    bindless.uniform_buffer = render_device->create_buffer({
+        .size = 64U * 1024U,
+        .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    });
+
+    const auto& buffer = render_device->get_buffer(bindless.uniform_buffer);
+    VkDescriptorBufferInfo buffer_info {
+        .buffer = buffer.vk_buffer,
+        .offset = 0U,
+        .range = VK_WHOLE_SIZE,
+    };
+
+    VkWriteDescriptorSet write_descriptor_set {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext = nullptr,
+        .dstSet = bindless.sets[BindlessSetType::UNIFORMS],
+        .dstBinding = 0U,
+        .dstArrayElement = 0U,
+        .descriptorCount = 1U,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+        .pImageInfo = nullptr,
+        .pBufferInfo = &buffer_info,
+        .pTexelBufferView = nullptr,
+    };
+
+    vkUpdateDescriptorSets(device, 1U, &write_descriptor_set, 0U, nullptr);
 #else
     VkBufferCreateInfo create_info{
         .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -23,7 +61,6 @@ bindless_model bindless_model::create_bindless_model(VkDevice device) {
     };
 
     VmaAllocatorCreateFlags alloc_create_flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
     VmaAllocationCreateInfo alloc_create_info{
         .flags          = alloc_create_flags,
         .usage          = VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -46,7 +83,8 @@ bindless_model bindless_model::create_bindless_model(VkDevice device) {
     return bindless;
 }
 
-void bindless_model::destroy_bindless_model(VkDevice device, bindless_model& bindless) {
+void bindless_model::destroy_bindless_model(bindless_model& bindless) {
+    auto* device = vkdevice::get_render_device()->get_device();
     vkDestroyDescriptorPool(device, bindless.descriptor_pool, nullptr);
 
     for (auto index{ 0U }; index < BindlessSetType::MAX; index++) {
@@ -112,6 +150,30 @@ void bindless_model::create_layout(VkDevice device) {
         VKCHECK(vkCreateDescriptorSetLayout(device, &create_info, nullptr, &sets_layout[BindlessSetType::GLOBAL]));
     }
 
+    // Set 1 uniforms
+    //  Binding 0 Uniforms
+    {
+        VkDescriptorSetLayoutBinding set_layout_bindings[]{
+            {
+                .binding            = 0U,
+                .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                .descriptorCount    = 1,
+                .stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = nullptr,
+            },
+        };
+
+        VkDescriptorSetLayoutCreateInfo create_info{
+            .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext        = nullptr,
+            .flags        = 0U,
+            .bindingCount = sizeof(set_layout_bindings) / sizeof(VkDescriptorSetLayoutBinding),
+            .pBindings    = set_layout_bindings,
+        };
+
+        VKCHECK(vkCreateDescriptorSetLayout(device, &create_info, nullptr, &sets_layout[BindlessSetType::UNIFORMS]));
+    }
+
     VkPipelineLayoutCreateInfo create_info{
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = nullptr,
@@ -140,6 +202,10 @@ void bindless_model::create_descriptor_pool(VkDevice device) {
             .type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .descriptorCount = set_descriptors_count[BindlessSetType::MAX],
         },
+        {
+            .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = set_descriptors_count[BindlessSetType::MAX],
+        },
     };
 
     VkDescriptorPoolCreateInfo descriptor_pool_create_info{
@@ -162,6 +228,9 @@ void bindless_model::allocate_sets(VkDevice device) {
         .pSetLayouts        = &sets_layout[BindlessSetType::GLOBAL],
     };
     VKCHECK(vkAllocateDescriptorSets(device, &allocate_info, &sets[BindlessSetType::GLOBAL]));
+
+    allocate_info.pSetLayouts        = &sets_layout[BindlessSetType::UNIFORMS],
+    VKCHECK(vkAllocateDescriptorSets(device, &allocate_info, &sets[BindlessSetType::UNIFORMS]));
 }
 
 void bindless_model::create_immutable_samplers(VkDevice device) {

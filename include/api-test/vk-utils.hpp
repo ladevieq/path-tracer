@@ -9,3 +9,8 @@
 #else
 #define VKCHECK(result) (result)
 #endif
+
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
+                                              VkDebugUtilsMessageTypeFlagsEXT             type,
+                                              const VkDebugUtilsMessengerCallbackDataEXT* data,
+                                              void*);

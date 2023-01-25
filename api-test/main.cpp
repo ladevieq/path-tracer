@@ -97,6 +97,13 @@ int main() {
         .cs_code = std::span(code),
     });
 
+    auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
+    auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
+    auto graphics = device->create_pipeline({
+        .vs_code = std::span(vertex_code),
+        .fs_code = std::span(fragment_code),
+    });
+
 
     graphics_command_buffer command_buffer;
     device->allocate_command_buffers(&command_buffer, 1, QueueType::GRAPHICS);
@@ -108,14 +115,27 @@ int main() {
     command_buffer.copy(staging_buffer_handle, gpu_texture_handle);
     command_buffer.copy(staging_buffer_handle, second_texture, static_cast<VkDeviceSize>(offset));
 
-    command_buffer.barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+    command_buffer.barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
     command_buffer.barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
-    command_buffer.barrier(output_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+
+    struct compute_params {
+        uint32_t input1;
+        uint32_t input2;
+        uint32_t output;
+    };
+    const auto& uniform_buffer = device->get_bindingmodel().get_uniform_buffer();
+    compute_params params {
+        device->get_texture(second_texture).storage_index,
+        device->get_texture(gpu_texture_handle).storage_index,
+        device->get_texture(output_texture_handle).storage_index,
+    };
+    memcpy(uniform_buffer.mapped_ptr, &params, sizeof(params));
 
     command_buffer.dispatch({
         .pipeline = compute,
         .group_size = { image_size, image_size, 1U },
         .local_group_size = { 8U, 8U, 1U },
+        .uniforms_offset = 0U,
     });
 
     command_buffer.stop();

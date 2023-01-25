@@ -4,5 +4,7 @@
 
 template<typename T>
 struct handle {
-    const uint32_t id;
+    uint32_t id = handle::invalid_handle;
+
+    static constexpr uint32_t invalid_handle = -1;
 };

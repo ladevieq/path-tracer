@@ -38,7 +38,7 @@ class freelist {
             }
         }
 
-        return invalid_handle;
+        return invalid_id;
     }
 
     auto begin() {
@@ -49,7 +49,7 @@ class freelist {
         return items.end();
     }
 
-    static constexpr uint32_t invalid_handle = -1;
+    static constexpr uint32_t invalid_id = -1;
 
 private:
     std::vector<T>        items;
