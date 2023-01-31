@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdio>
 #include <span>
+#include <array>
 #include <vk_mem_alloc.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -9,6 +10,8 @@
 #include "window.hpp"
 #include "vk-device.hpp"
 #include "utils.hpp"
+
+struct device_texture;
 
 #define ENABLE_RENDERDOC
 
@@ -30,7 +33,9 @@ int main() {
     }
 #endif
 
-    window wnd { 640U, 360U };
+    constexpr size_t window_width = 640U;
+    constexpr size_t window_height = 360U;
+    window wnd { window_width, window_height };
 
 #ifdef ENABLE_RENDERDOC
     if(rdoc_api != nullptr) rdoc_api->StartFrameCapture(nullptr, nullptr);
@@ -58,7 +63,7 @@ int main() {
     auto gpu_texture_handle = device->create_texture({
         .width  = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height),
-        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .type   = VK_IMAGE_TYPE_2D,
     });
@@ -97,11 +102,13 @@ int main() {
         .cs_code = std::span(code),
     });
 
+    std::array<VkFormat, 1U> formats { VK_FORMAT_R8G8B8A8_UNORM };
     auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
     auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
     auto graphics = device->create_pipeline({
         .vs_code = std::span(vertex_code),
         .fs_code = std::span(fragment_code),
+        .color_attachments_format = formats
     });
 
 
@@ -137,6 +144,25 @@ int main() {
         .local_group_size = { 8U, 8U, 1U },
         .uniforms_offset = 0U,
     });
+
+    std::array<handle<device_texture>, 1U> color_attachment {gpu_texture_handle};
+
+    command_buffer.barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    command_buffer.begin_renderpass({
+        .render_area = {
+            .x = 0,
+            .y = 0,
+            .width = window_width,
+            .height = window_height,
+        },
+        .color_attachments = color_attachment,
+    });
+    command_buffer.render({
+        .pipeline = graphics,
+        .vertex_count = 3U,
+        .instance_count = 1U,
+    });
+    command_buffer.end_renderpass();
 
     command_buffer.stop();
 

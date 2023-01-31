@@ -59,6 +59,9 @@ struct pipeline_desc {
     std::span<uint8_t> vs_code;
     std::span<uint8_t> fs_code;
     std::span<uint8_t> cs_code;
+    std::span<VkFormat> color_attachments_format;
+    VkFormat depth_attachment_format;
+    VkFormat stencil_attachment_format;
 };
 
 struct device_pipeline {
