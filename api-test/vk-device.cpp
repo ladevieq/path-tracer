@@ -330,9 +330,9 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0U,
-            .viewportCount = 0U,
+            .viewportCount = 1U,
             .pViewports = nullptr,
-            .scissorCount = 0U,
+            .scissorCount = 1U,
             .pScissors = nullptr,
         };
 
@@ -347,6 +347,35 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
             .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
             .depthBiasEnable = VK_FALSE,
             .lineWidth = 1.f,
+        };
+
+        VkPipelineMultisampleStateCreateInfo multisample_state_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            .sampleShadingEnable = VK_FALSE,
+            .minSampleShading = 1.f,
+        };
+
+        VkPipelineColorBlendAttachmentState color_attachment_state {
+            .blendEnable = VK_TRUE,
+            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            .colorBlendOp = VK_BLEND_OP_ADD,
+            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            .alphaBlendOp = VK_BLEND_OP_ADD,
+            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+        };
+
+        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .logicOpEnable = VK_FALSE,
+            .attachmentCount = 1,
+            .pAttachments = &color_attachment_state,
         };
 
         VkDynamicState dynamic_states[] {
@@ -366,8 +395,8 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
             .pNext = nullptr,
             .viewMask = 0U,
-            .colorAttachmentCount = 0U,
-            .pColorAttachmentFormats = nullptr,
+            .colorAttachmentCount = static_cast<uint32_t>(desc.color_attachments_format.size()),
+            .pColorAttachmentFormats = desc.color_attachments_format.data(),
             .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
             .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
         };
@@ -383,9 +412,9 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
             .pTessellationState = nullptr,
             .pViewportState = &viewport_state_create_info,
             .pRasterizationState = &rasterization_state_create_info,
-            .pMultisampleState = nullptr,
+            .pMultisampleState = &multisample_state_create_info,
             .pDepthStencilState = nullptr,
-            .pColorBlendState = nullptr,
+            .pColorBlendState = &color_blend_state_create_info,
             .pDynamicState = &dynamic_state_create_info,
             .layout = bindless.layout, 
             .renderPass = nullptr,

@@ -88,6 +88,7 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkCmdPushConstants)             \
     X(vkCmdClearColorImage)           \
     X(vkCmdBeginRenderPass)           \
+    X(vkCmdBeginRendering)            \
     X(vkCmdBindPipeline)              \
     X(vkCmdBindVertexBuffers)         \
     X(vkCmdBindIndexBuffer)           \
@@ -101,6 +102,7 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkCmdDraw)                      \
     X(vkCmdDrawIndexed)               \
     X(vkCmdDispatch)                  \
+    X(vkCmdEndRendering)              \
     X(vkCmdEndRenderPass)             \
     X(vkEndCommandBuffer)             \
     X(vkResetCommandBuffer)           \

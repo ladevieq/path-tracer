@@ -18,7 +18,7 @@ void command_buffer::start() const {
 
     VKCHECK(vkBeginCommandBuffer(vk_command_buffer, &begin_info));
 
-    const auto& bindless = vkdevice::get_render_device()->get_bindingmodel();
+    const auto& bindless   = vkdevice::get_render_device()->get_bindingmodel();
     const auto* global_set = &bindless.sets[BindlessSetType::GLOBAL];
     if (queue_type == QueueType::GRAPHICS) {
         vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.layout, 0, 1U, global_set, 0U, nullptr);
@@ -80,7 +80,7 @@ void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineSt
 }
 
 void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle, VkDeviceSize offset) const {
-    auto* device = vkdevice::get_render_device();
+    auto*                    device      = vkdevice::get_render_device();
     const auto&              buffer      = device->get_buffer(buffer_handle);
     const auto&              texture     = device->get_texture(texture_handle);
     VkImageAspectFlags       aspect_mask = ((texture.desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
@@ -109,7 +109,7 @@ void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_t
     vkCmdCopyBufferToImage(vk_command_buffer, buffer.vk_buffer, texture.vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_to_image_copy);
 }
 
-void graphics_command_buffer::dispatch(const dispatch_params& params) {
+void graphics_command_buffer::dispatch(const dispatch_params& params) const {
     const auto& pipeline = vkdevice::get_render_device()->get_pipeline(params.pipeline);
     const auto& bindless = vkdevice::get_render_device()->get_bindingmodel();
     vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, static_cast<uint32_t>(BindlessSetType::UNIFORMS), 1U, &bindless.sets[BindlessSetType::UNIFORMS], 1U, &params.uniforms_offset);
@@ -117,4 +117,74 @@ void graphics_command_buffer::dispatch(const dispatch_params& params) {
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
 
     vkCmdDispatch(vk_command_buffer, params.group_size.x / params.local_group_size.x, params.group_size.y / params.local_group_size.y, params.group_size.z / params.local_group_size.z);
+}
+
+void graphics_command_buffer::begin_renderpass(const renderpass_params& params) const {
+    std::vector<VkRenderingAttachmentInfo> attachments_info(params.color_attachments.size());
+
+    for (auto index{ 0U }; index < params.color_attachments.size(); index++) {
+        auto& attachment_info              = attachments_info[index];
+        auto& attachment                   = vkdevice::get_render_device()->get_texture(params.color_attachments[index]);
+
+        attachment_info.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        attachment_info.pNext              = nullptr;
+        attachment_info.imageView          = attachment.whole_view;
+        attachment_info.imageLayout        = attachment.layout;
+        attachment_info.resolveMode        = VK_RESOLVE_MODE_NONE;
+        attachment_info.resolveImageView   = nullptr;
+        attachment_info.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment_info.loadOp             = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachment_info.storeOp            = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment_info.clearValue         = VkClearValue{
+                    .color = {
+                        .float32 = { 0.f, 0.f, 0.f, 0.f },
+            },
+        };
+    }
+
+    VkRect2D scissor{
+        .offset{
+            .x = params.render_area.x,
+            .y = params.render_area.x,
+        },
+        .extent{
+            .width  = params.render_area.width,
+            .height = params.render_area.height,
+        },
+    };
+    VkViewport viewport{
+        .x        = static_cast<float>(params.render_area.x),
+        .y        = static_cast<float>(params.render_area.y),
+        .width    = static_cast<float>(params.render_area.width),
+        .height   = static_cast<float>(params.render_area.height),
+        .minDepth = 0.f,
+        .maxDepth = 1.f,
+    };
+    VkRenderingInfo rendering_info{
+        .sType                = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .pNext                = nullptr,
+        .flags                = 0U,
+        .renderArea           = scissor,
+        .layerCount           = 1U,
+        .viewMask             = 0U,
+        .colorAttachmentCount = static_cast<uint32_t>(attachments_info.size()),
+        .pColorAttachments    = attachments_info.data(),
+        .pDepthAttachment     = nullptr,
+        .pStencilAttachment   = nullptr,
+    };
+    vkCmdBeginRendering(vk_command_buffer, &rendering_info);
+
+    vkCmdSetScissor(vk_command_buffer, 0U, 1U, &scissor);
+    vkCmdSetViewport(vk_command_buffer, 0U, 1U, &viewport);
+}
+
+void graphics_command_buffer::render(const draw_params& params) const {
+    const auto& pipeline = vkdevice::get_render_device()->get_pipeline(params.pipeline);
+
+    vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
+    vkCmdDraw(vk_command_buffer, params.vertex_count, params.instance_count, 0U, 0U);
+}
+
+void graphics_command_buffer::end_renderpass() const {
+    vkCmdEndRendering(vk_command_buffer);
 }
