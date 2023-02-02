@@ -48,7 +48,7 @@ struct buffer_desc {
 struct device_buffer {
     VkBuffer        vk_buffer;
     VmaAllocation   alloc;
-    VkDeviceAddress device_address;
+    VkDeviceAddress device_address = 0U;
     void*           mapped_ptr;
 
     buffer_desc     desc;

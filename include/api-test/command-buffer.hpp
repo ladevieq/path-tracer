@@ -40,13 +40,17 @@ private:
 public:
     rect render_area;
     std::span<handle<device_texture>> color_attachments;
-    // optional viewport
-    // optional scissor
+    // rect viewport;
+    // rect scissor;
 };
 struct draw_params {
     handle<device_pipeline> pipeline;
+    handle<device_buffer>   index_buffer;
     uint32_t vertex_count;
+    uint32_t vertex_offset;
+    uint32_t index_offset;
     uint32_t instance_count;
+    uint32_t uniforms_offset;
 };
 
 struct command_buffer {

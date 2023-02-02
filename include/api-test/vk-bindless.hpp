@@ -8,7 +8,8 @@
 
 enum BindlessSetType : uint32_t {
     GLOBAL,
-    UNIFORMS,
+    INSTANCES_UNIFORMS,
+    DRAWS_UNIFORMS,
     MAX,
 };
 
@@ -34,7 +35,8 @@ struct bindless_model {
 private:
     VkDescriptorSetLayout     sets_layout[BindlessSetType::MAX];
     VkDescriptorPool          descriptor_pool;
-    handle<device_buffer>     uniform_buffer;
+    handle<device_buffer>     instances_uniform_buffer_handle;
+    handle<device_buffer>     draws_uniform_buffer_handle;
 
     static constexpr size_t   descriptor_pool_allocable_sets_count = 64U;
     static constexpr uint32_t set_descriptors_count[BindlessSetType::MAX]{ 1024U };
@@ -50,6 +52,9 @@ private:
     void destroy_immutable_samplers(VkDevice device);
 
     VkSampler samplers[SamplerType::MAX_SAMPLER];
+
+    static constexpr size_t instances_uniform_buffer_size = 64ULL * 1024ULL;
+    static constexpr size_t draws_uniform_buffer_size = 64ULL * 1024ULL;
 #else
     VkPipelineLayout          layout;
     VkDescriptorSetLayout     sets_layout[BindlessSetType::MAX];

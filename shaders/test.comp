@@ -6,7 +6,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler samplers[];
 layout(set = 0, binding = 1) uniform texture2D textures[];
 layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
-layout(set = 1, binding = 0) uniform parameters {
+layout(set = 2, binding = 0) uniform parameters {
     uint input_id1;
     uint input_id2;
     uint output_id;
