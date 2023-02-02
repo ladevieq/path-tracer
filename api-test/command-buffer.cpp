@@ -12,7 +12,7 @@ void command_buffer::start() const {
     VkCommandBufferBeginInfo begin_info{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext            = nullptr,
-        .flags            = 0U,
+        .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         .pInheritanceInfo = nullptr
     };
 
@@ -112,7 +112,8 @@ void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_t
 void graphics_command_buffer::dispatch(const dispatch_params& params) const {
     const auto& pipeline = vkdevice::get_render_device()->get_pipeline(params.pipeline);
     const auto& bindless = vkdevice::get_render_device()->get_bindingmodel();
-    vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, static_cast<uint32_t>(BindlessSetType::UNIFORMS), 1U, &bindless.sets[BindlessSetType::UNIFORMS], 1U, &params.uniforms_offset);
+    vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, static_cast<uint32_t>(BindlessSetType::INSTANCES_UNIFORMS), 1U, &bindless.sets[BindlessSetType::INSTANCES_UNIFORMS], 1U, &params.uniforms_offset);
+    vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, static_cast<uint32_t>(BindlessSetType::DRAWS_UNIFORMS), 1U, &bindless.sets[BindlessSetType::DRAWS_UNIFORMS], 1U, &params.uniforms_offset);
 
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
 
@@ -179,10 +180,21 @@ void graphics_command_buffer::begin_renderpass(const renderpass_params& params) 
 }
 
 void graphics_command_buffer::render(const draw_params& params) const {
-    const auto& pipeline = vkdevice::get_render_device()->get_pipeline(params.pipeline);
+    auto* device = vkdevice::get_render_device();
+    const auto& pipeline = device->get_pipeline(params.pipeline);
+
+    const auto& bindless = device->get_bindingmodel();
+    vkCmdBindDescriptorSets(vk_command_buffer, pipeline.bind_point, bindless.layout, static_cast<uint32_t>(BindlessSetType::DRAWS_UNIFORMS), 1U, &bindless.sets[BindlessSetType::DRAWS_UNIFORMS], 1U, &params.uniforms_offset);
 
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
-    vkCmdDraw(vk_command_buffer, params.vertex_count, params.instance_count, 0U, 0U);
+
+    if (params.index_buffer.is_valid()) {
+        const auto& index_buffer = device->get_buffer(params.index_buffer);
+        vkCmdBindIndexBuffer(vk_command_buffer, index_buffer.vk_buffer, 0U, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(vk_command_buffer, params.vertex_count, params.instance_count, params.index_offset, static_cast<int32_t>(params.vertex_offset), 0U);
+    } else {
+        vkCmdDraw(vk_command_buffer, params.vertex_count, params.instance_count, params.vertex_offset, 0U);
+    }
 }
 
 void graphics_command_buffer::end_renderpass() const {

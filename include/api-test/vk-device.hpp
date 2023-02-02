@@ -15,6 +15,17 @@ using VmaAllocator = struct VmaAllocator_T*;
 
 class window;
 
+struct vksurface {
+    VkSurfaceKHR vk_surface;
+    VkSwapchainKHR vk_swapchain;
+    uint32_t image_index;
+};
+
+struct vksemaphore {
+    VkSemaphore vk_semaphore = nullptr;
+    uint64_t value = 0U;
+};
+
 class vkdevice {
     struct queue {
         VkQueue       vk_queue;
@@ -37,6 +48,8 @@ class vkdevice {
     handle<device_buffer>   create_buffer(const buffer_desc& desc);
 
     handle<device_pipeline> create_pipeline(const pipeline_desc& desc);
+
+    vksemaphore create_semaphore();
 
     void                    destroy_texture(const device_texture& texture);
     void                    destroy_texture(handle<device_texture> handle);
@@ -72,9 +85,11 @@ class vkdevice {
         return device;
     }
 
-    void submit(command_buffer* buffers, size_t count);
+    void wait(vksemaphore& semaphore);
 
-    void present();
+    void submit(std::span<command_buffer> buffers, vksemaphore* wait, vksemaphore* signal);
+
+    void present(vksurface& surface, const vksemaphore& semaphore);
 
     private:
     vkdevice(const window& window);

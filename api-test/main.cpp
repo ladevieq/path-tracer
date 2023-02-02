@@ -7,6 +7,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include "imgui.h"
+
 #include "window.hpp"
 #include "vk-device.hpp"
 #include "utils.hpp"
@@ -18,8 +20,19 @@ struct device_texture;
 #ifdef ENABLE_RENDERDOC
 #include <renderdoc.h>
 
+#define RD_START_CAPTURE if(rdoc_api != nullptr) rdoc_api->StartFrameCapture(nullptr, nullptr)
+#define RD_END_CAPTURE if(rdoc_api != nullptr) rdoc_api->EndFrameCapture(nullptr, nullptr)
+
 RENDERDOC_API_1_4_1 *rdoc_api = nullptr;
 #endif
+
+void ui() {
+    ImGui::NewFrame();
+    bool open = true;
+    ImGui::ShowDemoWindow(&open);
+    ImGui::EndFrame();
+    ImGui::Render();
+}
 
 int main() {
 
@@ -37,9 +50,10 @@ int main() {
     constexpr size_t window_height = 360U;
     window wnd { window_width, window_height };
 
-#ifdef ENABLE_RENDERDOC
-    if(rdoc_api != nullptr) rdoc_api->StartFrameCapture(nullptr, nullptr);
-#endif
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    io.DisplaySize.x = 1024.f;
+    io.DisplaySize.y = 1024.f;
 
     auto* device = vkdevice::init_device(wnd);
 
@@ -90,40 +104,71 @@ int main() {
         .type   = VK_IMAGE_TYPE_2D,
     });
 
-    // auto gpu_buffer = vkdevice::get_buffer(device.create_buffer({
-    //     .size = 1024U * sizeof(uint32_t),
-    //     .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-    //     .memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-    //     .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
-    // }));
+    uint8_t *pixels = nullptr;
+    int atlas_width;
+    int atlas_height;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &atlas_width, &atlas_height);
+    const auto ui_texture_handle = device->create_texture({
+        .width = static_cast<uint32_t>(atlas_width),
+        .height = static_cast<uint32_t>(atlas_height),
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .type = VK_IMAGE_TYPE_2D,
+    });
+    const auto& ui_texture = device->get_texture(ui_texture_handle);
+    io.Fonts->SetTexID(*(void **)&ui_texture_handle.id);
+
+    off_t ui_offset = 2L * offset;
+    size = static_cast<size_t>(atlas_width) * atlas_height * 4U;
+    addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + ui_offset);
+    memcpy(addr, pixels, size);
+
+    auto vertex_buffer = device->get_buffer(device->create_buffer({
+        .size = 1024U * 1024U * sizeof(uint32_t),
+        .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    }));
+
+    auto index_buffer_handle = device->create_buffer({
+        .size = 1024U * 1024U * sizeof(uint32_t),
+        .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    });
+    auto index_buffer = device->get_buffer(index_buffer_handle);
 
     auto code = read_file("shaders/test.comp.spv");
     auto compute = device->create_pipeline({
-        .cs_code = std::span(code),
+        .cs_code = code,
     });
 
     std::array<VkFormat, 1U> formats { VK_FORMAT_R8G8B8A8_UNORM };
     auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
     auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
     auto graphics = device->create_pipeline({
-        .vs_code = std::span(vertex_code),
-        .fs_code = std::span(fragment_code),
+        .vs_code = vertex_code,
+        .fs_code = fragment_code,
         .color_attachments_format = formats
     });
 
+    auto semaphore = device->create_semaphore();
+    std::array<graphics_command_buffer, 2U> command_buffers;
+    device->allocate_command_buffers(command_buffers.data(), 2, QueueType::GRAPHICS);
 
-    graphics_command_buffer command_buffer;
-    device->allocate_command_buffers(&command_buffer, 1, QueueType::GRAPHICS);
+    RD_START_CAPTURE;
 
-    command_buffer.start();
+    command_buffers[0].start();
 
-    command_buffer.barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    command_buffer.barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    command_buffer.copy(staging_buffer_handle, gpu_texture_handle);
-    command_buffer.copy(staging_buffer_handle, second_texture, static_cast<VkDeviceSize>(offset));
+    command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
+    command_buffers[0].copy(staging_buffer_handle, second_texture, static_cast<VkDeviceSize>(offset));
+    command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, static_cast<VkDeviceSize>(ui_offset));
 
-    command_buffer.barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
-    command_buffer.barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
     struct compute_params {
         uint32_t input1;
@@ -138,42 +183,128 @@ int main() {
     };
     memcpy(uniform_buffer.mapped_ptr, &params, sizeof(params));
 
-    command_buffer.dispatch({
+    command_buffers[0].dispatch({
         .pipeline = compute,
         .group_size = { image_size, image_size, 1U },
         .local_group_size = { 8U, 8U, 1U },
         .uniforms_offset = 0U,
     });
 
+    command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    command_buffers[0].stop();
+    std::array<struct command_buffer, 1U> compute_command_buffers = {command_buffers[0]};
+    device->submit(compute_command_buffers, nullptr, &semaphore);
+
+    RD_END_CAPTURE;
+
+    std::array<struct command_buffer, 1U> ui_command_buffers = {command_buffers[1]};
     std::array<handle<device_texture>, 1U> color_attachment {gpu_texture_handle};
-
-    command_buffer.barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    command_buffer.begin_renderpass({
-        .render_area = {
-            .x = 0,
-            .y = 0,
-            .width = window_width,
-            .height = window_height,
-        },
-        .color_attachments = color_attachment,
-    });
-    command_buffer.render({
-        .pipeline = graphics,
-        .vertex_count = 3U,
-        .instance_count = 1U,
-    });
-    command_buffer.end_renderpass();
-
-    command_buffer.stop();
-
-    device->submit(&command_buffer, 1);
-
-#ifdef ENABLE_RENDERDOC
-    if(rdoc_api != nullptr) rdoc_api->EndFrameCapture(nullptr, nullptr);
-#endif
-
     while(wnd.isOpen) {
         wnd.poll_events();
+
+        ui();
+
+        auto* draw_data = ImGui::GetDrawData();
+        struct vertex {
+            ImVec2 pos;
+            ImVec2 uv;
+            uint32_t color;
+            uint32_t padding;
+        };
+
+        off_t vertex_offset = 0;
+        off_t index_offset = 0;
+        for (auto index {0U} ; index < draw_data->CmdListsCount; index++) {
+            auto* cmd_list = draw_data->CmdLists[index];
+
+            size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
+            auto* vtx_ptr = static_cast<vertex*>(vertex_buffer.mapped_ptr) + vertex_offset;
+            for (auto vtx_index{0}; vtx_index < cmd_list->VtxBuffer.size(); vtx_index++, vtx_ptr++) {
+                auto& vtx = cmd_list->VtxBuffer[vtx_index];
+                vtx_ptr->pos = vtx.pos;
+                vtx_ptr->uv = vtx.uv;
+                vtx_ptr->color = vtx.col;
+            }
+            // memcpy(static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset, cmd_list->VtxBuffer.Data, vertex_bytes_size);
+            vertex_offset += static_cast<off_t>(vertex_bytes_size);
+
+            size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
+            memcpy(static_cast<uint8_t*>(index_buffer.mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
+            index_offset += static_cast<off_t>(index_bytes_size);
+        }
+
+        device->wait(semaphore);
+
+        RD_START_CAPTURE;
+        command_buffers[1].start(),
+
+        command_buffers[1].begin_renderpass({
+            .render_area = {
+                .x = static_cast<int32_t>(draw_data->DisplayPos.x),
+                .y = static_cast<int32_t>(draw_data->DisplayPos.y),
+                .width = static_cast<uint32_t>(draw_data->DisplaySize.x),
+                .height = static_cast<uint32_t>(draw_data->DisplaySize.y),
+            },
+            .color_attachments = color_attachment,
+        });
+
+        struct draw_params {
+            uintptr_t vertex_buffer;
+            float scale[2U];
+            float translate[2U];
+            uint32_t texture_index;
+        };
+
+        printf("%llu\n", sizeof(ImDrawVert));
+
+        uint32_t draw_index = 0U;
+        uint32_t vtx_offset = 0U;
+        uint32_t idx_offset = 0U;
+        std::array<draw_params, 100U> draws;
+        for (auto index {0U} ; index < draw_data->CmdListsCount; index++) {
+            auto* cmd_list = draw_data->CmdLists[index];
+
+            for (auto& draw_command : cmd_list->CmdBuffer) {
+                draws[draw_index] = draw_params{
+                    .vertex_buffer = vertex_buffer.device_address,
+                    .scale {
+                        2.f / draw_data->DisplaySize.x,
+                        2.f / draw_data->DisplaySize.y,
+                    },
+                    .translate {
+                        -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
+                        -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
+                    },
+                    .texture_index = ui_texture.sampled_index,
+                };
+
+                command_buffers[1].render({
+                    .pipeline = graphics,
+                    .index_buffer = index_buffer_handle,
+                    .vertex_count = draw_command.ElemCount,
+                    .vertex_offset = draw_command.VtxOffset,
+                    .index_offset = draw_command.IdxOffset,
+                    .instance_count = 1U,
+                    .uniforms_offset = 0U,
+                });
+
+                draw_index++;
+                // vtx_offset += draw_command.
+            }
+        }
+
+        memcpy(uniform_buffer.mapped_ptr, draws.data(), sizeof(draw_params) * draw_index);
+
+        command_buffers[1].end_renderpass();
+
+        command_buffers[1].stop();
+
+        device->submit(ui_command_buffers, nullptr, &semaphore);
+        RD_END_CAPTURE;
+
+        // std::system("PAUSE");
+        break;
     }
 
     return 0;

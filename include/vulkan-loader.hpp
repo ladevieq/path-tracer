@@ -75,6 +75,7 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkDestroyDevice)                \
     X(vkDeviceWaitIdle)               \
     X(vkQueueSubmit)                  \
+    X(vkQueueSubmit2)                 \
     X(vkCreateSemaphore)              \
     X(vkDestroySemaphore)             \
     X(vkWaitSemaphores)               \
