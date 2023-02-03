@@ -69,5 +69,18 @@ struct device_pipeline {
     VkPipelineBindPoint bind_point;
     pipeline_desc       desc;
 
-    bindless_model*     bindless = nullptr;
+    // bindless_model*     bindless = nullptr;
+};
+
+
+struct surface_desc {
+
+};
+
+struct device_surface {
+    VkSurfaceKHR vk_surface;
+    VkSwapchainKHR vk_swapchain;
+
+    handle<device_texture> swapchain_images;
+    uint32_t image_index;
 };
