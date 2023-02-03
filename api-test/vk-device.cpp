@@ -235,7 +235,6 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
 handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
     device_pipeline device_pipeline{
         .desc     = desc,
-        .bindless = &bindless,
     };
     if (!desc.cs_code.empty()) {
         VkShaderModule shader_module;
@@ -587,7 +586,7 @@ void vkdevice::submit(std::span<command_buffer> buffers, vksemaphore* wait, vkse
 #endif
 }
 
-void vkdevice::present(vksurface& surface, const vksemaphore& semaphore) {
+void vkdevice::present(device_surface& surface, const vksemaphore& semaphore) {
     VkResult result;
     VkPresentInfoKHR present_info{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
