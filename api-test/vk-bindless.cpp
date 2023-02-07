@@ -1,20 +1,20 @@
 #include "vk-bindless.hpp"
 
-#include <vma/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 
 #include "vk-device.hpp"
 #include "vk-utils.hpp"
 #include "vulkan-loader.hpp"
 
 const device_buffer& bindless_model::get_uniform_buffer() const {
-    auto* render_device = vkdevice::get_render_device();
-    return render_device->get_buffer(draws_uniform_buffer_handle);
+    auto& render_device = vkdevice::get_render_device();
+    return render_device.get_buffer(draws_uniform_buffer_handle);
 }
 
 bindless_model bindless_model::create_bindless_model() {
     bindless_model bindless;
-    auto* render_device = vkdevice::get_render_device();
-    auto* device = render_device->get_device();
+    auto& render_device = vkdevice::get_render_device();
+    auto* device = render_device.get_device();
 #ifndef USE_VK_DESCRIPTOR_BUFFER
     bindless.create_immutable_samplers(device);
     bindless.create_layout(device);
@@ -24,14 +24,14 @@ bindless_model bindless_model::create_bindless_model() {
     VkWriteDescriptorSet writes_descriptor_set[2U];
 
     {
-        bindless.instances_uniform_buffer_handle = render_device->create_buffer({
+        bindless.instances_uniform_buffer_handle = render_device.create_buffer({
             .size = instances_uniform_buffer_size,
             .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         });
 
-        const auto& buffer = render_device->get_buffer(bindless.instances_uniform_buffer_handle);
+        const auto& buffer = render_device.get_buffer(bindless.instances_uniform_buffer_handle);
         VkDescriptorBufferInfo buffer_info {
             .buffer = buffer.vk_buffer,
             .offset = 0U,
@@ -53,14 +53,14 @@ bindless_model bindless_model::create_bindless_model() {
     }
 
     {
-        bindless.draws_uniform_buffer_handle = render_device->create_buffer({
+        bindless.draws_uniform_buffer_handle = render_device.create_buffer({
             .size = draws_uniform_buffer_size,
             .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         });
 
-        const auto& buffer = render_device->get_buffer(bindless.draws_uniform_buffer_handle);
+        const auto& buffer = render_device.get_buffer(bindless.draws_uniform_buffer_handle);
         VkDescriptorBufferInfo buffer_info {
             .buffer = buffer.vk_buffer,
             .offset = 0U,
@@ -118,7 +118,7 @@ bindless_model bindless_model::create_bindless_model() {
 }
 
 void bindless_model::destroy_bindless_model(bindless_model& bindless) {
-    auto* device = vkdevice::get_render_device()->get_device();
+    auto* device = vkdevice::get_render_device().get_device();
     vkDestroyDescriptorPool(device, bindless.descriptor_pool, nullptr);
 
     for (auto index{ 0U }; index < BindlessSetType::MAX; index++) {

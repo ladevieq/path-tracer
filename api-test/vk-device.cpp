@@ -8,29 +8,25 @@
 
 #include "vk-utils.hpp"
 #include "vulkan-loader.hpp"
-#include "window.hpp"
 
-vkdevice* vkdevice::render_device = nullptr;
+vkdevice vkdevice::render_device = vkdevice();
 
-vkdevice::vkdevice(const window& window)
-        : queues{
-              {
-                  .usages = VK_QUEUE_GRAPHICS_BIT |
-                            VK_QUEUE_COMPUTE_BIT |
-                            VK_QUEUE_TRANSFER_BIT,
-              },
-              {
-                  .usages = VK_QUEUE_COMPUTE_BIT,
-              },
-              {
-                  .usages = VK_QUEUE_TRANSFER_BIT,
-              },
-          } {
+void vkdevice::init() {
+    queues[0U] = {
+        .usages = VK_QUEUE_GRAPHICS_BIT |
+                  VK_QUEUE_COMPUTE_BIT |
+                  VK_QUEUE_TRANSFER_BIT,
+    };
+   queues[1U] = {
+        .usages = VK_QUEUE_COMPUTE_BIT,
+    };
+    queues[2U] = {
+        .usages = VK_QUEUE_TRANSFER_BIT,
+    };
+
     load_vulkan();
 
     create_instance();
-
-    create_surface(window);
 
 #ifdef _DEBUG
     create_debug_layer_callback();
@@ -40,20 +36,7 @@ vkdevice::vkdevice(const window& window)
 
     create_memory_allocator();
 
-    create_swapchain();
-
     bindless = bindless_model::create_bindless_model();
-}
-
-vkdevice* vkdevice::init_device(const window& window) {
-    vkdevice::render_device = static_cast<vkdevice*>(malloc(sizeof(vkdevice)));
-    vkdevice::render_device = new (vkdevice::render_device) vkdevice(window);
-    return render_device;
-}
-
-void vkdevice::free_device() {
-    delete render_device;
-    render_device = nullptr;
 }
 
 vkdevice::~vkdevice() {
@@ -61,20 +44,24 @@ vkdevice::~vkdevice() {
 
     bindless_model::destroy_bindless_model(bindless);
 
-    for (auto& texture : textures) {
+    for (const auto& texture : textures) {
         destroy_texture(texture);
     }
 
-    for (auto& buffer : buffers) {
+    for (const auto& buffer : buffers) {
         destroy_buffer(buffer);
     }
 
-    for (auto& pipeline : pipelines) {
+    for (const auto& pipeline : pipelines) {
         destroy_pipeline(pipeline);
     }
 
-    if (swapchain != nullptr) {
-        vkDestroySwapchainKHR(device, swapchain, nullptr);
+    for (const auto& semaphore : semaphores) {
+        destroy_semaphore(semaphore);
+    }
+
+    for (const auto& surface : surfaces) {
+        destroy_surface(surface);
     }
 
     vmaDestroyAllocator(gpu_allocator);
@@ -89,15 +76,15 @@ vkdevice::~vkdevice() {
     vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
 #endif // _DEBUG
 
-    if (surface != nullptr) {
-        vkDestroySurfaceKHR(instance, surface, nullptr);
-    }
     vkDestroyInstance(instance, nullptr);
 }
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
     device_texture device_texture{
-        .desc = desc,
+        .format = desc.format,
+        .width = desc.width,
+        .height = desc.height,
+        .mips = desc.mips,
     };
 
     assert(desc.mips <= texture_desc::max_mips);
@@ -135,7 +122,11 @@ handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
 
     VKCHECK(vmaCreateImage(gpu_allocator, &create_info, &alloc_create_info, &device_texture.vk_image, &device_texture.alloc, nullptr));
 
-    create_views(device_texture);
+    device_texture.aspects = ((desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
+        ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+        : VK_IMAGE_ASPECT_COLOR_BIT;
+
+    create_views(desc, device_texture);
 
     // TODO: Handle mips views
     VkDescriptorImageInfo images_info[]{
@@ -187,7 +178,6 @@ handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
 
 handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     device_buffer device_buffer{
-        .desc = desc,
     };
 
     VkBufferCreateInfo create_info{
@@ -234,29 +224,14 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
 
 handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
     device_pipeline device_pipeline{
-        .desc     = desc,
     };
     if (!desc.cs_code.empty()) {
-        VkShaderModule shader_module;
-        {
-            const auto&              code = desc.cs_code;
-            VkShaderModuleCreateInfo create_info{
-                .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                .pNext    = nullptr,
-                .flags    = 0U,
-                .codeSize = code.size(),
-                .pCode    = (uint32_t*)code.data(),
-            };
-
-            VKCHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
-        }
-
         VkPipelineShaderStageCreateInfo stage_create_info{
             .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .pNext               = nullptr,
             .flags               = 0U,
             .stage               = VK_SHADER_STAGE_COMPUTE_BIT,
-            .module              = shader_module,
+            .module              = create_shader_module(desc.cs_code),
             .pName               = "main",
             .pSpecializationInfo = nullptr,
         };
@@ -274,7 +249,7 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
         device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
         VKCHECK(vkCreateComputePipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
 
-        vkDestroyShaderModule(device, shader_module, nullptr);
+        vkDestroyShaderModule(device, stage_create_info.module, nullptr);
     } else {
         VkPipelineShaderStageCreateInfo shader_stages_create_info[2U]{
             {
@@ -282,6 +257,7 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
                 .pNext               = nullptr,
                 .flags               = 0U,
                 .stage               = VK_SHADER_STAGE_VERTEX_BIT,
+                .module              = create_shader_module(desc.vs_code),
                 .pName               = "main",
                 .pSpecializationInfo = nullptr,
             },
@@ -290,35 +266,11 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
                 .pNext               = nullptr,
                 .flags               = 0U,
                 .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module              = create_shader_module(desc.fs_code),
                 .pName               = "main",
                 .pSpecializationInfo = nullptr,
             },
         };
-
-        {
-            const auto&              code = desc.vs_code;
-            VkShaderModuleCreateInfo module_create_info{
-                .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                .pNext    = nullptr,
-                .flags    = 0U,
-                .codeSize = code.size(),
-                .pCode    = (uint32_t*)code.data(),
-            };
-
-            VKCHECK(vkCreateShaderModule(device, &module_create_info, nullptr, &shader_stages_create_info[0U].module));
-        }
-        {
-            const auto&              code = desc.fs_code;
-            VkShaderModuleCreateInfo module_create_info{
-                .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                .pNext    = nullptr,
-                .flags    = 0U,
-                .codeSize = code.size(),
-                .pCode    = (uint32_t*)code.data(),
-            };
-
-            VKCHECK(vkCreateShaderModule(device, &module_create_info, nullptr, &shader_stages_create_info[1U].module));
-        }
 
         VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -431,20 +383,49 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
 
         device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
         VKCHECK(vkCreateGraphicsPipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
+
+        for(auto& stage_create_info : shader_stages_create_info) {
+            vkDestroyShaderModule(device, stage_create_info.module, nullptr);
+        }
     }
 
     return { pipelines.add(device_pipeline) };
 }
 
-vksemaphore vkdevice::create_semaphore() {
-    vksemaphore semaphore{
-        .value = 0,
+handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
+    device_surface device_surface {
+    };
+
+    {
+        VkWin32SurfaceCreateInfoKHR create_info{
+            .sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+            .pNext     = nullptr,
+            .flags     = 0U,
+            .hinstance = GetModuleHandle(nullptr),
+            .hwnd      = desc.window_handle,
+        };
+
+        VKCHECK(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &device_surface.vk_surface));
+    }
+
+    create_swapchain(desc, device_surface);
+
+    vkGetSwapchainImagesKHR(device, device_surface.vk_swapchain, &device_surface.image_count, nullptr);
+    std::vector<VkImage> images {device_surface.image_count};
+    vkGetSwapchainImagesKHR(device, device_surface.vk_swapchain, &device_surface.image_count, images.data());
+
+    return { surfaces.add(device_surface) };
+}
+
+handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc) {
+    device_semaphore semaphore {
+        .value = desc.initial_value,
     };
     VkSemaphoreTypeCreateInfo semaphore_type_create_info{
         .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
         .pNext         = nullptr,
         .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-        .initialValue  = 0U,
+        .initialValue  = desc.initial_value,
     };
 
     VkSemaphoreCreateInfo create_info{
@@ -455,7 +436,7 @@ vksemaphore vkdevice::create_semaphore() {
 
     VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
 
-    return semaphore;
+    return { semaphores.add(semaphore) };
 }
 
 void vkdevice::destroy_texture(const device_texture& texture) {
@@ -495,7 +476,30 @@ void vkdevice::destroy_pipeline(handle<device_pipeline> handle) {
     vkDestroyPipeline(device, pipeline.vk_pipeline, nullptr);
 }
 
-void vkdevice::wait(vksemaphore& semaphore) {
+void vkdevice::destroy_semaphore(const device_semaphore& semaphore) {
+    destroy_semaphore({ .id = semaphores.find(semaphore)});
+}
+
+void vkdevice::destroy_semaphore(handle<device_semaphore> handle) {
+    auto& semaphore = vkdevice::get_semaphore(handle);
+
+    vkDestroySemaphore(device, semaphore.vk_semaphore, nullptr);
+}
+
+void vkdevice::destroy_surface(const device_surface& surface) {
+    destroy_surface({ .id = surfaces.find(surface)});
+}
+
+void vkdevice::destroy_surface(handle<device_surface> handle) {
+    const auto& surface = vkdevice::get_surface(handle);
+
+    vkDestroySwapchainKHR(device, surface.vk_swapchain, nullptr);
+
+    vkDestroySurfaceKHR(instance, surface.vk_surface, nullptr);
+}
+
+void vkdevice::wait(handle<device_semaphore> semaphore_handle) {
+    const auto& semaphore = vkdevice::get_render_device().get_semaphore(semaphore_handle);
     VkSemaphoreWaitInfo wait_info {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .pNext = nullptr,
@@ -507,32 +511,10 @@ void vkdevice::wait(vksemaphore& semaphore) {
     VKCHECK(vkWaitSemaphores(device, &wait_info, -1));
 }
 
-void vkdevice::submit(std::span<command_buffer> buffers, vksemaphore* wait, vksemaphore* signal) {
-#define USE_SUBMIT2
+void vkdevice::submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle) {
     assert((max_submitable_command_buffers - buffers.size()) >= 0);
     const auto queue_type = buffers[0].queue_type;
-#ifndef USE_SUBMIT2
-    VkCommandBuffer to_submit[max_submitable_command_buffers];
 
-    for (auto index{ 0U }; index < count; index++) {
-        assert(queue_type == buffers[index].queue_type);
-        to_submit[index] = buffers[index].vk_command_buffer;
-    }
-
-    VkSubmitInfo submit_info{
-        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .pNext                = nullptr,
-        .waitSemaphoreCount   = 0U,
-        .pWaitSemaphores      = nullptr,
-        .pWaitDstStageMask    = nullptr,
-        .commandBufferCount   = static_cast<uint32_t>(count),
-        .pCommandBuffers      = to_submit,
-        .signalSemaphoreCount = 0U,
-        .pSignalSemaphores    = nullptr,
-    };
-
-    VKCHECK(vkQueueSubmit(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
-#else
     VkCommandBufferSubmitInfo command_buffers_info[buffers.size()];
 
     for (auto index{ 0U }; index < buffers.size(); index++) {
@@ -567,37 +549,43 @@ void vkdevice::submit(std::span<command_buffer> buffers, vksemaphore* wait, vkse
         .pCommandBufferInfos      = command_buffers_info,
     };
 
-    if (wait != nullptr) {
-        wait_semaphore_info.semaphore      = wait->vk_semaphore;
-        wait_semaphore_info.value          = wait->value;
+    if (wait_handle.is_valid()) {
+        const auto& wait = vkdevice::get_render_device().get_semaphore(wait_handle);
+        wait_semaphore_info.semaphore      = wait.vk_semaphore;
+        wait_semaphore_info.value          = wait.value;
         submit_info.waitSemaphoreInfoCount = 1U;
         submit_info.pWaitSemaphoreInfos    = &wait_semaphore_info;
     }
 
-    if (signal != nullptr) {
-        signal_semaphore_info.semaphore      = signal->vk_semaphore;
-        signal_semaphore_info.value          = ++signal->value;
+    if (signal_handle.is_valid()) {
+        auto& signal = vkdevice::get_render_device().get_semaphore(signal_handle);
+        signal_semaphore_info.semaphore      = signal.vk_semaphore;
+        signal_semaphore_info.value          = ++signal.value;
 
         submit_info.signalSemaphoreInfoCount = 1U;
         submit_info.pSignalSemaphoreInfos    = &signal_semaphore_info;
     }
 
     VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
-#endif
 }
 
-void vkdevice::present(device_surface& surface, const vksemaphore& semaphore) {
+void vkdevice::present(handle<device_surface> surface_handle, handle<device_semaphore> semaphore_handle) {
+    const auto& surface = vkdevice::get_render_device().get_surface(surface_handle);
     VkResult result;
     VkPresentInfoKHR present_info{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext = nullptr,
-        .waitSemaphoreCount = 1U,
-        .pWaitSemaphores = &semaphore.vk_semaphore,
         .swapchainCount = 1U,
         .pSwapchains = &surface.vk_swapchain,
         .pImageIndices = &surface.image_index,
         .pResults = &result,
     };
+
+    if (semaphore_handle.is_valid()) {
+        const auto& semaphore = vkdevice::get_render_device().get_semaphore(semaphore_handle);
+        present_info.waitSemaphoreCount = 1U;
+        present_info.pWaitSemaphores = &semaphore.vk_semaphore;
+    }
 
     VKCHECK(vkQueuePresentKHR(queues[static_cast<uint32_t>(QueueType::GRAPHICS)].vk_queue, &present_info));
 
@@ -626,17 +614,29 @@ void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, Q
     }
 }
 
-void vkdevice::create_views(device_texture& texture) {
-    VkImageAspectFlags    aspect_mask = ((texture.desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
-                                            ? VK_IMAGE_ASPECT_DEPTH_BIT
-                                            : VK_IMAGE_ASPECT_COLOR_BIT;
+VkShaderModule vkdevice::create_shader_module(const std::span<uint8_t>& shader_code) {
+    VkShaderModule shader_module;
+    const auto&              code = shader_code;
+    VkShaderModuleCreateInfo create_info{
+        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .pNext    = nullptr,
+        .flags    = 0U,
+        .codeSize = code.size(),
+        .pCode    = reinterpret_cast<uint32_t*>(code.data()),
+    };
+
+    VKCHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+    return shader_module;
+}
+
+void vkdevice::create_views(const texture_desc& desc, device_texture& texture) {
     VkImageViewCreateInfo create_info{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext      = nullptr,
         .flags      = 0U,
         .image      = texture.vk_image,
         .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = texture.desc.format,
+        .format     = texture.format,
         .components = {
             .r = VK_COMPONENT_SWIZZLE_R,
             .g = VK_COMPONENT_SWIZZLE_G,
@@ -644,7 +644,7 @@ void vkdevice::create_views(device_texture& texture) {
             .a = VK_COMPONENT_SWIZZLE_A,
         },
         .subresourceRange = {
-            .aspectMask     = aspect_mask,
+            .aspectMask     = texture.aspects,
             .baseMipLevel   = 0,
             .levelCount     = 1,
             .baseArrayLayer = 0,
@@ -652,41 +652,32 @@ void vkdevice::create_views(device_texture& texture) {
         },
     };
 
-    for (auto mip_index{ 0 }; mip_index < texture.desc.mips; mip_index++) {
+    for (auto mip_index{ 0 }; mip_index < texture.mips; mip_index++) {
         create_info.subresourceRange.baseMipLevel = mip_index;
         VKCHECK(vkCreateImageView(device, &create_info, nullptr, &texture.mips_views[mip_index]));
     }
 
     create_info.subresourceRange.baseMipLevel = 0;
-    create_info.subresourceRange.levelCount   = texture.desc.mips;
+    create_info.subresourceRange.levelCount   = texture.mips;
     VKCHECK(vkCreateImageView(device, &create_info, nullptr, &texture.whole_view));
 }
 
-// Presentation stuff
-void vkdevice::create_surface(const window& window) {
-    VkWin32SurfaceCreateInfoKHR create_info{
-        .sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-        .pNext     = nullptr,
-        .flags     = 0U,
-        .hinstance = GetModuleHandle(nullptr),
-        .hwnd      = window.handle,
-    };
+void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surface) {
+    VkSurfaceKHR vk_surface = surface.vk_surface;
 
-    VKCHECK(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &surface));
-}
-
-void vkdevice::create_swapchain() {
-    VkBool32 supported = VK_FALSE;
     auto&    queue     = queues[static_cast<uint32_t>(QueueType::GRAPHICS)];
-    VKCHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue.index, surface, &supported));
 
-    assert(supported);
+    {
+        VkBool32 supported = VK_FALSE;
+        VKCHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue.index, vk_surface, &supported));
 
-    VkSurfaceCapabilitiesKHR surface_capabilities = {};
-    VKCHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_capabilities));
+        assert(supported);
+    }
+
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    VKCHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, vk_surface, &surface_capabilities));
 
     VkExtent2D extent = surface_capabilities.currentExtent;
-
     if (extent.width < surface_capabilities.minImageExtent.width) {
         extent.width = surface_capabilities.minImageExtent.width;
     } else if (extent.width > surface_capabilities.maxImageExtent.width) {
@@ -699,65 +690,68 @@ void vkdevice::create_swapchain() {
         extent.height = surface_capabilities.maxImageExtent.height;
     }
 
-    auto supported_formats_count = 0U;
-    VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &supported_formats_count, nullptr));
+    {
+        auto supported = false;
+        auto supported_formats_count = 0U;
+        VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, nullptr));
 
-    std::vector<VkSurfaceFormatKHR> supported_formats{ supported_formats_count };
-    VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &supported_formats_count, supported_formats.data()));
+        std::vector<VkSurfaceFormatKHR> supported_formats{ supported_formats_count };
+        VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, supported_formats.data()));
 
+        for (auto& surface_format : supported_formats) {
+            if (surface_format.format == desc.surface_format.format &&
+                surface_format.colorSpace == desc.surface_format.colorSpace) {
+                supported = true;
+                break;
+            }
+        }
 
-    auto supported_present_modes_count = 0U;
-    VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &supported_present_modes_count, nullptr));
+        assert(supported);
+    }
 
-    std::vector<VkPresentModeKHR> supported_present_modes{ supported_present_modes_count };
+    {
+        auto supported = false;
+        auto supported_present_modes_count = 0U;
+        VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, nullptr));
 
-    VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &supported_present_modes_count, supported_present_modes.data()));
+        std::vector<VkPresentModeKHR> supported_present_modes{ supported_present_modes_count };
+        VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, supported_present_modes.data()));
 
-    auto                     min_image_count = (surface_capabilities.minImageCount <= virtual_frames_count) ? virtual_frames_count : surface_capabilities.minImageCount;
+        for (auto& present_mode : supported_present_modes) {
+            if (present_mode == desc.present_mode) {
+                supported = true;
+                break;
+            }
+        }
+
+        assert(supported);
+    }
+
+    assert(desc.image_count >= surface_capabilities.minImageCount);
+    assert(desc.image_count <= surface_capabilities.maxImageCount);
 
     VkSwapchainCreateInfoKHR create_info     = {
             .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .pNext                 = nullptr,
             .flags                 = 0U,
-            .surface               = surface,
-            .minImageCount         = min_image_count,
-            .imageFormat           = supported_formats[0].format,
-            .imageColorSpace       = supported_formats[0].colorSpace,
+            .surface               = vk_surface,
+            .minImageCount         = desc.image_count,
+            .imageFormat           = desc.surface_format.format,
+            .imageColorSpace       = desc.surface_format.colorSpace,
             .imageExtent           = extent,
             .imageArrayLayers      = 1U,
-            .imageUsage            = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            .imageUsage            = desc.usages,
             .imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0U,
             .pQueueFamilyIndices   = nullptr,
             .preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
             .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            .presentMode           = supported_present_modes[0],
+            .presentMode           = desc.present_mode,
             .clipped               = VK_TRUE,
             .oldSwapchain          = nullptr,
     };
 
-    VKCHECK(vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain));
-}
-
-void vkdevice::create_virtual_frames() {
-    for (auto index{ 0U }; index < virtual_frames_count; index++) {
-        {
-            VkSemaphoreTypeCreateInfo semaphore_type_create_info{
-                .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-                .pNext         = nullptr,
-                .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-                .initialValue  = 0U,
-            };
-
-            VkSemaphoreCreateInfo create_info{
-                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-                .pNext = &semaphore_type_create_info,
-                .flags = 0U,
-            };
-
-            VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphores[index]));
-        }
-    }
+    VKCHECK(vkCreateSwapchainKHR(device, &create_info, nullptr, &surface.vk_swapchain));
 }
 
 // ----------------- vkadapter -----------------
@@ -988,4 +982,17 @@ void vkdevice::create_debug_layer_callback() {
     };
 
     VKCHECK(vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
+}
+
+
+void device_surface::acquire_image_index(handle<device_semaphore> signal_handle) {
+    auto& render_device = vkdevice::get_render_device();
+    auto* device = render_device.get_device();
+    const auto& signal = render_device.get_semaphore(signal_handle);
+
+    vkAcquireNextImageKHR(device, vk_swapchain, -1, signal.vk_semaphore, nullptr, &image_index);
+}
+
+handle<device_texture> device_surface::get_backbuffer_image() {
+
 }

@@ -1,6 +1,7 @@
+#pragma once
 #include <numeric>
 #include <vector>
-
+#include <cassert>
 
 static constexpr uint32_t default_element_count = 1024U;
 
@@ -27,6 +28,11 @@ class freelist {
     }
 
     T& operator[](uint32_t index) {
+        assert(index >= 0);
+        return items[index];
+    }
+
+    const T& operator[](uint32_t index) const {
         return items[index];
     }
 
@@ -41,11 +47,11 @@ class freelist {
         return invalid_id;
     }
 
-    auto begin() {
+    auto begin() const {
         return items.begin();
     }
 
-    auto end() {
+    auto end() const {
         return items.end();
     }
 
