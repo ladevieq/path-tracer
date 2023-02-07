@@ -40,8 +40,6 @@ private:
 public:
     rect render_area;
     std::span<handle<device_texture>> color_attachments;
-    // rect viewport;
-    // rect scissor;
 };
 struct draw_params {
     handle<device_pipeline> pipeline;

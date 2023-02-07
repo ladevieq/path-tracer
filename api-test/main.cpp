@@ -9,6 +9,7 @@
 
 #include "imgui.h"
 
+#include "handle.hpp"
 #include "window.hpp"
 #include "vk-device.hpp"
 #include "utils.hpp"
@@ -85,17 +86,28 @@ int main() {
     io.DisplaySize.x = 1024.f;
     io.DisplaySize.y = 1024.f;
 
-    auto* device = vkdevice::init_device(wnd);
+    auto& device = vkdevice::get_render_device();
+    device.init();
+
+    device.create_surface({
+        .window_handle = wnd.handle,
+        .surface_format = {
+            .format = VK_FORMAT_B8G8R8A8_UNORM,
+            .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        },
+        .present_mode = VK_PRESENT_MODE_FIFO_KHR,
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    });
 
     constexpr size_t image_size = 1024U;
     constexpr size_t image_count = 4U;
-    auto staging_buffer_handle = device->create_buffer({
+    auto staging_buffer_handle = device.create_buffer({
         .size = image_size * image_size * sizeof(uint32_t) * image_count,
         .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     });
-    const auto& staging_buffer = device->get_buffer(staging_buffer_handle);
+    const auto& staging_buffer = device.get_buffer(staging_buffer_handle);
 
     int width;
     int height;
@@ -104,7 +116,7 @@ int main() {
     size_t size = static_cast<size_t>(width) * height * 4U;
     memcpy(staging_buffer.mapped_ptr, data, size);
 
-    auto gpu_texture_handle = device->create_texture({
+    auto gpu_texture_handle = device.create_texture({
         .width  = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height),
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -118,7 +130,7 @@ int main() {
     auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + offset);
     memcpy(addr, data, size);
 
-    auto second_texture = device->create_texture({
+    auto second_texture = device.create_texture({
         .width  = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height),
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
@@ -126,7 +138,7 @@ int main() {
         .type   = VK_IMAGE_TYPE_2D,
     });
 
-    auto output_texture_handle = device->create_texture({
+    auto output_texture_handle = device.create_texture({
         .width  = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height),
         .usages = VK_IMAGE_USAGE_STORAGE_BIT,
@@ -138,14 +150,14 @@ int main() {
     int atlas_width;
     int atlas_height;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &atlas_width, &atlas_height);
-    const auto ui_texture_handle = device->create_texture({
+    const auto ui_texture_handle = device.create_texture({
         .width = static_cast<uint32_t>(atlas_width),
         .height = static_cast<uint32_t>(atlas_height),
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .type = VK_IMAGE_TYPE_2D,
     });
-    const auto& ui_texture = device->get_texture(ui_texture_handle);
+    const auto& ui_texture = device.get_texture(ui_texture_handle);
     io.Fonts->SetTexID(*(void **)&ui_texture_handle.id);
 
     off_t ui_offset = 2L * offset;
@@ -153,38 +165,40 @@ int main() {
     addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + ui_offset);
     memcpy(addr, pixels, size);
 
-    auto vertex_buffer = device->get_buffer(device->create_buffer({
+    auto vertex_buffer = device.get_buffer(device.create_buffer({
         .size = 1024U * 1024U * sizeof(uint32_t),
         .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     }));
 
-    auto index_buffer_handle = device->create_buffer({
+    auto index_buffer_handle = device.create_buffer({
         .size = 1024U * 1024U * sizeof(uint32_t),
         .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
     });
-    auto index_buffer = device->get_buffer(index_buffer_handle);
+    auto index_buffer = device.get_buffer(index_buffer_handle);
 
     auto code = read_file("shaders/test.comp.spv");
-    auto compute = device->create_pipeline({
+    auto compute = device.create_pipeline({
         .cs_code = code,
     });
 
     std::array<VkFormat, 1U> formats { VK_FORMAT_R8G8B8A8_UNORM };
     auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
     auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
-    auto graphics = device->create_pipeline({
+    auto graphics = device.create_pipeline({
         .vs_code = vertex_code,
         .fs_code = fragment_code,
         .color_attachments_format = formats
     });
 
-    auto semaphore = device->create_semaphore();
+    auto semaphore = device.create_semaphore({
+        .type = VK_SEMAPHORE_TYPE_TIMELINE,
+    });
     std::array<graphics_command_buffer, 2U> command_buffers;
-    device->allocate_command_buffers(command_buffers.data(), 2, QueueType::GRAPHICS);
+    device.allocate_command_buffers(command_buffers.data(), 2, QueueType::GRAPHICS);
 
     RD_START_CAPTURE;
 
@@ -205,11 +219,11 @@ int main() {
         uint32_t input2;
         uint32_t output;
     };
-    const auto& uniform_buffer = device->get_bindingmodel().get_uniform_buffer();
+    const auto& uniform_buffer = device.get_bindingmodel().get_uniform_buffer();
     compute_params params {
-        device->get_texture(second_texture).storage_index,
-        device->get_texture(gpu_texture_handle).storage_index,
-        device->get_texture(output_texture_handle).storage_index,
+        device.get_texture(second_texture).storage_index,
+        device.get_texture(gpu_texture_handle).storage_index,
+        device.get_texture(output_texture_handle).storage_index,
     };
     memcpy(uniform_buffer.mapped_ptr, &params, sizeof(params));
 
@@ -225,7 +239,7 @@ int main() {
     command_buffers[0].stop();
 
     std::array<struct command_buffer, 1U> compute_command_buffers = {command_buffers[0]};
-    device->submit(compute_command_buffers, nullptr, &semaphore);
+    device.submit(compute_command_buffers, {}, semaphore);
 
     RD_END_CAPTURE;
 
@@ -239,7 +253,7 @@ int main() {
         auto* draw_data = ImGui::GetDrawData();
         update_buffers(draw_data, vertex_buffer, index_buffer);
 
-        device->wait(semaphore);
+        device.wait(semaphore);
 
         RD_START_CAPTURE;
         command_buffers[1].start(),
@@ -260,8 +274,6 @@ int main() {
             float translate[2U];
             uint32_t texture_index;
         };
-
-        printf("%llu\n", sizeof(ImDrawVert));
 
         uint32_t draw_index = 0U;
         std::array<draw_params, 100U> draws;
@@ -302,10 +314,8 @@ int main() {
 
         command_buffers[1].stop();
 
-        device->submit(ui_command_buffers, nullptr, &semaphore);
+        device.submit(ui_command_buffers, {}, semaphore);
         RD_END_CAPTURE;
-
-        break;
     }
 
     return 0;
