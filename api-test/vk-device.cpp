@@ -44,6 +44,10 @@ vkdevice::~vkdevice() {
 
     bindless_model::destroy_bindless_model(bindless);
 
+    for (const auto& surface : surfaces) {
+        destroy_surface(surface);
+    }
+
     for (const auto& texture : textures) {
         destroy_texture(texture);
     }
@@ -58,10 +62,6 @@ vkdevice::~vkdevice() {
 
     for (const auto& semaphore : semaphores) {
         destroy_semaphore(semaphore);
-    }
-
-    for (const auto& surface : surfaces) {
-        destroy_surface(surface);
     }
 
     vmaDestroyAllocator(gpu_allocator);
@@ -80,98 +80,7 @@ vkdevice::~vkdevice() {
 }
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
-    device_texture device_texture{
-        .format = desc.format,
-        .width = desc.width,
-        .height = desc.height,
-        .mips = desc.mips,
-    };
-
-    assert(desc.mips <= texture_desc::max_mips);
-
-    VkImageCreateInfo create_info{
-        .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .pNext     = nullptr,
-        .flags     = 0U,
-        .imageType = desc.type,
-        .format    = desc.format,
-        .extent    = {
-               .width  = desc.width,
-               .height = desc.height,
-               .depth  = desc.depth },
-        .mipLevels             = desc.mips,
-        .arrayLayers           = 1,
-        .samples               = VK_SAMPLE_COUNT_1_BIT,
-        .tiling                = VK_IMAGE_TILING_OPTIMAL,
-        .usage                 = desc.usages,
-        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount = 0,
-        .pQueueFamilyIndices   = nullptr,
-        .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED,
-    };
-
-    VmaAllocationCreateInfo alloc_create_info{
-        .flags          = 0U,
-        .usage          = VMA_MEMORY_USAGE_GPU_ONLY,
-        .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        .preferredFlags = 0U,
-        .memoryTypeBits = 0U,
-        .pool           = nullptr,
-        .pUserData      = nullptr,
-    };
-
-    VKCHECK(vmaCreateImage(gpu_allocator, &create_info, &alloc_create_info, &device_texture.vk_image, &device_texture.alloc, nullptr));
-
-    device_texture.aspects = ((desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
-        ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
-        : VK_IMAGE_ASPECT_COLOR_BIT;
-
-    create_views(desc, device_texture);
-
-    // TODO: Handle mips views
-    VkDescriptorImageInfo images_info[]{
-        {
-            nullptr,
-            device_texture.whole_view,
-            VK_IMAGE_LAYOUT_GENERAL,
-        },
-    };
-
-    std::vector<VkWriteDescriptorSet> write_descriptor_sets;
-    if ((desc.usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0) {
-        device_texture.storage_index = storage_indices.add(&device_texture);
-
-        write_descriptor_sets.push_back({
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
-            .dstBinding       = 2U,
-            .dstArrayElement  = device_texture.storage_index,
-            .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
-            .descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo       = images_info,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        });
-    }
-    if ((desc.usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0) {
-        device_texture.sampled_index = sampled_indices.add(&device_texture);
-
-        write_descriptor_sets.push_back({
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
-            .dstBinding       = 1U,
-            .dstArrayElement  = device_texture.sampled_index,
-            .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
-            .descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo       = images_info,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        });
-    }
-
-    vkUpdateDescriptorSets(device, write_descriptor_sets.size(), write_descriptor_sets.data(), 0U, nullptr);
+    device_texture device_texture { desc };
 
     return { textures.add(device_texture) };
 }
@@ -410,10 +319,6 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
 
     create_swapchain(desc, device_surface);
 
-    vkGetSwapchainImagesKHR(device, device_surface.vk_swapchain, &device_surface.image_count, nullptr);
-    std::vector<VkImage> images {device_surface.image_count};
-    vkGetSwapchainImagesKHR(device, device_surface.vk_swapchain, &device_surface.image_count, images.data());
-
     return { surfaces.add(device_surface) };
 }
 
@@ -424,7 +329,7 @@ handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc) 
     VkSemaphoreTypeCreateInfo semaphore_type_create_info{
         .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
         .pNext         = nullptr,
-        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+        .semaphoreType = desc.type,
         .initialValue  = desc.initial_value,
     };
 
@@ -492,6 +397,17 @@ void vkdevice::destroy_surface(const device_surface& surface) {
 
 void vkdevice::destroy_surface(handle<device_surface> handle) {
     const auto& surface = vkdevice::get_surface(handle);
+
+    for (auto texture_index{0U}; texture_index < surface.image_count; texture_index++) {
+        auto texture_handle = surface.swapchain_images[texture_index];
+        const auto& texture = get_texture(texture_handle);
+
+        vkDestroyImageView(device, texture.whole_view, nullptr);
+
+        for (auto mip_index{0U}; mip_index < texture.mips; mip_index++) {
+            vkDestroyImageView(device, texture.mips_views[mip_index], nullptr);
+        }
+    }
 
     vkDestroySwapchainKHR(device, surface.vk_swapchain, nullptr);
 
@@ -629,39 +545,6 @@ VkShaderModule vkdevice::create_shader_module(const std::span<uint8_t>& shader_c
     return shader_module;
 }
 
-void vkdevice::create_views(const texture_desc& desc, device_texture& texture) {
-    VkImageViewCreateInfo create_info{
-        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext      = nullptr,
-        .flags      = 0U,
-        .image      = texture.vk_image,
-        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = texture.format,
-        .components = {
-            .r = VK_COMPONENT_SWIZZLE_R,
-            .g = VK_COMPONENT_SWIZZLE_G,
-            .b = VK_COMPONENT_SWIZZLE_B,
-            .a = VK_COMPONENT_SWIZZLE_A,
-        },
-        .subresourceRange = {
-            .aspectMask     = texture.aspects,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        },
-    };
-
-    for (auto mip_index{ 0 }; mip_index < texture.mips; mip_index++) {
-        create_info.subresourceRange.baseMipLevel = mip_index;
-        VKCHECK(vkCreateImageView(device, &create_info, nullptr, &texture.mips_views[mip_index]));
-    }
-
-    create_info.subresourceRange.baseMipLevel = 0;
-    create_info.subresourceRange.levelCount   = texture.mips;
-    VKCHECK(vkCreateImageView(device, &create_info, nullptr, &texture.whole_view));
-}
-
 void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surface) {
     VkSurfaceKHR vk_surface = surface.vk_surface;
 
@@ -752,6 +635,26 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
     };
 
     VKCHECK(vkCreateSwapchainKHR(device, &create_info, nullptr, &surface.vk_swapchain));
+
+    surface.surface_format = desc.surface_format;
+
+    vkGetSwapchainImagesKHR(device, surface.vk_swapchain, &surface.image_count, nullptr);
+    assert(surface.image_count <= surface_desc::max_image_count);
+
+    std::vector<VkImage> images {surface.image_count};
+    vkGetSwapchainImagesKHR(device, surface.vk_swapchain, &surface.image_count, images.data());
+
+    for (auto index {0U}; index < surface.image_count; index++) {
+        surface.swapchain_images[index] = create_texture({
+            .width = extent.width,
+            .height = extent.height,
+            .depth = 1U,
+            .usages = desc.usages,
+            .format = desc.surface_format.format,
+            .type = VK_IMAGE_TYPE_2D,
+            .vk_image = images[index],
+        });
+    }
 }
 
 // ----------------- vkadapter -----------------
@@ -985,6 +888,145 @@ void vkdevice::create_debug_layer_callback() {
 }
 
 
+freelist<device_texture*> device_texture::sampled_indices = {};
+freelist<device_texture*> device_texture::storage_indices = {};
+
+device_texture::device_texture(const texture_desc& desc) {
+    auto& render_device = vkdevice::get_render_device();
+    const auto& bindless = render_device.get_bindingmodel();
+    auto* device = render_device.get_device();
+
+    vk_image = desc.vk_image;
+    format = desc.format;
+    width = desc.width;
+    height = desc.height;
+    mips = desc.mips;
+    aspects = ((desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
+        ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+        : VK_IMAGE_ASPECT_COLOR_BIT;
+
+    assert(mips <= texture_desc::max_mips);
+
+    if (vk_image == nullptr) {
+        VkImageCreateInfo create_info{
+            .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext     = nullptr,
+            .flags     = 0U,
+            .imageType = desc.type,
+            .format    = desc.format,
+            .extent    = {
+                   .width  = desc.width,
+                   .height = desc.height,
+                   .depth  = desc.depth
+            },
+            .mipLevels             = desc.mips,
+            .arrayLayers           = 1,
+            .samples               = VK_SAMPLE_COUNT_1_BIT,
+            .tiling                = VK_IMAGE_TILING_OPTIMAL,
+            .usage                 = desc.usages,
+            .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices   = nullptr,
+            .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+
+        VmaAllocationCreateInfo alloc_create_info{
+            .flags          = 0U,
+            .usage          = VMA_MEMORY_USAGE_GPU_ONLY,
+            .requiredFlags  = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .preferredFlags = 0U,
+            .memoryTypeBits = 0U,
+            .pool           = nullptr,
+            .pUserData      = nullptr,
+        };
+
+        VKCHECK(vmaCreateImage(render_device.get_allocator(), &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
+    }
+
+    create_views();
+
+    // TODO: Handle mips views
+    VkDescriptorImageInfo images_info[]{
+        {
+            nullptr,
+            whole_view,
+            VK_IMAGE_LAYOUT_GENERAL,
+        },
+    };
+
+    std::vector<VkWriteDescriptorSet> write_descriptor_sets;
+    if ((desc.usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0) {
+        storage_index = storage_indices.add(this);
+
+        write_descriptor_sets.push_back({
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+            .dstBinding       = 2U,
+            .dstArrayElement  = storage_index,
+            .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
+            .descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo       = images_info,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
+        });
+    }
+    if ((desc.usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0) {
+        sampled_index = sampled_indices.add(this);
+
+        write_descriptor_sets.push_back({
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+            .dstBinding       = 1U,
+            .dstArrayElement  = sampled_index,
+            .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
+            .descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo       = images_info,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
+        });
+    }
+
+    vkUpdateDescriptorSets(device, write_descriptor_sets.size(), write_descriptor_sets.data(), 0U, nullptr);
+}
+
+void device_texture::create_views() {
+    auto* device = vkdevice::get_render_device().get_device();
+
+    VkImageViewCreateInfo create_info{
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext      = nullptr,
+        .flags      = 0U,
+        .image      = vk_image,
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = format,
+        .components = {
+            .r = VK_COMPONENT_SWIZZLE_R,
+            .g = VK_COMPONENT_SWIZZLE_G,
+            .b = VK_COMPONENT_SWIZZLE_B,
+            .a = VK_COMPONENT_SWIZZLE_A,
+        },
+        .subresourceRange = {
+            .aspectMask     = aspects,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    };
+
+    for (auto mip_index{ 0 }; mip_index < mips; mip_index++) {
+        create_info.subresourceRange.baseMipLevel = mip_index;
+        VKCHECK(vkCreateImageView(device, &create_info, nullptr, &mips_views[mip_index]));
+    }
+
+    create_info.subresourceRange.baseMipLevel = 0;
+    create_info.subresourceRange.levelCount   = mips;
+    VKCHECK(vkCreateImageView(device, &create_info, nullptr, &whole_view));
+}
+
+
 void device_surface::acquire_image_index(handle<device_semaphore> signal_handle) {
     auto& render_device = vkdevice::get_render_device();
     auto* device = render_device.get_device();
@@ -993,6 +1035,6 @@ void device_surface::acquire_image_index(handle<device_semaphore> signal_handle)
     vkAcquireNextImageKHR(device, vk_swapchain, -1, signal.vk_semaphore, nullptr, &image_index);
 }
 
-handle<device_texture> device_surface::get_backbuffer_image() {
-
+handle<device_texture> device_surface::get_backbuffer_image() const {
+    return swapchain_images[image_index];
 }

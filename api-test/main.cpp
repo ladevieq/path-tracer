@@ -83,21 +83,22 @@ int main() {
 
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
-    io.DisplaySize.x = 1024.f;
-    io.DisplaySize.y = 1024.f;
+    io.DisplaySize.x = window_width;
+    io.DisplaySize.y = window_height;
 
     auto& device = vkdevice::get_render_device();
     device.init();
 
-    device.create_surface({
+    auto surface_handle = device.create_surface({
         .window_handle = wnd.handle,
         .surface_format = {
             .format = VK_FORMAT_B8G8R8A8_UNORM,
             .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
         },
         .present_mode = VK_PRESENT_MODE_FIFO_KHR,
-        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     });
+    auto& surface = device.get_surface(surface_handle);
 
     constexpr size_t image_size = 1024U;
     constexpr size_t image_count = 4U;
@@ -185,7 +186,7 @@ int main() {
         .cs_code = code,
     });
 
-    std::array<VkFormat, 1U> formats { VK_FORMAT_R8G8B8A8_UNORM };
+    std::array<VkFormat, 1U> formats { surface.surface_format.format };
     auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
     auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
     auto graphics = device.create_pipeline({
@@ -197,6 +198,10 @@ int main() {
     auto semaphore = device.create_semaphore({
         .type = VK_SEMAPHORE_TYPE_TIMELINE,
     });
+    auto acquire_semaphore = device.create_semaphore({
+        .type = VK_SEMAPHORE_TYPE_BINARY,
+    });
+
     std::array<graphics_command_buffer, 2U> command_buffers;
     device.allocate_command_buffers(command_buffers.data(), 2, QueueType::GRAPHICS);
 
@@ -244,7 +249,9 @@ int main() {
     RD_END_CAPTURE;
 
     std::array<struct command_buffer, 1U> ui_command_buffers = {command_buffers[1]};
-    std::array<handle<device_texture>, 1U> color_attachment {gpu_texture_handle};
+    // std::array<handle<device_texture>, 1U> color_attachment {gpu_texture_handle};
+    surface.acquire_image_index(acquire_semaphore);
+    std::array<handle<device_texture>, 1U> color_attachment {surface.get_backbuffer_image()};
     while(wnd.isOpen) {
         wnd.poll_events();
 
@@ -258,6 +265,7 @@ int main() {
         RD_START_CAPTURE;
         command_buffers[1].start(),
 
+        command_buffers[1].barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         command_buffers[1].begin_renderpass({
             .render_area = {
                 .x = static_cast<int32_t>(draw_data->DisplayPos.x),
@@ -311,11 +319,16 @@ int main() {
         memcpy(uniform_buffer.mapped_ptr, draws.data(), sizeof(draw_params) * draw_index);
 
         command_buffers[1].end_renderpass();
+        command_buffers[1].barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         command_buffers[1].stop();
 
-        device.submit(ui_command_buffers, {}, semaphore);
+        device.submit(ui_command_buffers, acquire_semaphore, semaphore);
+        device.wait(semaphore);
+        device.present(surface_handle, {});
         RD_END_CAPTURE;
+
+        std::system("PAUSE");
     }
 
     return 0;
