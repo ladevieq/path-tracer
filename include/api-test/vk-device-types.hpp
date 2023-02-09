@@ -4,6 +4,8 @@
 
 #include <span>
 
+#include "freelist.hpp"
+
 using VmaAllocation = struct VmaAllocation_T*;
 
 struct texture_desc {
@@ -14,15 +16,21 @@ struct texture_desc {
     VkImageUsageFlags     usages;
     VkFormat              format;
     VkImageType           type;
+    VkImage               vk_image = nullptr;
 
     static constexpr auto max_mips = 16U;
 };
 
 struct device_texture {
+    device_texture() = default;
+    device_texture(const texture_desc& desc);
+
+    void create_views();
+
     VkImage               vk_image;
     VkImageView           whole_view;
-    VkImageView           mips_views[texture_desc::max_mips] = { VK_NULL_HANDLE };
-    VkImageLayout         layout;
+    VkImageView           mips_views[texture_desc::max_mips] = { nullptr };
+    VkImageLayout         layout = VK_IMAGE_LAYOUT_UNDEFINED;
     VkPipelineStageFlags2 stage         = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     VkAccessFlags2        access        = VK_ACCESS_2_NONE;
     VkFormat              format;
@@ -37,6 +45,10 @@ struct device_texture {
     uint32_t              sampled_index = -1;
 
     VmaAllocation         alloc;
+
+private:
+    static freelist<device_texture*>  storage_indices;
+    static freelist<device_texture*>  sampled_indices;
 };
 
 struct buffer_desc {
@@ -97,11 +109,12 @@ struct surface_desc {
 struct device_surface {
     VkSurfaceKHR           vk_surface;
     VkSwapchainKHR         vk_swapchain;
+    VkSurfaceFormatKHR     surface_format;
 
-    // handle<device_texture> swapchain_images;
+    handle<device_texture> swapchain_images[surface_desc::max_image_count];
     uint32_t               image_index;
     uint32_t               image_count;
 
     void acquire_image_index(handle<device_semaphore> signal_handle);
-    handle<device_texture> get_backbuffer_image();
+    handle<device_texture> get_backbuffer_image() const;
 };

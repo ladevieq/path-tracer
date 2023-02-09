@@ -72,7 +72,7 @@ class vkdevice {
         return pipelines[handle.id];
     }
 
-    [[nodiscard]] inline const device_surface& get_surface(handle<device_surface> handle) const {
+    [[nodiscard]] inline device_surface& get_surface(handle<device_surface> handle) {
         return surfaces[handle.id];
     }
 
@@ -88,6 +88,10 @@ class vkdevice {
         return device;
     }
 
+    inline VmaAllocator get_allocator() {
+        return gpu_allocator;
+    }
+
     void wait(handle<device_semaphore> semaphore_handle);
 
     void submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle);
@@ -101,8 +105,6 @@ class vkdevice {
     void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type);
 
     VkShaderModule create_shader_module(const std::span<uint8_t>& shader_code);
-
-    void create_views(const texture_desc& desc, device_texture& texture);
 
     void create_swapchain(const surface_desc& desc, device_surface& surface);
 
@@ -133,9 +135,6 @@ class vkdevice {
 
     static constexpr size_t    max_allocable_command_buffers  = 16;
     static constexpr size_t    max_submitable_command_buffers = 16;
-
-    freelist<device_texture*>  storage_indices;
-    freelist<device_texture*>  sampled_indices;
 
     freelist<device_texture>   textures;
     freelist<device_buffer>    buffers;

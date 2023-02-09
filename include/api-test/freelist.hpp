@@ -18,7 +18,7 @@ class freelist {
         const auto id = free.back();
         free.pop_back();
 
-        items[id] = item;
+        items[id] = std::move(item);
 
         return id;
     }
