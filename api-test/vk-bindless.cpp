@@ -118,6 +118,7 @@ bindless_model bindless_model::create_bindless_model() {
 }
 
 void bindless_model::destroy_bindless_model(bindless_model& bindless) {
+    auto& render_device = vkdevice::get_render_device();
     auto* device = vkdevice::get_render_device().get_device();
     vkDestroyDescriptorPool(device, bindless.descriptor_pool, nullptr);
 
@@ -128,6 +129,9 @@ void bindless_model::destroy_bindless_model(bindless_model& bindless) {
     vkDestroyPipelineLayout(device, bindless.layout, nullptr);
 
     bindless.destroy_immutable_samplers(device);
+
+    render_device.destroy_buffer(bindless.instances_uniform_buffer_handle);
+    render_device.destroy_buffer(bindless.draws_uniform_buffer_handle);
 }
 
 void bindless_model::create_layout(VkDevice device) {

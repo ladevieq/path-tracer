@@ -3,61 +3,118 @@
 #include <vector>
 #include <cassert>
 
+#include "handle.hpp"
+
 static constexpr uint32_t default_element_count = 1024U;
 
 template<typename T, const size_t initial_size = default_element_count>
 class freelist {
     public:
-    freelist()
-            : free(initial_size),
-              items(initial_size) {
-        std::iota(free.rbegin(), free.rend(), 0);
-    }
 
-    uint32_t add(const T& item) {
-        const auto id = free.back();
-        free.pop_back();
-
-        items[id] = std::move(item);
-
-        return id;
-    }
-
-    void remove(uint32_t item_id) {
-        free.push_back(item_id);
-    }
-
-    T& operator[](uint32_t index) {
-        assert(index >= 0);
-        return items[index];
-    }
-
-    const T& operator[](uint32_t index) const {
-        return items[index];
-    }
-
-    uint32_t find(const T& seeked_item) {
-        for (auto index { 0U }; index < items.size(); index++) {
-            const auto& item = items[index];
-            if (memcmp(&item, &seeked_item, sizeof(T)) == 0) {
-                return index;
-            }
+    freelist() {
+        auto next_free = 0U;
+        elements.reserve(initial_size);
+        for (auto id { 0U }; id < initial_size; id++) {
+            elements.push_back(
+                {
+                    .next_free = static_cast<uint32_t>(++next_free % initial_size),
+                }
+            );
         }
 
-        return invalid_id;
+        elements.back().next_free = -1U;
     }
 
-    auto begin() const {
-        return items.begin();
+    handle<T> add(const T& item) {
+        auto id = elements[0U].next_free;
+
+        if (id != -1U) {
+            auto& element = elements[id];
+
+            elements[0U].next_free = element.next_free;
+            element.item = std::move(item);
+
+            return { id, ++element.generation };
+        }
+
+        // grow
     }
 
-    auto end() const {
-        return items.end();
+    void remove(handle<T> handle) {
+        assert(handle.generation == elements[handle.id].generation);
+        elements[handle.id].next_free = elements[0U].next_free;
+        elements[0U].next_free = handle.id;
+    }
+
+    T& operator[](handle<T> handle) {
+        assert(handle.generation == elements[handle.id].generation);
+        return elements[handle.id].item;
+    }
+
+    const T& operator[](handle<T> handle) const {
+        assert(handle.generation == elements[handle.id].generation);
+        return elements[handle.id].item;
     }
 
     static constexpr uint32_t invalid_id = -1;
 
 private:
-    std::vector<T>        items;
-    std::vector<uint32_t> free;
+    struct element {
+        union {
+            T item;
+            uint32_t next_free = -1;
+        };
+        uint32_t generation = 0U;
+    };
+
+    std::vector<element>        elements;
+};
+
+template<const size_t initial_size = default_element_count>
+class idlist {
+    public:
+
+    idlist() {
+        auto next_free = 1U;
+        elements.reserve(initial_size);
+        for (auto id { 0U }; id < initial_size; id++) {
+            elements.push_back(
+                {
+                    .next_free = static_cast<uint32_t>(++next_free % initial_size),
+                }
+            );
+        }
+
+        elements.back().next_free = -1U;
+    }
+
+    handle<void> add() {
+        auto id = elements[0U].next_free;
+
+        if (id != -1U) {
+            auto& element = elements[id];
+            elements[0U].next_free = element.next_free;
+            element.next_free = -1;
+
+            return { id, ++element.generation };
+        }
+
+        // grow
+    }
+
+    void remove(handle<void> handle) {
+        assert(handle.generation == elements[handle.id].generation);
+        elements[handle.id].next_free = elements[0U].next_free;
+        elements[0U].next_free = handle.id;
+    }
+
+    static constexpr uint32_t invalid_id = -1;
+
+private:
+    struct element {
+        uint32_t next_free = -1;
+        uint32_t generation = 0U;
+    };
+
+    std::vector<element>        elements;
 };
