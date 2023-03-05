@@ -27,6 +27,9 @@ struct device_texture;
 RENDERDOC_API_1_4_1 *rdoc_api = nullptr;
 #endif
 
+static constexpr size_t Kb = 1024U;
+static constexpr size_t Mb = 1024U * Kb;
+
 void ui() {
     ImGui::NewFrame();
     bool open = true;
@@ -77,8 +80,8 @@ int main() {
     }
 #endif
 
-    constexpr size_t window_width = 640U;
-    constexpr size_t window_height = 360U;
+    constexpr size_t window_width = 1280U;
+    constexpr size_t window_height = 720U;
     window wnd { window_width, window_height };
 
     ImGui::CreateContext();
@@ -166,15 +169,16 @@ int main() {
     addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + ui_offset);
     memcpy(addr, pixels, size);
 
-    auto vertex_buffer = device.get_buffer(device.create_buffer({
-        .size = 1024U * 1024U * sizeof(uint32_t),
+    auto vertex_buffer_handle = device.create_buffer({
+        .size = Mb * sizeof(uint32_t),
         .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-    }));
+    });
+    auto vertex_buffer = device.get_buffer(vertex_buffer_handle);
 
     auto index_buffer_handle = device.create_buffer({
-        .size = 1024U * 1024U * sizeof(uint32_t),
+        .size = Mb * sizeof(uint32_t),
         .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -226,9 +230,9 @@ int main() {
     };
     const auto& uniform_buffer = device.get_bindingmodel().get_uniform_buffer();
     compute_params params {
-        device.get_texture(second_texture).storage_index,
-        device.get_texture(gpu_texture_handle).storage_index,
-        device.get_texture(output_texture_handle).storage_index,
+        device.get_texture(second_texture).get_storage_index(),
+        device.get_texture(gpu_texture_handle).get_storage_index(),
+        device.get_texture(output_texture_handle).get_storage_index(),
     };
     memcpy(uniform_buffer.mapped_ptr, &params, sizeof(params));
 
@@ -249,11 +253,18 @@ int main() {
     RD_END_CAPTURE;
 
     std::array<struct command_buffer, 1U> ui_command_buffers = {command_buffers[1]};
-    // std::array<handle<device_texture>, 1U> color_attachment {gpu_texture_handle};
-    surface.acquire_image_index(acquire_semaphore);
-    std::array<handle<device_texture>, 1U> color_attachment {surface.get_backbuffer_image()};
+    std::array<handle<device_texture>, 1U> color_attachment {};
     while(wnd.isOpen) {
         wnd.poll_events();
+
+        for (auto& event : wnd.events) {
+            if (event.type == EVENT_TYPES::MOUSE_MOVE) {
+                io.MousePos.x = static_cast<float>(event.x);
+                io.MousePos.y = static_cast<float>(event.y);
+            }
+
+            io.MouseDown[0] = event.type == EVENT_TYPES::BUTTON_PRESS;
+        }
 
         ui();
 
@@ -261,6 +272,9 @@ int main() {
         update_buffers(draw_data, vertex_buffer, index_buffer);
 
         device.wait(semaphore);
+
+        surface.acquire_image_index(acquire_semaphore);
+        color_attachment[0] = surface.get_backbuffer_image();
 
         RD_START_CAPTURE;
         command_buffers[1].start(),
@@ -299,7 +313,7 @@ int main() {
                         -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
                         -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
                     },
-                    .texture_index = ui_texture.sampled_index,
+                    .texture_index = ui_texture.get_sampled_index(),
                 };
 
                 command_buffers[1].render({
@@ -327,9 +341,28 @@ int main() {
         device.wait(semaphore);
         device.present(surface_handle, {});
         RD_END_CAPTURE;
-
-        std::system("PAUSE");
     }
+
+    device.wait(semaphore);
+
+    device.destroy_surface(surface_handle);
+
+    device.destroy_pipeline(compute);
+    device.destroy_pipeline(graphics);
+
+    device.destroy_semaphore(semaphore);
+    device.destroy_semaphore(acquire_semaphore);
+
+    device.destroy_texture(gpu_texture_handle);
+    device.destroy_texture(second_texture);
+    device.destroy_texture(output_texture_handle);
+    device.destroy_texture(ui_texture_handle);
+
+    device.destroy_buffer(staging_buffer_handle);
+    device.destroy_buffer(vertex_buffer_handle);
+    device.destroy_buffer(index_buffer_handle);
+
+    ImGui::DestroyContext();
 
     return 0;
 }

@@ -18,6 +18,5 @@ layout(set = 2, binding = 0) uniform parameters {
 } params;
 
 void main() {
-    o_Color = In.color * texture(sampler2D(textures[nonuniformEXT(params.texture_index)], samplers[nonuniformEXT(1U)]), In.uv.xy);
-    // o_Color = vec4(1, 0, 0, 1);
+    o_Color = In.color * texture(sampler2D(textures[nonuniformEXT(params.texture_index)], samplers[nonuniformEXT(0U)]), In.uv.xy);
 }

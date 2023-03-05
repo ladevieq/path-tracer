@@ -44,26 +44,6 @@ vkdevice::~vkdevice() {
 
     bindless_model::destroy_bindless_model(bindless);
 
-    for (const auto& surface : surfaces) {
-        destroy_surface(surface);
-    }
-
-    for (const auto& texture : textures) {
-        destroy_texture(texture);
-    }
-
-    for (const auto& buffer : buffers) {
-        destroy_buffer(buffer);
-    }
-
-    for (const auto& pipeline : pipelines) {
-        destroy_pipeline(pipeline);
-    }
-
-    for (const auto& semaphore : semaphores) {
-        destroy_semaphore(semaphore);
-    }
-
     vmaDestroyAllocator(gpu_allocator);
 
     for (auto& queue : queues) {
@@ -80,13 +60,15 @@ vkdevice::~vkdevice() {
 }
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
-    device_texture device_texture { desc };
+    device_texture device_texture;
+    device_texture.init(desc);
 
-    return { textures.add(device_texture) };
+    return textures.add(device_texture);
 }
 
 handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     device_buffer device_buffer{
+        .size = desc.size,
     };
 
     VkBufferCreateInfo create_info{
@@ -128,7 +110,7 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
 
     device_buffer.mapped_ptr = alloc_info.pMappedData;
 
-    return { buffers.add(device_buffer) };
+    return buffers.add(device_buffer);
 }
 
 handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
@@ -298,7 +280,7 @@ handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
         }
     }
 
-    return { pipelines.add(device_pipeline) };
+    return pipelines.add(device_pipeline);
 }
 
 handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
@@ -319,7 +301,7 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
 
     create_swapchain(desc, device_surface);
 
-    return { surfaces.add(device_surface) };
+    return surfaces.add(device_surface);
 }
 
 handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc) {
@@ -341,58 +323,35 @@ handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc) 
 
     VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
 
-    return { semaphores.add(semaphore) };
-}
-
-void vkdevice::destroy_texture(const device_texture& texture) {
-    destroy_texture({ .id = textures.find(texture) });
+    return semaphores.add(semaphore);
 }
 
 void vkdevice::destroy_texture(handle<device_texture> handle) {
-    const auto& texture = get_texture(handle);
-    textures.remove(handle.id);
+    auto& texture = get_texture(handle);
 
-    vmaDestroyImage(gpu_allocator, texture.vk_image, texture.alloc);
-
-    vkDestroyImageView(device, texture.whole_view, nullptr);
-
-    for (const auto& mip_view : texture.mips_views) {
-        vkDestroyImageView(device, mip_view, nullptr);
-    }
-}
-
-void vkdevice::destroy_buffer(const device_buffer& buffer) {
-    destroy_buffer({ .id = buffers.find(buffer) });
+    texture.release();
+    textures.remove(handle);
 }
 
 void vkdevice::destroy_buffer(handle<device_buffer> handle) {
     const auto& buffer = get_buffer(handle);
 
     vmaDestroyBuffer(gpu_allocator, buffer.vk_buffer, buffer.alloc);
-}
-
-void vkdevice::destroy_pipeline(const device_pipeline& pipeline) {
-    destroy_pipeline({ .id = pipelines.find(pipeline) });
+    buffers.remove(handle);
 }
 
 void vkdevice::destroy_pipeline(handle<device_pipeline> handle) {
     const auto& pipeline = vkdevice::get_pipeline(handle);
 
     vkDestroyPipeline(device, pipeline.vk_pipeline, nullptr);
-}
-
-void vkdevice::destroy_semaphore(const device_semaphore& semaphore) {
-    destroy_semaphore({ .id = semaphores.find(semaphore)});
+    pipelines.remove(handle);
 }
 
 void vkdevice::destroy_semaphore(handle<device_semaphore> handle) {
     auto& semaphore = vkdevice::get_semaphore(handle);
 
     vkDestroySemaphore(device, semaphore.vk_semaphore, nullptr);
-}
-
-void vkdevice::destroy_surface(const device_surface& surface) {
-    destroy_surface({ .id = surfaces.find(surface)});
+    semaphores.remove(handle);
 }
 
 void vkdevice::destroy_surface(handle<device_surface> handle) {
@@ -400,13 +359,7 @@ void vkdevice::destroy_surface(handle<device_surface> handle) {
 
     for (auto texture_index{0U}; texture_index < surface.image_count; texture_index++) {
         auto texture_handle = surface.swapchain_images[texture_index];
-        const auto& texture = get_texture(texture_handle);
-
-        vkDestroyImageView(device, texture.whole_view, nullptr);
-
-        for (auto mip_index{0U}; mip_index < texture.mips; mip_index++) {
-            vkDestroyImageView(device, texture.mips_views[mip_index], nullptr);
-        }
+        destroy_texture(texture_handle);
     }
 
     vkDestroySwapchainKHR(device, surface.vk_swapchain, nullptr);
@@ -425,6 +378,7 @@ void vkdevice::wait(handle<device_semaphore> semaphore_handle) {
         .pValues = &semaphore.value,
     };
     VKCHECK(vkWaitSemaphores(device, &wait_info, -1));
+    vkDeviceWaitIdle(device);
 }
 
 void vkdevice::submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle) {
@@ -649,6 +603,7 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
             .width = extent.width,
             .height = extent.height,
             .depth = 1U,
+            .mips = 1U,
             .usages = desc.usages,
             .format = desc.surface_format.format,
             .type = VK_IMAGE_TYPE_2D,
@@ -888,10 +843,10 @@ void vkdevice::create_debug_layer_callback() {
 }
 
 
-freelist<device_texture*> device_texture::sampled_indices = {};
-freelist<device_texture*> device_texture::storage_indices = {};
+idlist<> device_texture::sampled_indices = {};
+idlist<> device_texture::storage_indices = {};
 
-device_texture::device_texture(const texture_desc& desc) {
+void device_texture::init(const texture_desc& desc) {
     auto& render_device = vkdevice::get_render_device();
     const auto& bindless = render_device.get_bindingmodel();
     auto* device = render_device.get_device();
@@ -956,14 +911,14 @@ device_texture::device_texture(const texture_desc& desc) {
 
     std::vector<VkWriteDescriptorSet> write_descriptor_sets;
     if ((desc.usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0) {
-        storage_index = storage_indices.add(this);
+        storage_index = storage_indices.add();
 
         write_descriptor_sets.push_back({
             .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext            = nullptr,
             .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
             .dstBinding       = 2U,
-            .dstArrayElement  = storage_index,
+            .dstArrayElement  = storage_index.id,
             .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
             .descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo       = images_info,
@@ -972,14 +927,14 @@ device_texture::device_texture(const texture_desc& desc) {
         });
     }
     if ((desc.usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0) {
-        sampled_index = sampled_indices.add(this);
+        sampled_index = sampled_indices.add();
 
         write_descriptor_sets.push_back({
             .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext            = nullptr,
             .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
             .dstBinding       = 1U,
-            .dstArrayElement  = sampled_index,
+            .dstArrayElement  = sampled_index.id,
             .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
             .descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo       = images_info,
@@ -989,6 +944,31 @@ device_texture::device_texture(const texture_desc& desc) {
     }
 
     vkUpdateDescriptorSets(device, write_descriptor_sets.size(), write_descriptor_sets.data(), 0U, nullptr);
+}
+
+void device_texture::release() {
+    auto& render_device = vkdevice::get_render_device();
+    auto* device = render_device.get_device();
+    auto* gpu_allocator = render_device.get_allocator();
+
+    if (alloc != nullptr) {
+        vmaDestroyImage(gpu_allocator, vk_image, alloc);
+    }
+
+    vkDestroyImageView(device, whole_view, nullptr);
+
+    for (auto mip_index{ 0U }; mip_index < mips; mip_index++) {
+        const auto& mip_view = mips_views[mip_index];
+        vkDestroyImageView(device, mip_view, nullptr);
+    }
+
+    if (storage_index.is_valid()) {
+        storage_indices.remove(storage_index);
+    }
+
+    if (sampled_index.is_valid()) {
+        sampled_indices.remove(sampled_index);
+    }
 }
 
 void device_texture::create_views() {

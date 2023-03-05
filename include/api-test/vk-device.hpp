@@ -7,7 +7,6 @@
 
 #include "command-buffer.hpp"
 #include "freelist.hpp"
-#include "handle.hpp"
 #include "vk-bindless.hpp"
 #include "vk-device-types.hpp"
 
@@ -40,19 +39,14 @@ class vkdevice {
 
     handle<device_semaphore> create_semaphore(const semaphore_desc& desc);
 
-    void                     destroy_texture(const device_texture& texture);
     void                     destroy_texture(handle<device_texture> handle);
 
-    void                     destroy_buffer(const device_buffer& buffer);
     void                     destroy_buffer(handle<device_buffer> handle);
 
-    void                     destroy_pipeline(const device_pipeline& pipeline);
     void                     destroy_pipeline(handle<device_pipeline> handle);
 
-    void                     destroy_semaphore(const device_semaphore& semaphore);
     void                     destroy_semaphore(handle<device_semaphore> handle);
 
-    void                     destroy_surface(const device_surface& surface);
     void                     destroy_surface(handle<device_surface> handle);
 
     template<typename cmd_buf_type>
@@ -61,23 +55,23 @@ class vkdevice {
     }
 
     [[nodiscard]] inline device_texture& get_texture(handle<device_texture> handle) {
-        return textures[handle.id];
+        return textures[handle];
     }
 
     [[nodiscard]] inline const device_buffer& get_buffer(handle<device_buffer> handle) const {
-        return buffers[handle.id];
+        return buffers[handle];
     }
 
     [[nodiscard]] inline const device_pipeline& get_pipeline(handle<device_pipeline> handle) const {
-        return pipelines[handle.id];
+        return pipelines[handle];
     }
 
     [[nodiscard]] inline device_surface& get_surface(handle<device_surface> handle) {
-        return surfaces[handle.id];
+        return surfaces[handle];
     }
 
     [[nodiscard]] inline device_semaphore& get_semaphore(handle<device_semaphore> handle) {
-        return semaphores[handle.id];
+        return semaphores[handle];
     }
 
     [[nodiscard]] inline const bindless_model& get_bindingmodel() const {
