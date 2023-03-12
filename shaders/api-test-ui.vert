@@ -1,10 +1,11 @@
 #extension GL_EXT_buffer_reference : require
 
 struct vertex {
-    vec2    pos;
-    vec2    uv;
+    float    pos_x;
+    float    pos_y;
+    float    uv_x;
+    float    uv_y;
     uint    color;
-    uint    padding;
 };
 
 layout(buffer_reference) readonly buffer vertices {
@@ -32,7 +33,8 @@ void main() {
     vertex v = params.vertex_buffer.vertices[gl_VertexIndex];
 
     Out.color = unpackUnorm4x8(v.color);
-    Out.uv = v.uv;
+    Out.uv = vec2(v.uv_x, v.uv_y);
 
-    gl_Position = vec4(v.pos * params.scale + params.translate, 0.0, 1.0);
+    vec2 pos = vec2(v.pos_x, v.pos_y);
+    gl_Position = vec4(pos * params.scale + params.translate, 0.0, 1.0);
 }

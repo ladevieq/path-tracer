@@ -826,6 +826,7 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
 }
 
 void vkdevice::create_debug_layer_callback() {
+#ifdef _DEBUG
     VkDebugUtilsMessengerCreateInfoEXT create_info{
         .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
         .pNext           = nullptr,
@@ -840,6 +841,7 @@ void vkdevice::create_debug_layer_callback() {
     };
 
     VKCHECK(vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
+#endif // _DEBUG
 }
 
 
@@ -996,7 +998,7 @@ void device_texture::create_views() {
         },
     };
 
-    for (auto mip_index{ 0 }; mip_index < mips; mip_index++) {
+    for (auto mip_index{ 0U }; mip_index < mips; mip_index++) {
         create_info.subresourceRange.baseMipLevel = mip_index;
         VKCHECK(vkCreateImageView(device, &create_info, nullptr, &mips_views[mip_index]));
     }

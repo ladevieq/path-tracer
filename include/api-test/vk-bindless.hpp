@@ -39,7 +39,7 @@ private:
     handle<device_buffer>     draws_uniform_buffer_handle;
 
     static constexpr size_t   descriptor_pool_allocable_sets_count = 64U;
-    static constexpr uint32_t set_descriptors_count[BindlessSetType::MAX]{ 1024U };
+    static constexpr uint32_t set_descriptors_count = 1024U;
 
     void create_layout(VkDevice device);
     void create_descriptor_pool(VkDevice device);
