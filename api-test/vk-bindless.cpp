@@ -151,14 +151,14 @@ void bindless_model::create_layout(VkDevice device) {
             {
                 .binding            = 1U,
                 .descriptorType     = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .descriptorCount    = set_descriptors_count[BindlessSetType::GLOBAL],
+                .descriptorCount    = set_descriptors_count,
                 .stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = nullptr,
             },
             {
                 .binding            = 2U,
                 .descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .descriptorCount    = set_descriptors_count[BindlessSetType::GLOBAL],
+                .descriptorCount    = set_descriptors_count,
                 .stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = nullptr,
             },
@@ -254,19 +254,19 @@ void bindless_model::create_descriptor_pool(VkDevice device) {
     VkDescriptorPoolSize pool_sizes[]{
         {
             .type            = VK_DESCRIPTOR_TYPE_SAMPLER,
-            .descriptorCount = set_descriptors_count[BindlessSetType::MAX],
+            .descriptorCount = set_descriptors_count,
         },
         {
             .type            = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .descriptorCount = set_descriptors_count[BindlessSetType::MAX],
+            .descriptorCount = set_descriptors_count,
         },
         {
             .type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = set_descriptors_count[BindlessSetType::MAX],
+            .descriptorCount = set_descriptors_count,
         },
         {
             .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .descriptorCount = set_descriptors_count[BindlessSetType::MAX],
+            .descriptorCount = set_descriptors_count,
         },
     };
 

@@ -12,6 +12,10 @@ add_executable(
 
 target_compile_definitions(api-test PUBLIC WINDOWS VK_NO_PROTOTYPES VK_USE_PLATFORM_WIN32_KHR)
 
+target_compile_options(api-test
+    PRIVATE -Wall -Wextra
+)
+
 target_include_directories(api-test SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(api-test SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty)
 target_include_directories(api-test PUBLIC ${CMAKE_SOURCE_DIR}/include)

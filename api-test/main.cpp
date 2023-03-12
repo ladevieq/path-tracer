@@ -16,7 +16,9 @@
 
 struct device_texture;
 
+#ifdef _DEBUG
 #define ENABLE_RENDERDOC
+#endif // _DEBUG
 
 #ifdef ENABLE_RENDERDOC
 #include <renderdoc.h>
@@ -25,7 +27,10 @@ struct device_texture;
 #define RD_END_CAPTURE if(rdoc_api != nullptr) rdoc_api->EndFrameCapture(nullptr, nullptr)
 
 RENDERDOC_API_1_4_1 *rdoc_api = nullptr;
-#endif
+#else
+#define RD_START_CAPTURE (0)
+#define RD_END_CAPTURE (0)
+#endif // ENABLE_RENDERDOC
 
 static constexpr size_t Kb = 1024U;
 static constexpr size_t Mb = 1024U * Kb;
@@ -39,27 +44,14 @@ void ui() {
 }
 
 void update_buffers(ImDrawData* draw_data, const device_buffer& vertex_buffer, const device_buffer& index_buffer) {
-    struct vertex {
-        ImVec2 pos;
-        ImVec2 uv;
-        uint32_t color;
-        uint32_t padding;
-    };
-
     off_t vertex_offset = 0;
     off_t index_offset = 0;
-    for (auto index {0U} ; index < draw_data->CmdListsCount; index++) {
+    for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
         auto* cmd_list = draw_data->CmdLists[index];
 
         size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
-        auto* vtx_ptr = static_cast<vertex*>(vertex_buffer.mapped_ptr) + vertex_offset;
-        for (auto vtx_index{0}; vtx_index < cmd_list->VtxBuffer.size(); vtx_index++, vtx_ptr++) {
-            auto& vtx = cmd_list->VtxBuffer[vtx_index];
-            vtx_ptr->pos = vtx.pos;
-            vtx_ptr->uv = vtx.uv;
-            vtx_ptr->color = vtx.col;
-        }
-        // memcpy(static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset, cmd_list->VtxBuffer.Data, vertex_bytes_size);
+        auto* vtx_ptr = static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset;
+        memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
         vertex_offset += static_cast<off_t>(vertex_bytes_size);
 
         size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
@@ -72,11 +64,8 @@ int main() {
 
 #ifdef ENABLE_RENDERDOC
     if (HMODULE mod = GetModuleHandleA("renderdoc.dll")) {
-      auto RENDERDOC_GetAPI =
-          (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-      int ret =
-          RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
-      assert(ret == 1);
+        auto RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+        assert(RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api) == 1);
     }
 #endif
 
@@ -238,8 +227,8 @@ int main() {
 
     command_buffers[0].dispatch({
         .pipeline = compute,
-        .group_size = { image_size, image_size, 1U },
-        .local_group_size = { 8U, 8U, 1U },
+        .group_size = { .vec = { image_size, image_size, 1U }},
+        .local_group_size = { .vec = { 8U, 8U, 1U }},
         .uniforms_offset = 0U,
     });
 
@@ -299,7 +288,7 @@ int main() {
 
         uint32_t draw_index = 0U;
         std::array<draw_params, 100U> draws;
-        for (auto index {0U} ; index < draw_data->CmdListsCount; index++) {
+        for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
             auto* cmd_list = draw_data->CmdLists[index];
 
             for (auto& draw_command : cmd_list->CmdBuffer) {
