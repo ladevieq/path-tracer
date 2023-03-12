@@ -12,32 +12,24 @@ class freelist {
     public:
 
     freelist() {
-        auto next_free = 0U;
-        elements.reserve(initial_size);
-        for (auto id { 0U }; id < initial_size; id++) {
-            elements.push_back(
-                {
-                    .next_free = static_cast<uint32_t>(++next_free % initial_size),
-                }
-            );
-        }
-
-        elements.back().next_free = -1U;
+        grow(initial_size);
     }
 
     handle<T> add(const T& item) {
         auto id = elements[0U].next_free;
 
-        if (id != -1U) {
-            auto& element = elements[id];
+        if (id == invalid_id) {
+            grow(elements.size());
 
-            elements[0U].next_free = element.next_free;
-            element.item = std::move(item);
-
-            return { id, ++element.generation };
+            id = elements[0U].next_free;
         }
 
-        // grow
+        auto& element = elements[id];
+
+        elements[0U].next_free = element.next_free;
+        element.item = std::move(item);
+
+        return { id, ++element.generation };
     }
 
     void remove(handle<T> handle) {
@@ -59,6 +51,23 @@ class freelist {
     static constexpr uint32_t invalid_id = -1;
 
 private:
+    void grow(size_t grow_size) {
+        auto size = elements.size();
+        uint32_t next_free = size;
+
+        elements.reserve(size + grow_size);
+
+        for (auto id { 0U }; id < initial_size; id++) {
+            elements.push_back(
+                {
+                    .next_free = static_cast<uint32_t>(++next_free % initial_size),
+                }
+            );
+        }
+
+        elements.back().next_free = -1U;
+    }
+
     struct element {
         union {
             T item;
@@ -75,31 +84,23 @@ class idlist {
     public:
 
     idlist() {
-        auto next_free = 1U;
-        elements.reserve(initial_size);
-        for (auto id { 0U }; id < initial_size; id++) {
-            elements.push_back(
-                {
-                    .next_free = static_cast<uint32_t>(++next_free % initial_size),
-                }
-            );
-        }
-
-        elements.back().next_free = -1U;
+        grow(initial_size);
     }
 
     handle<void> add() {
         auto id = elements[0U].next_free;
 
-        if (id != -1U) {
-            auto& element = elements[id];
-            elements[0U].next_free = element.next_free;
-            element.next_free = -1;
+        if (id == invalid_id) {
+            grow(elements.size());
 
-            return { id, ++element.generation };
+            id = elements[0U].next_free;
         }
 
-        // grow
+        auto& element = elements[id];
+        elements[0U].next_free = element.next_free;
+        element.next_free = -1;
+
+        return { id, ++element.generation };
     }
 
     void remove(handle<void> handle) {
@@ -111,6 +112,23 @@ class idlist {
     static constexpr uint32_t invalid_id = -1;
 
 private:
+    void grow(size_t grow_size) {
+        auto size = elements.size();
+        uint32_t next_free = size;
+
+        elements.reserve(size + grow_size);
+
+        for (auto id { 0U }; id < initial_size; id++) {
+            elements.push_back(
+                {
+                    .next_free = static_cast<uint32_t>(++next_free % initial_size),
+                }
+            );
+        }
+
+        elements.back().next_free = -1U;
+    }
+
     struct element {
         uint32_t next_free = -1;
         uint32_t generation = 0U;
