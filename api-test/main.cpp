@@ -1,7 +1,9 @@
 #include <cassert>
 #include <cstdio>
+#include <ratio>
 #include <span>
 #include <array>
+#include <chrono>
 #include <vk_mem_alloc.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -35,10 +37,23 @@ RENDERDOC_API_1_4_1 *rdoc_api = nullptr;
 static constexpr size_t Kb = 1024U;
 static constexpr size_t Mb = 1024U * Kb;
 
-void ui() {
+void ui(uint32_t frame_time) {
+    static float max_fps = 0.f;
+    static uint32_t max_frame_time = 1000U;
+    float fps = 1000000U / frame_time;
+    if (fps > max_fps) {
+        max_fps = fps;
+    }
+    if (frame_time > max_frame_time) {
+        max_frame_time = frame_time;
+    }
     ImGui::NewFrame();
-    bool open = true;
-    ImGui::ShowDemoWindow(&open);
+    // bool open = true;
+    // ImGui::ShowDemoWindow(&open);
+    ImGui::Text("FPS : %f\n", fps);
+    ImGui::Text("Max FPS : %f\n", max_fps);
+    ImGui::Text("frame_time : %f ms\n", frame_time / 1000.f);
+    ImGui::Text("max frame_time : %f ms\n", max_frame_time / 1000.f);
     ImGui::EndFrame();
     ImGui::Render();
 }
@@ -87,7 +102,7 @@ int main() {
             .format = VK_FORMAT_B8G8R8A8_UNORM,
             .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
         },
-        .present_mode = VK_PRESENT_MODE_FIFO_KHR,
+        .present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR,
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     });
     auto& surface = device.get_surface(surface_handle);
@@ -191,26 +206,36 @@ int main() {
     auto semaphore = device.create_semaphore({
         .type = VK_SEMAPHORE_TYPE_TIMELINE,
     });
-    auto acquire_semaphore = device.create_semaphore({
-        .type = VK_SEMAPHORE_TYPE_BINARY,
-    });
+    constexpr uint32_t virtual_frames_count = 2U;
+    handle<device_semaphore> submit_semaphores[virtual_frames_count];
+    for (auto& submit_semaphore : submit_semaphores) {
+        submit_semaphore = device.create_semaphore({
+            .type = VK_SEMAPHORE_TYPE_BINARY,
+        });
+    }
+    handle<device_semaphore> acquire_semaphores[virtual_frames_count];
+    for (auto& acquire_semaphore : acquire_semaphores) {
+        acquire_semaphore = device.create_semaphore({
+            .type = VK_SEMAPHORE_TYPE_BINARY,
+        });
+    }
 
-    std::array<graphics_command_buffer, 2U> command_buffers;
-    device.allocate_command_buffers(command_buffers.data(), 2, QueueType::GRAPHICS);
+    std::array<graphics_command_buffer, 4U> graphics_command_buffers;
+    device.allocate_command_buffers(graphics_command_buffers, QueueType::GRAPHICS);
 
     RD_START_CAPTURE;
 
-    command_buffers[0].start();
+    graphics_command_buffers[0].start();
 
-    command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
-    command_buffers[0].copy(staging_buffer_handle, second_texture, static_cast<VkDeviceSize>(offset));
-    command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, static_cast<VkDeviceSize>(ui_offset));
+    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    graphics_command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    graphics_command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
+    graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, static_cast<VkDeviceSize>(offset));
+    graphics_command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, static_cast<VkDeviceSize>(ui_offset));
 
-    command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
-    command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
     struct compute_params {
         uint32_t input1;
@@ -225,27 +250,34 @@ int main() {
     };
     memcpy(uniform_buffer.mapped_ptr, &params, sizeof(params));
 
-    command_buffers[0].dispatch({
+    graphics_command_buffers[0].dispatch({
         .pipeline = compute,
         .group_size = { .vec = { image_size, image_size, 1U }},
         .local_group_size = { .vec = { 8U, 8U, 1U }},
         .uniforms_offset = 0U,
     });
 
-    command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    command_buffers[0].stop();
+    graphics_command_buffers[0].stop();
 
-    std::array<struct command_buffer, 1U> compute_command_buffers = {command_buffers[0]};
-    device.submit(compute_command_buffers, {}, semaphore);
+    device.submit(std::span { static_cast<command_buffer*>(graphics_command_buffers.data()), 1 }, {}, semaphore);
 
     RD_END_CAPTURE;
 
-    std::array<struct command_buffer, 1U> ui_command_buffers = {command_buffers[1]};
+    // std::array<struct command_buffer, 1U> ui_command_buffers = {command_buffers[1]};
     std::array<handle<device_texture>, 1U> color_attachment {};
+    uint32_t frame_time;
+    uint32_t frame_count = 0U;
     while(wnd.isOpen) {
+        auto start = std::chrono::system_clock::now();
         wnd.poll_events();
 
+        uint32_t virtual_frame_index = frame_count % virtual_frames_count;
+        auto& submit_semaphore = submit_semaphores[virtual_frame_index];
+        auto& acquire_semaphore = acquire_semaphores[virtual_frame_index];
+        auto command_buffers = std::span<struct command_buffer> { static_cast<struct command_buffer*>(graphics_command_buffers.data() + virtual_frame_index + 1U), 1 };
+        graphics_command_buffer& command_buffer = graphics_command_buffers[virtual_frame_index + 1U];
         for (auto& event : wnd.events) {
             if (event.type == EVENT_TYPES::MOUSE_MOVE) {
                 io.MousePos.x = static_cast<float>(event.x);
@@ -255,21 +287,22 @@ int main() {
             io.MouseDown[0] = event.type == EVENT_TYPES::BUTTON_PRESS;
         }
 
-        ui();
+        ui(frame_time);
 
         auto* draw_data = ImGui::GetDrawData();
         update_buffers(draw_data, vertex_buffer, index_buffer);
 
-        device.wait(semaphore);
+        // device.wait(semaphore);
+        device.wait(submit_semaphore);
 
         surface.acquire_image_index(acquire_semaphore);
         color_attachment[0] = surface.get_backbuffer_image();
 
         RD_START_CAPTURE;
-        command_buffers[1].start(),
+        command_buffer.start(),
 
-        command_buffers[1].barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        command_buffers[1].begin_renderpass({
+        command_buffer.barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        command_buffer.begin_renderpass({
             .render_area = {
                 .x = static_cast<int32_t>(draw_data->DisplayPos.x),
                 .y = static_cast<int32_t>(draw_data->DisplayPos.y),
@@ -305,7 +338,7 @@ int main() {
                     .texture_index = ui_texture.get_sampled_index(),
                 };
 
-                command_buffers[1].render({
+                command_buffer.render({
                     .pipeline = graphics,
                     .index_buffer = index_buffer_handle,
                     .vertex_count = draw_command.ElemCount,
@@ -321,14 +354,21 @@ int main() {
 
         memcpy(uniform_buffer.mapped_ptr, draws.data(), sizeof(draw_params) * draw_index);
 
-        command_buffers[1].end_renderpass();
-        command_buffers[1].barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        command_buffer.end_renderpass();
+        command_buffer.barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        command_buffers[1].stop();
+        command_buffer.stop();
 
-        device.submit(ui_command_buffers, acquire_semaphore, semaphore);
-        device.wait(semaphore);
-        device.present(surface_handle, {});
+        // device.submit(command_buffers, acquire_semaphore, semaphore);
+        // device.wait(semaphore);
+        // device.present(surface_handle, {});
+
+        device.submit(command_buffers, acquire_semaphore, submit_semaphore);
+        device.present(surface_handle, submit_semaphore);
+
+        auto end = std::chrono::system_clock::now();
+        frame_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
         RD_END_CAPTURE;
     }
 
@@ -340,7 +380,12 @@ int main() {
     device.destroy_pipeline(graphics);
 
     device.destroy_semaphore(semaphore);
-    device.destroy_semaphore(acquire_semaphore);
+    for (auto& submit_semaphore : submit_semaphores) {
+        device.destroy_semaphore(submit_semaphore);
+    }
+    for (auto& acquire_semaphore : acquire_semaphores) {
+        device.destroy_semaphore(acquire_semaphore);
+    }
 
     device.destroy_texture(gpu_texture_handle);
     device.destroy_texture(second_texture);

@@ -49,9 +49,9 @@ class vkdevice {
 
     void                     destroy_surface(handle<device_surface> handle);
 
-    template<typename cmd_buf_type>
-    void allocate_command_buffers(cmd_buf_type* buffers, size_t count, QueueType queue_type) {
-        allocate_command_buffers(static_cast<command_buffer*>(buffers), count, queue_type);
+    template<typename array_type>
+    void allocate_command_buffers(array_type& buffers, QueueType queue_type) {
+        allocate_command_buffers(static_cast<command_buffer*>(buffers.data()), buffers.size(), queue_type);
     }
 
     [[nodiscard]] inline device_texture& get_texture(handle<device_texture> handle) {
