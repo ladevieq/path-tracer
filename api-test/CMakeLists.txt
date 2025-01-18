@@ -8,12 +8,18 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/src/window.cpp
     ${CMAKE_SOURCE_DIR}/src/utils.cpp
     ${CMAKE_SOURCE_DIR}/src/vulkan-loader.cpp
+    ${CMAKE_SOURCE_DIR}/src/gltf.cpp
+    ${CMAKE_SOURCE_DIR}/src/vec3.cpp
+    ${CMAKE_SOURCE_DIR}/src/mesh.cpp
+    ${CMAKE_SOURCE_DIR}/src/scene.cpp
+    ${CMAKE_SOURCE_DIR}/src/camera.cpp
+    ${CMAKE_SOURCE_DIR}/src/bvh.cpp
 )
 
-target_compile_definitions(api-test PUBLIC WINDOWS VK_NO_PROTOTYPES VK_USE_PLATFORM_WIN32_KHR)
+target_compile_definitions(api-test PUBLIC WINDOWS VK_NO_PROTOTYPES VK_USE_PLATFORM_WIN32_KHR API_TEST NOMINMAX)
 
 target_compile_options(api-test
-    PRIVATE -Wall -Wextra
+    PRIVATE -Wall -Wextra -msse4.1
 )
 
 target_include_directories(api-test SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})

@@ -1,7 +1,6 @@
 #include <cassert>
 #include <cstdio>
 #include <ratio>
-#include <span>
 #include <array>
 #include <chrono>
 #include <vk_mem_alloc.h>
@@ -21,6 +20,9 @@ struct device_texture;
 #ifdef _DEBUG
 #define ENABLE_RENDERDOC
 #endif // _DEBUG
+
+#include "camera.hpp"
+#include "scene.hpp"
 
 #ifdef ENABLE_RENDERDOC
 #include <renderdoc.h>
@@ -93,8 +95,18 @@ int main() {
     io.DisplaySize.x = window_width;
     io.DisplaySize.y = window_height;
 
+    const float aspect_ratio = 16.0 / 9.0;
+
+    point3 position { 13.f, 2.f, -3.f };
+    point3 target {};
+    const auto v_fov = 90.f;
+    const auto aperture = 0.1f;
+    const auto focus_distance = 10.f;
+
     auto& device = vkdevice::get_render_device();
     device.init();
+
+    auto main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
 
     auto surface_handle = device.create_surface({
         .window_handle = wnd.handle,
@@ -103,7 +115,7 @@ int main() {
             .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
         },
         .present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR,
-        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
     });
     auto& surface = device.get_surface(surface_handle);
 
@@ -190,38 +202,47 @@ int main() {
     auto index_buffer = device.get_buffer(index_buffer_handle);
 
     auto code = read_file("shaders/test.comp.spv");
-    auto compute = device.create_pipeline({
+    auto compute = device.create_compute_pipeline({
         .cs_code = code,
     });
+
+    auto rt_code = read_file("shaders/compute.comp.spv");
+    auto raytracing = device.create_compute_pipeline({
+        .cs_code = rt_code,
+    });
+    auto tonemapping_code = read_file("shaders/tonemapping.comp.spv");
+    auto tonemapping = device.create_compute_pipeline({
+        .cs_code = tonemapping_code,
+    });
+    const auto acc_handle = device.create_texture({
+        .width = static_cast<uint32_t>(window_width),
+        .height = static_cast<uint32_t>(window_height),
+        .usages = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+        .type = VK_IMAGE_TYPE_2D,
+    });
+    auto acc_storage_index = device.get_texture(acc_handle).get_storage_index();
+
+    const auto result_handle = device.create_texture({
+        .width = static_cast<uint32_t>(window_width),
+        .height = static_cast<uint32_t>(window_height),
+        .usages = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+        .type = VK_IMAGE_TYPE_2D,
+    });
+    auto result_storage_index = device.get_texture(result_handle).get_storage_index();
 
     std::array<VkFormat, 1U> formats { surface.surface_format.format };
     auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
     auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
-    auto graphics = device.create_pipeline({
+    auto graphics = device.create_graphics_pipeline({
         .vs_code = vertex_code,
         .fs_code = fragment_code,
         .color_attachments_format = formats
     });
 
-    auto semaphore = device.create_semaphore({
-        .type = VK_SEMAPHORE_TYPE_TIMELINE,
-    });
-    constexpr uint32_t virtual_frames_count = 2U;
-    handle<device_semaphore> submit_semaphores[virtual_frames_count];
-    for (auto& submit_semaphore : submit_semaphores) {
-        submit_semaphore = device.create_semaphore({
-            .type = VK_SEMAPHORE_TYPE_BINARY,
-        });
-    }
-    handle<device_semaphore> acquire_semaphores[virtual_frames_count];
-    for (auto& acquire_semaphore : acquire_semaphores) {
-        acquire_semaphore = device.create_semaphore({
-            .type = VK_SEMAPHORE_TYPE_BINARY,
-        });
-    }
-
     std::array<graphics_command_buffer, 4U> graphics_command_buffers;
-    device.allocate_command_buffers(graphics_command_buffers, QueueType::GRAPHICS);
+    device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), QueueType::GRAPHICS);
 
     RD_START_CAPTURE;
 
@@ -237,47 +258,38 @@ int main() {
     graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
     graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
-    struct compute_params {
-        uint32_t input1;
-        uint32_t input2;
-        uint32_t output;
-    };
-    const auto& uniform_buffer = device.get_bindingmodel().get_uniform_buffer();
-    compute_params params {
-        device.get_texture(second_texture).get_storage_index(),
-        device.get_texture(gpu_texture_handle).get_storage_index(),
-        device.get_texture(output_texture_handle).get_storage_index(),
-    };
-    memcpy(uniform_buffer.mapped_ptr, &params, sizeof(params));
-
-    graphics_command_buffers[0].dispatch({
-        .pipeline = compute,
-        .group_size = { .vec = { image_size, image_size, 1U }},
-        .local_group_size = { .vec = { 8U, 8U, 1U }},
-        .uniforms_offset = 0U,
-    });
+    {
+        graphics_command_buffers[0].dispatch({
+            .pipeline = compute,
+            .group_size = { .vec = { image_size, image_size, 1U }},
+            .local_group_size = { .vec = { 8U, 8U, 1U }},
+            .params = {
+                device.get_texture(second_texture).get_storage_index(),         // Input 1
+                device.get_texture(gpu_texture_handle).get_storage_index(),     // Input 2
+                device.get_texture(output_texture_handle).get_storage_index(),  // Output
+            },
+        });
+    }
 
     graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     graphics_command_buffers[0].stop();
 
-    device.submit(std::span { static_cast<command_buffer*>(graphics_command_buffers.data()), 1 }, {}, semaphore);
+    device.submit(graphics_command_buffers.data(), 1);
+    device.wait();
 
     RD_END_CAPTURE;
 
-    // std::array<struct command_buffer, 1U> ui_command_buffers = {command_buffers[1]};
     std::array<handle<device_texture>, 1U> color_attachment {};
-    uint32_t frame_time;
+    constexpr uint32_t virtual_frames_count = 2U;
+    uint32_t frame_time = 1U;
     uint32_t frame_count = 0U;
     while(wnd.isOpen) {
         auto start = std::chrono::system_clock::now();
         wnd.poll_events();
 
         uint32_t virtual_frame_index = frame_count % virtual_frames_count;
-        auto& submit_semaphore = submit_semaphores[virtual_frame_index];
-        auto& acquire_semaphore = acquire_semaphores[virtual_frame_index];
-        auto command_buffers = std::span<struct command_buffer> { static_cast<struct command_buffer*>(graphics_command_buffers.data() + virtual_frame_index + 1U), 1 };
-        graphics_command_buffer& command_buffer = graphics_command_buffers[virtual_frame_index + 1U];
+        auto command_buffer = graphics_command_buffers[2U + virtual_frame_index];
         for (auto& event : wnd.events) {
             if (event.type == EVENT_TYPES::MOUSE_MOVE) {
                 io.MousePos.x = static_cast<float>(event.x);
@@ -292,16 +304,71 @@ int main() {
         auto* draw_data = ImGui::GetDrawData();
         update_buffers(draw_data, vertex_buffer, index_buffer);
 
-        // device.wait(semaphore);
-        device.wait(submit_semaphore);
+        const auto& scene_buffer = device.get_buffer(main_scene.scene_buffer_handle);
+        main_scene.meta.sample_index = frame_count;
+        uint8_t* ptr = static_cast<uint8_t*>(scene_buffer.mapped_ptr);
+        memcpy(static_cast<void*>(ptr), &main_scene.meta, sizeof(main_scene.meta));
+        memcpy(static_cast<void*>(ptr + sizeof(main_scene.meta)), &main_scene.meta, sizeof(main_scene.meta));
+        memcpy(static_cast<void*>(ptr + sizeof(main_scene.meta) * 2U), &main_scene.meta, sizeof(main_scene.meta));
 
-        surface.acquire_image_index(acquire_semaphore);
-        color_attachment[0] = surface.get_backbuffer_image();
+        // TODO: Refactor backbuffer acquisition
+        auto backbuffer = surface.swapchain_images[device.acquire_image_index(surface_handle)];
+        color_attachment[0] = backbuffer;
 
         RD_START_CAPTURE;
-        command_buffer.start(),
+        command_buffer.start();
 
-        command_buffer.barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        command_buffer.barrier(backbuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+
+        {
+            uint64_t textures = (virtual_frame_index == 0U) ? ((uint64_t(acc_storage_index) << 32U) | result_storage_index) : ((uint64_t(result_storage_index) << 32U) | acc_storage_index);
+
+            if (virtual_frame_index == 0) {
+                command_buffer.barrier(result_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+                command_buffer.barrier(acc_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL);
+            } else {
+                command_buffer.barrier(result_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL);
+                command_buffer.barrier(acc_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+            }
+
+            command_buffer.dispatch({
+                .pipeline = raytracing,
+                .group_size = { .vec { window_width, window_height, 1U, } },
+                .local_group_size = { .vec { 8U, 8U, 1U, } },
+                .params = {
+                    main_scene.scene_buffer_address(),
+                    main_scene.bvh_buffer_address(),
+                    main_scene.indices_buffer_address(),
+                    main_scene.positions_buffer_address(),
+                    main_scene.normals_buffer_address(),
+                    main_scene.uvs_buffer_address(),
+                    main_scene.materials_buffer_address(),
+                    textures,
+                },
+            });
+
+            // TODO: Refactor backbuffer acquisition
+            auto backbuffer_storage_index = device.get_texture(backbuffer).get_storage_index();
+            uint64_t out = (virtual_frame_index == 0U) ? ((uint64_t(result_storage_index) << 32U) | backbuffer_storage_index) : ((uint64_t(acc_storage_index) << 32U) | backbuffer_storage_index);
+            command_buffer.dispatch({
+                .pipeline = tonemapping,
+                .group_size = { .vec { window_width, window_height, 1U, } },
+                .local_group_size = { .vec { 8U, 8U, 1U, } },
+                .params = {
+                    main_scene.scene_buffer_address(),
+                    main_scene.bvh_buffer_address(),
+                    main_scene.indices_buffer_address(),
+                    main_scene.positions_buffer_address(),
+                    main_scene.normals_buffer_address(),
+                    main_scene.uvs_buffer_address(),
+                    main_scene.materials_buffer_address(),
+                    out,
+                },
+            });
+        }
+
+        command_buffer.barrier(backbuffer, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
         command_buffer.begin_renderpass({
             .render_area = {
                 .x = static_cast<int32_t>(draw_data->DisplayPos.x),
@@ -312,21 +379,20 @@ int main() {
             .color_attachments = color_attachment,
         });
 
-        struct draw_params {
-            uintptr_t vertex_buffer;
-            float scale[2U];
-            float translate[2U];
-            uint32_t texture_index;
-        };
-
-        uint32_t draw_index = 0U;
-        std::array<draw_params, 100U> draws;
+        auto& draws_uniform_buffer = device.get_bindingmodel().get_draws_uniform_buffer();
         for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
             auto* cmd_list = draw_data->CmdLists[index];
-
-            for (auto& draw_command : cmd_list->CmdBuffer) {
-                draws[draw_index] = draw_params{
-                    .vertex_buffer = vertex_buffer.device_address,
+            auto offset = draws_uniform_buffer.offset;
+            {
+                struct ui_params {
+                    // uintptr_t vertex_buffer;
+                    float scale[2U];
+                    float translate[2U];
+                    uint32_t texture_index;
+                };
+                auto* ui_param = draws_uniform_buffer.allocate<ui_params>();
+                *ui_param = ui_params{
+                    // .vertex_buffer = vertex_buffer.device_address,
                     .scale {
                         2.f / draw_data->DisplaySize.x,
                         2.f / draw_data->DisplaySize.y,
@@ -337,60 +403,52 @@ int main() {
                     },
                     .texture_index = ui_texture.get_sampled_index(),
                 };
+            }
 
-                command_buffer.render({
+            for (auto& draw_command : cmd_list->CmdBuffer) {
+                command_buffer.draw_indexed({
                     .pipeline = graphics,
                     .index_buffer = index_buffer_handle,
                     .vertex_count = draw_command.ElemCount,
                     .vertex_offset = draw_command.VtxOffset,
                     .index_offset = draw_command.IdxOffset,
                     .instance_count = 1U,
-                    .uniforms_offset = 0U,
+                    .uniforms_address = draws_uniform_buffer.device_address + offset,
+                    .vertex_address = vertex_buffer.device_address,
                 });
-
-                draw_index++;
             }
         }
 
-        memcpy(uniform_buffer.mapped_ptr, draws.data(), sizeof(draw_params) * draw_index);
-
         command_buffer.end_renderpass();
-        command_buffer.barrier(surface.get_backbuffer_image(), VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        command_buffer.barrier(backbuffer, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         command_buffer.stop();
 
-        // device.submit(command_buffers, acquire_semaphore, semaphore);
-        // device.wait(semaphore);
-        // device.present(surface_handle, {});
-
-        device.submit(command_buffers, acquire_semaphore, submit_semaphore);
-        device.present(surface_handle, submit_semaphore);
+        device.submit_before_present(surface_handle, &command_buffer, 1U);
+        device.present(surface_handle);
+        device.wait();
 
         auto end = std::chrono::system_clock::now();
         frame_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        frame_count++;
 
         RD_END_CAPTURE;
     }
 
-    device.wait(semaphore);
-
+    device.wait();
     device.destroy_surface(surface_handle);
 
     device.destroy_pipeline(compute);
     device.destroy_pipeline(graphics);
-
-    device.destroy_semaphore(semaphore);
-    for (auto& submit_semaphore : submit_semaphores) {
-        device.destroy_semaphore(submit_semaphore);
-    }
-    for (auto& acquire_semaphore : acquire_semaphores) {
-        device.destroy_semaphore(acquire_semaphore);
-    }
+    device.destroy_pipeline(raytracing);
+    device.destroy_pipeline(tonemapping);
 
     device.destroy_texture(gpu_texture_handle);
     device.destroy_texture(second_texture);
     device.destroy_texture(output_texture_handle);
     device.destroy_texture(ui_texture_handle);
+    device.destroy_texture(acc_handle);
+    device.destroy_texture(result_handle);
 
     device.destroy_buffer(staging_buffer_handle);
     device.destroy_buffer(vertex_buffer_handle);

@@ -1,3 +1,6 @@
 [submodule "vcpkg"]
 	path = vcpkg
 	url = git@github.com:microsoft/vcpkg.git
+[submodule "tracy"]
+	path = tracy
+	url = git@github.com:wolfpld/tracy.git

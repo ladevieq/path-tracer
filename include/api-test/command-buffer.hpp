@@ -22,10 +22,22 @@ struct device_buffer;
 struct device_pipeline;
 
 struct dispatch_params {
+    enum class PARAM_BINDING : uint32_t {
+        PARAM1,
+        PARAM2,
+        PARAM3,
+        PARAM4,
+        PARAM5,
+        PARAM6,
+        PARAM7,
+        PARAM8,
+        MAX
+    };
+
     handle<device_pipeline> pipeline;
     vec3u                   group_size;
     vec3u                   local_group_size;
-    uint32_t                uniforms_offset;
+    uint64_t                params[static_cast<uint32_t>(PARAM_BINDING::MAX)];
 };
 
 struct renderpass_params {
@@ -41,14 +53,30 @@ public:
     rect render_area;
     std::span<handle<device_texture>> color_attachments;
 };
+
 struct draw_params {
+    handle<device_pipeline> pipeline;
+    handle<device_buffer>   index_buffer;
+    uint32_t vertex_count;
+    uint32_t vertex_offset;
+    uint32_t instance_count;
+    uint64_t globals_address = 0U; // TODO: This is probably stupid and should be set elsewhere once ???
+    uint64_t instances_address = 0U;
+    uint64_t uniforms_address = 0U;
+    uint64_t vertex_address = 0U;
+};
+
+struct draw_indexed_params {
     handle<device_pipeline> pipeline;
     handle<device_buffer>   index_buffer;
     uint32_t vertex_count;
     uint32_t vertex_offset;
     uint32_t index_offset;
     uint32_t instance_count;
-    uint32_t uniforms_offset;
+    uint64_t globals_address = 0U; // TODO: This is probably stupid and should be set elsewhere once ???
+    uint64_t instances_address = 0U;
+    uint64_t uniforms_address = 0U;
+    uint64_t vertex_address = 0U;
 };
 
 struct command_buffer {
@@ -68,7 +96,8 @@ struct graphics_command_buffer: public command_buffer {
     void dispatch(const dispatch_params& params) const;
 
     void begin_renderpass(const renderpass_params& params) const;
-    void render(const draw_params& params) const;
+    void draw(const draw_params& params) const;
+    void draw_indexed(const draw_indexed_params& params) const;
     void end_renderpass() const;
 };
 
