@@ -13,6 +13,13 @@ enum BindlessSetType : uint32_t {
     MAX,
 };
 
+enum ConstantType : uint32_t {
+    GLOBALS,
+    INSTANCES,
+    DRAWS,
+    VERTEX_BUFFER
+};
+
 enum SamplerType : uint32_t {
     NEAREST,
     LINEAR,
@@ -22,19 +29,29 @@ enum SamplerType : uint32_t {
 struct device_buffer;
 
 struct bindless_model {
-#ifndef USE_VK_DESCRIPTOR_BUFFERS
-    [[nodiscard]] const device_buffer& get_uniform_buffer() const;
+#ifndef USE_VK_DESCRIPTOR_BUFFER
+    [[nodiscard]] device_buffer& get_draws_uniform_buffer() const;
+    [[nodiscard]] device_buffer& get_globals_uniform_buffer() const;
 
     static bindless_model     create_bindless_model();
 
     static void               destroy_bindless_model(bindless_model& bindless);
 
-    VkPipelineLayout          layout;
+    VkPipelineLayout          graphics_layout;
+    VkPipelineLayout          compute_layout;
     VkDescriptorSet           sets[BindlessSetType::MAX];
+
+private:
+    static constexpr size_t max_push_constants_size = 128ULL;
+
+public:
+    static constexpr size_t max_push_constants_slots_size = 8U;
+    static constexpr size_t max_push_constants_slots = max_push_constants_size / max_push_constants_slots_size;
 
 private:
     VkDescriptorSetLayout     sets_layout[BindlessSetType::MAX];
     VkDescriptorPool          descriptor_pool;
+    handle<device_buffer>     globals_uniform_buffer_handle;
     handle<device_buffer>     instances_uniform_buffer_handle;
     handle<device_buffer>     draws_uniform_buffer_handle;
 
@@ -53,6 +70,7 @@ private:
 
     VkSampler samplers[SamplerType::MAX_SAMPLER];
 
+    static constexpr size_t globals_uniform_buffer_size = 64ULL * 1024ULL;
     static constexpr size_t instances_uniform_buffer_size = 64ULL * 1024ULL;
     static constexpr size_t draws_uniform_buffer_size = 64ULL * 1024ULL;
 #else

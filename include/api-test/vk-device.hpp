@@ -31,15 +31,21 @@ class vkdevice {
 
     handle<device_texture>   create_texture(const texture_desc& desc);
 
+    handle<device_sampler>   create_sampler(const sampler_desc& desc);
+
     handle<device_buffer>    create_buffer(const buffer_desc& desc);
 
-    handle<device_pipeline>  create_pipeline(const pipeline_desc& desc);
+    handle<device_pipeline>  create_graphics_pipeline(const graphics_pipeline_desc& desc);
+
+    handle<device_pipeline>  create_compute_pipeline(const compute_pipeline_desc& desc);
 
     handle<device_surface>   create_surface(const surface_desc& desc);
 
     handle<device_semaphore> create_semaphore(const semaphore_desc& desc);
 
     void                     destroy_texture(handle<device_texture> handle);
+
+    void                     destroy_sampler(handle<device_sampler> handle);
 
     void                     destroy_buffer(handle<device_buffer> handle);
 
@@ -49,16 +55,20 @@ class vkdevice {
 
     void                     destroy_surface(handle<device_surface> handle);
 
-    template<typename array_type>
-    void allocate_command_buffers(array_type& buffers, QueueType queue_type) {
-        allocate_command_buffers(static_cast<command_buffer*>(buffers.data()), buffers.size(), queue_type);
+    template<typename buffer_type>
+    void allocate_command_buffers(buffer_type* buffers, size_t count, QueueType queue_type) {
+        allocate_command_buffers(static_cast<command_buffer*>(buffers), count, queue_type);
     }
 
     [[nodiscard]] inline device_texture& get_texture(handle<device_texture> handle) {
         return textures[handle];
     }
 
-    [[nodiscard]] inline const device_buffer& get_buffer(handle<device_buffer> handle) const {
+    [[nodiscard]] inline device_sampler& get_sampler(handle<device_sampler> handle) {
+        return samplers[handle];
+    }
+
+    [[nodiscard]] inline device_buffer& get_buffer(handle<device_buffer> handle) {
         return buffers[handle];
     }
 
@@ -86,11 +96,14 @@ class vkdevice {
         return gpu_allocator;
     }
 
-    void wait(handle<device_semaphore> semaphore_handle);
+    // uint64_t submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle);
+    uint32_t acquire_image_index(handle<device_surface> surface_handle);
+    uint32_t submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count);
+    uint32_t submit(command_buffer* buffers, uint32_t count);
 
-    void submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle);
+    void present(handle<device_surface> surface_handle);
 
-    void present(handle<device_surface> surface_handle, handle<device_semaphore> semaphore_handle);
+    void wait();
 
     private:
     vkdevice() = default;
@@ -103,38 +116,41 @@ class vkdevice {
     void create_swapchain(const surface_desc& desc, device_surface& surface);
 
     // TODO: Wrap in a struct called adapter ?
-    void                       create_instance();
+    void                        create_instance();
 
-    void                       create_device();
+    void                        create_device();
 
-    void                       create_memory_allocator();
+    void                        create_memory_allocator();
 
-    void                       create_command_pools();
+    void                        create_command_pools();
 
-    void                       pick_physical_device();
+    void                        pick_physical_device();
 
-    static bool                device_support_features(VkPhysicalDevice physical_dev);
+    static bool                 device_support_features(VkPhysicalDevice physical_dev);
 
-    void                       create_debug_layer_callback();
+    void                        create_debug_layer_callback();
 
-    queue                      queues[static_cast<uint32_t>(QueueType::MAX)];
+    queue                       queues[static_cast<uint32_t>(QueueType::MAX)];
 
-    VkInstance                 instance;
-    VkPhysicalDevice           physical_device;
-    VkDevice                   device;
+    VkInstance                  instance;
+    VkPhysicalDevice            physical_device;
+    VkDevice                    device;
 
-    VmaAllocator               gpu_allocator;
+    VmaAllocator                gpu_allocator;
 
-    bindless_model             bindless;
+    bindless_model              bindless;
 
-    static constexpr size_t    max_allocable_command_buffers  = 16;
-    static constexpr size_t    max_submitable_command_buffers = 16;
+    static constexpr size_t     max_allocable_command_buffers  = 16;
+    static constexpr size_t     max_submitable_command_buffers = 16;
 
-    freelist<device_texture>   textures;
-    freelist<device_buffer>    buffers;
-    freelist<device_pipeline>  pipelines;
-    freelist<device_surface>   surfaces;
-    freelist<device_semaphore> semaphores;
+    freelist<device_texture>    textures;
+    freelist<device_sampler>    samplers;
+    freelist<device_buffer>     buffers;
+    freelist<device_pipeline>   pipelines;
+    freelist<device_surface>    surfaces;
+    freelist<device_semaphore>  semaphores;
+
+    device_semaphore            timeline_semaphore;
 
     static vkdevice            render_device;
 

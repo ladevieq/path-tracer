@@ -37,6 +37,11 @@ void vkdevice::init() {
     create_memory_allocator();
 
     bindless = bindless_model::create_bindless_model();
+
+    auto semaphore = create_semaphore({
+        .type = VK_SEMAPHORE_TYPE_TIMELINE,
+    });
+    timeline_semaphore = get_semaphore(semaphore);
 }
 
 vkdevice::~vkdevice() {
@@ -50,6 +55,8 @@ vkdevice::~vkdevice() {
         vkDestroyCommandPool(device, queue.command_pool, nullptr);
     }
 
+    vkDestroySemaphore(device, timeline_semaphore.vk_semaphore, nullptr);
+
     vkDestroyDevice(device, nullptr);
 
 #ifdef _DEBUG
@@ -59,11 +66,20 @@ vkdevice::~vkdevice() {
     vkDestroyInstance(instance, nullptr);
 }
 
+void vkdevice::wait() { vkDeviceWaitIdle(device); };
+
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
     device_texture device_texture;
     device_texture.init(desc);
 
     return textures.add(device_texture);
+}
+
+handle<device_sampler>   vkdevice::create_sampler(const sampler_desc& desc) {
+    device_sampler device_sampler;
+    device_sampler.init(desc);
+
+    return samplers.add(device_sampler);
 }
 
 handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
@@ -113,172 +129,177 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     return buffers.add(device_buffer);
 }
 
-handle<device_pipeline> vkdevice::create_pipeline(const pipeline_desc& desc) {
+handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeline_desc& desc) {
     device_pipeline device_pipeline{
     };
-    if (!desc.cs_code.empty()) {
-        VkPipelineShaderStageCreateInfo stage_create_info{
+
+    VkPipelineShaderStageCreateInfo shader_stages_create_info[2U]{ {
             .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .pNext               = nullptr,
             .flags               = 0U,
-            .stage               = VK_SHADER_STAGE_COMPUTE_BIT,
-            .module              = create_shader_module(desc.cs_code),
+            .stage               = VK_SHADER_STAGE_VERTEX_BIT,
+            .module              = create_shader_module(desc.vs_code),
             .pName               = "main",
             .pSpecializationInfo = nullptr,
-        };
-
-        VkComputePipelineCreateInfo create_info{
-            .sType              = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .pNext              = nullptr,
-            .flags              = 0U,
-            .stage              = stage_create_info,
-            .layout             = bindless.layout,
-            .basePipelineHandle = nullptr,
-            .basePipelineIndex  = 0,
-        };
-
-        device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
-        VKCHECK(vkCreateComputePipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
-
-        vkDestroyShaderModule(device, stage_create_info.module, nullptr);
-    } else {
-        VkPipelineShaderStageCreateInfo shader_stages_create_info[2U]{
-            {
-                .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .pNext               = nullptr,
-                .flags               = 0U,
-                .stage               = VK_SHADER_STAGE_VERTEX_BIT,
-                .module              = create_shader_module(desc.vs_code),
-                .pName               = "main",
-                .pSpecializationInfo = nullptr,
-            },
-            {
-                .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .pNext               = nullptr,
-                .flags               = 0U,
-                .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module              = create_shader_module(desc.fs_code),
-                .pName               = "main",
-                .pSpecializationInfo = nullptr,
-            },
-        };
-
-        VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        };
-
-        VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info{
-            .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-            .pNext                  = nullptr,
-            .flags                  = 0U,
-            .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-            .primitiveRestartEnable = VK_FALSE,
-        };
-
-        VkPipelineViewportStateCreateInfo viewport_state_create_info{
-            .sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-            .pNext         = nullptr,
-            .flags         = 0U,
-            .viewportCount = 1U,
-            .pViewports    = nullptr,
-            .scissorCount  = 1U,
-            .pScissors     = nullptr,
-        };
-
-        VkPipelineRasterizationStateCreateInfo rasterization_state_create_info{
-            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-            .pNext                   = nullptr,
-            .flags                   = 0U,
-            .depthClampEnable        = VK_FALSE,
-            .rasterizerDiscardEnable = VK_FALSE,
-            .polygonMode             = VK_POLYGON_MODE_FILL,
-            .cullMode                = VK_CULL_MODE_NONE,
-            .frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-            .depthBiasEnable         = VK_FALSE,
-            .lineWidth               = 1.f,
-        };
-
-        VkPipelineMultisampleStateCreateInfo multisample_state_create_info{
-            .sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-            .pNext                = nullptr,
-            .flags                = 0,
-            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-            .sampleShadingEnable  = VK_FALSE,
-            .minSampleShading     = 1.f,
-        };
-
-        VkPipelineColorBlendAttachmentState color_attachment_state{
-            .blendEnable         = VK_TRUE,
-            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            .colorBlendOp        = VK_BLEND_OP_ADD,
-            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            .alphaBlendOp        = VK_BLEND_OP_ADD,
-            .colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-        };
-
-        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info{
-            .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-            .pNext           = nullptr,
-            .flags           = 0,
-            .logicOpEnable   = VK_FALSE,
-            .attachmentCount = 1,
-            .pAttachments    = &color_attachment_state,
-        };
-
-        VkDynamicState dynamic_states[]{
-            VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_SCISSOR,
-        };
-
-        VkPipelineDynamicStateCreateInfo dynamic_state_create_info{
-            .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-            .pNext             = nullptr,
-            .flags             = 0U,
-            .dynamicStateCount = sizeof(dynamic_states) / sizeof(VkDynamicState),
-            .pDynamicStates    = dynamic_states,
-        };
-
-        VkPipelineRenderingCreateInfo pipeline_rendering_create_info{
-            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-            .pNext                   = nullptr,
-            .viewMask                = 0U,
-            .colorAttachmentCount    = static_cast<uint32_t>(desc.color_attachments_format.size()),
-            .pColorAttachmentFormats = desc.color_attachments_format.data(),
-            .depthAttachmentFormat   = VK_FORMAT_UNDEFINED,
-            .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
-        };
-
-        VkGraphicsPipelineCreateInfo create_info{
-            .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-            .pNext               = &pipeline_rendering_create_info,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .pNext               = nullptr,
             .flags               = 0U,
-            .stageCount          = sizeof(shader_stages_create_info) / sizeof(VkPipelineShaderStageCreateInfo),
-            .pStages             = shader_stages_create_info,
-            .pVertexInputState   = &vertex_input_state_create_info,
-            .pInputAssemblyState = &input_assembly_create_info,
-            .pTessellationState  = nullptr,
-            .pViewportState      = &viewport_state_create_info,
-            .pRasterizationState = &rasterization_state_create_info,
-            .pMultisampleState   = &multisample_state_create_info,
-            .pDepthStencilState  = nullptr,
-            .pColorBlendState    = &color_blend_state_create_info,
-            .pDynamicState       = &dynamic_state_create_info,
-            .layout              = bindless.layout,
-            .renderPass          = nullptr,
-            .subpass             = 0U,
-            .basePipelineHandle  = nullptr,
-            .basePipelineIndex   = 0,
-        };
+            .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module              = create_shader_module(desc.fs_code),
+            .pName               = "main",
+            .pSpecializationInfo = nullptr,
+        },
+    };
 
-        device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        VKCHECK(vkCreateGraphicsPipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
+    VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    };
 
-        for(auto& stage_create_info : shader_stages_create_info) {
-            vkDestroyShaderModule(device, stage_create_info.module, nullptr);
-        }
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info{
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .pNext                  = nullptr,
+        .flags                  = 0U,
+        .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE,
+    };
+
+    VkPipelineViewportStateCreateInfo viewport_state_create_info{
+        .sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .pNext         = nullptr,
+        .flags         = 0U,
+        .viewportCount = 1U,
+        .pViewports    = nullptr,
+        .scissorCount  = 1U,
+        .pScissors     = nullptr,
+    };
+
+    VkPipelineRasterizationStateCreateInfo rasterization_state_create_info{
+        .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = 0U,
+        .depthClampEnable        = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode             = VK_POLYGON_MODE_FILL,
+        .cullMode                = VK_CULL_MODE_NONE,
+        .frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .depthBiasEnable         = VK_FALSE,
+        .lineWidth               = 1.f,
+    };
+
+    VkPipelineMultisampleStateCreateInfo multisample_state_create_info{
+        .sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .pNext                = nullptr,
+        .flags                = 0,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable  = VK_FALSE,
+        .minSampleShading     = 1.f,
+    };
+
+    VkPipelineColorBlendAttachmentState color_attachment_state{
+        .blendEnable         = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp        = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .alphaBlendOp        = VK_BLEND_OP_ADD,
+        .colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    };
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state_create_info{
+        .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .pNext           = nullptr,
+        .flags           = 0,
+        .logicOpEnable   = VK_FALSE,
+        .attachmentCount = 1,
+        .pAttachments    = &color_attachment_state,
+    };
+
+    VkDynamicState dynamic_states[]{
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info{
+        .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .pNext             = nullptr,
+        .flags             = 0U,
+        .dynamicStateCount = sizeof(dynamic_states) / sizeof(VkDynamicState),
+        .pDynamicStates    = dynamic_states,
+    };
+
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info{
+        .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                   = nullptr,
+        .viewMask                = 0U,
+        .colorAttachmentCount    = static_cast<uint32_t>(desc.color_attachments_format.size()),
+        .pColorAttachmentFormats = desc.color_attachments_format.data(),
+        .depthAttachmentFormat   = VK_FORMAT_UNDEFINED,
+        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+    };
+
+    VkGraphicsPipelineCreateInfo create_info{
+        .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext               = &pipeline_rendering_create_info,
+        .flags               = 0U,
+        .stageCount          = sizeof(shader_stages_create_info) / sizeof(VkPipelineShaderStageCreateInfo),
+        .pStages             = shader_stages_create_info,
+        .pVertexInputState   = &vertex_input_state_create_info,
+        .pInputAssemblyState = &input_assembly_create_info,
+        .pTessellationState  = nullptr,
+        .pViewportState      = &viewport_state_create_info,
+        .pRasterizationState = &rasterization_state_create_info,
+        .pMultisampleState   = &multisample_state_create_info,
+        .pDepthStencilState  = nullptr,
+        .pColorBlendState    = &color_blend_state_create_info,
+        .pDynamicState       = &dynamic_state_create_info,
+        .layout              = bindless.graphics_layout,
+        .renderPass          = nullptr,
+        .subpass             = 0U,
+        .basePipelineHandle  = nullptr,
+        .basePipelineIndex   = 0,
+    };
+
+    device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    VKCHECK(vkCreateGraphicsPipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
+
+    for(auto& stage_create_info : shader_stages_create_info) {
+        vkDestroyShaderModule(device, stage_create_info.module, nullptr);
     }
+
+    return pipelines.add(device_pipeline);
+}
+
+handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline_desc& desc) {
+    device_pipeline device_pipeline{
+    };
+
+    VkPipelineShaderStageCreateInfo stage_create_info{
+        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext               = nullptr,
+        .flags               = 0U,
+        .stage               = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module              = create_shader_module(desc.cs_code),
+        .pName               = "main",
+        .pSpecializationInfo = nullptr,
+    };
+
+    VkComputePipelineCreateInfo create_info{
+        .sType              = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext              = nullptr,
+        .flags              = 0U,
+        .stage              = stage_create_info,
+        .layout             = bindless.compute_layout,
+        .basePipelineHandle = nullptr,
+        .basePipelineIndex  = 0,
+    };
+
+    device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
+    VKCHECK(vkCreateComputePipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
+
+    vkDestroyShaderModule(device, stage_create_info.module, nullptr);
 
     return pipelines.add(device_pipeline);
 }
@@ -300,6 +321,17 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
     }
 
     create_swapchain(desc, device_surface);
+
+    assert(surface_desc::max_image_count >= device_surface.image_count);
+
+    for (uint32_t index = 0u; index < device_surface.image_count; index++) {
+        device_surface.acquire_semaphores[index] = create_semaphore({
+            .type = VK_SEMAPHORE_TYPE_BINARY,
+        });
+        device_surface.submit_semaphores[index]  = create_semaphore({
+            .type = VK_SEMAPHORE_TYPE_BINARY,
+        });
+    }
 
     return surfaces.add(device_surface);
 }
@@ -355,11 +387,16 @@ void vkdevice::destroy_semaphore(handle<device_semaphore> handle) {
 }
 
 void vkdevice::destroy_surface(handle<device_surface> handle) {
-    const auto& surface = vkdevice::get_surface(handle);
+    auto& surface = vkdevice::get_surface(handle);
 
     for (auto texture_index{0U}; texture_index < surface.image_count; texture_index++) {
         auto texture_handle = surface.swapchain_images[texture_index];
         destroy_texture(texture_handle);
+    }
+
+    for (uint32_t index = 0u; index < surface.image_count; index++) {
+        destroy_semaphore(surface.acquire_semaphores[index]);
+        destroy_semaphore(surface.submit_semaphores[index]);
     }
 
     vkDestroySwapchainKHR(device, surface.vk_swapchain, nullptr);
@@ -367,27 +404,90 @@ void vkdevice::destroy_surface(handle<device_surface> handle) {
     vkDestroySurfaceKHR(instance, surface.vk_surface, nullptr);
 }
 
-void vkdevice::wait(handle<device_semaphore> semaphore_handle) {
-    const auto& semaphore = vkdevice::get_render_device().get_semaphore(semaphore_handle);
-    VkSemaphoreWaitInfo wait_info {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .pNext = nullptr,
-        .flags = 0U,
-        .semaphoreCount = 1U,
-        .pSemaphores = &semaphore.vk_semaphore,
-        .pValues = &semaphore.value,
-    };
-    VKCHECK(vkWaitSemaphores(device, &wait_info, -1));
-    vkDeviceWaitIdle(device);
-}
+// uint64_t vkdevice::submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle) {
+//     assert((max_submitable_command_buffers - buffers.size()) >= 0);
+//     const auto queue_type = buffers[0].queue_type;
+// 
+//     VkCommandBufferSubmitInfo command_buffers_info[buffers.size()];
+// 
+//     for (auto index{ 0U }; index < buffers.size(); index++) {
+//         assert(queue_type == buffers[index].queue_type);
+// 
+//         auto& command_buffer_info         = command_buffers_info[index];
+//         command_buffer_info.sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+//         command_buffer_info.pNext         = nullptr;
+//         command_buffer_info.commandBuffer = buffers[index].vk_command_buffer;
+//         command_buffer_info.deviceMask    = 0U;
+//     }
+// 
+//     VkSemaphoreSubmitInfo wait_semaphore_info{
+//         .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+//         .pNext       = nullptr,
+//         .stageMask   = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+//         .deviceIndex = 0U,
+//     };
+// 
+//     VkSemaphoreSubmitInfo signal_semaphore_infos[2U];
+// 
+//     VkSubmitInfo2 submit_info{
+//         .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+//         .pNext                    = nullptr,
+//         .flags                    = 0U,
+//         .waitSemaphoreInfoCount   = 0U,
+//         .commandBufferInfoCount   = static_cast<uint32_t>(buffers.size()),
+//         .pCommandBufferInfos      = command_buffers_info,
+//         .pSignalSemaphoreInfos    = signal_semaphore_infos,
+//     };
+// 
+//     if (wait_handle.is_valid()) {
+//         const auto& wait = vkdevice::get_render_device().get_semaphore(wait_handle);
+//         wait_semaphore_info.semaphore      = wait.vk_semaphore;
+//         wait_semaphore_info.value          = wait.value;
+//         submit_info.waitSemaphoreInfoCount++;
+//         submit_info.pWaitSemaphoreInfos    = &wait_semaphore_info;
+//     }
+// 
+//     if (signal_handle.is_valid()) {
+//         auto& signal = vkdevice::get_render_device().get_semaphore(signal_handle);
+//         signal_semaphore_infos[0U] = {
+//             .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+//             .pNext          = nullptr,
+//             .semaphore      = signal.vk_semaphore,
+//             .value          = signal.value,
+//             .stageMask      = VK_PIPELINE_STAGE_2_NONE,
+//             .deviceIndex    = 0U,
+//         };
+//         submit_info.signalSemaphoreInfoCount++;
+//     }
+// 
+//     uint64_t ret = -1;
+// 
+//     if (fence_handle.is_valid()) {
+//         auto& fence = vkdevice::get_render_device().get_semaphore(fence_handle);
+//         auto fence_index = submit_info.signalSemaphoreInfoCount;
+//         signal_semaphore_infos[fence_index] = {
+//             .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+//             .pNext          = nullptr,
+//             .semaphore      = fence.vk_semaphore,
+//             .value          = ++fence.value,
+//             .stageMask      = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+//             .deviceIndex    = 0U,
+//         };
+//         ret = fence.value;
+//     }
+// 
+//     VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
+// 
+//     return ret;
+// }
 
-void vkdevice::submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle) {
-    assert((max_submitable_command_buffers - buffers.size()) >= 0);
+uint32_t vkdevice::submit(command_buffer* buffers, uint32_t count) {
+    assert((max_submitable_command_buffers - count) >= 0);
     const auto queue_type = buffers[0].queue_type;
 
-    VkCommandBufferSubmitInfo command_buffers_info[buffers.size()];
+    VkCommandBufferSubmitInfo command_buffers_info[count];
 
-    for (auto index{ 0U }; index < buffers.size(); index++) {
+    for (auto index{ 0U }; index < count; index++) {
         assert(queue_type == buffers[index].queue_type);
 
         auto& command_buffer_info         = command_buffers_info[index];
@@ -397,50 +497,102 @@ void vkdevice::submit(std::span<command_buffer> buffers, handle<device_semaphore
         command_buffer_info.deviceMask    = 0U;
     }
 
-    VkSemaphoreSubmitInfo wait_semaphore_info{
-        .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .pNext       = nullptr,
-        .stageMask   = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-        .deviceIndex = 0U,
+    VkSubmitInfo2 submit_info{
+        .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .pNext                    = nullptr,
+        .flags                    = 0U,
+        .waitSemaphoreInfoCount   = 0U,
+        .pWaitSemaphoreInfos      = nullptr,
+        .commandBufferInfoCount   = count,
+        .pCommandBufferInfos      = command_buffers_info,
     };
 
-    VkSemaphoreSubmitInfo signal_semaphore_info{
-        .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .pNext       = nullptr,
-        .stageMask   = VK_PIPELINE_STAGE_2_NONE,
-        .deviceIndex = 0U,
+    auto& fence = timeline_semaphore;
+    VkSemaphoreSubmitInfo signal_semaphore_infos[] = {
+        {
+            .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .pNext       = nullptr,
+            .semaphore   = fence.vk_semaphore,
+            .value       = ++fence.value,
+            .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .deviceIndex = 0U,
+        },
+    };
+    submit_info.signalSemaphoreInfoCount = sizeof(signal_semaphore_infos) / sizeof(signal_semaphore_infos[0U]);
+    submit_info.pSignalSemaphoreInfos = signal_semaphore_infos;
+
+    VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
+
+    return fence.value;
+}
+
+uint32_t vkdevice::submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count) {
+    assert((max_submitable_command_buffers - count) >= 0);
+    const auto queue_type = buffers[0].queue_type;
+
+    VkCommandBufferSubmitInfo command_buffers_info[count];
+
+    for (auto index{ 0U }; index < count; index++) {
+        assert(queue_type == buffers[index].queue_type);
+
+        auto& command_buffer_info         = command_buffers_info[index];
+        command_buffer_info.sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        command_buffer_info.pNext         = nullptr;
+        command_buffer_info.commandBuffer = buffers[index].vk_command_buffer;
+        command_buffer_info.deviceMask    = 0U;
+    }
+
+    const auto& surface = get_surface(surface_handle);
+    auto& wait = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
+    VkSemaphoreSubmitInfo wait_semaphore_info = {
+            .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .pNext       = nullptr,
+            .semaphore   = wait.vk_semaphore,
+            .value       = wait.value,
+            .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .deviceIndex = 0U,
     };
 
     VkSubmitInfo2 submit_info{
         .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
         .pNext                    = nullptr,
         .flags                    = 0U,
-        .commandBufferInfoCount   = static_cast<uint32_t>(buffers.size()),
+        .waitSemaphoreInfoCount   = 1U,
+        .pWaitSemaphoreInfos      = &wait_semaphore_info,
+        .commandBufferInfoCount   = count,
         .pCommandBufferInfos      = command_buffers_info,
     };
 
-    if (wait_handle.is_valid()) {
-        const auto& wait = vkdevice::get_render_device().get_semaphore(wait_handle);
-        wait_semaphore_info.semaphore      = wait.vk_semaphore;
-        wait_semaphore_info.value          = wait.value;
-        submit_info.waitSemaphoreInfoCount = 1U;
-        submit_info.pWaitSemaphoreInfos    = &wait_semaphore_info;
-    }
-
-    if (signal_handle.is_valid()) {
-        auto& signal = vkdevice::get_render_device().get_semaphore(signal_handle);
-        signal_semaphore_info.semaphore      = signal.vk_semaphore;
-        signal_semaphore_info.value          = ++signal.value;
-
-        submit_info.signalSemaphoreInfoCount = 1U;
-        submit_info.pSignalSemaphoreInfos    = &signal_semaphore_info;
-    }
+    auto& fence = timeline_semaphore;
+    auto& signal = get_semaphore(surface.submit_semaphores[surface.frame_index]);
+    VkSemaphoreSubmitInfo signal_semaphore_infos[] = {
+        {
+            .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .pNext       = nullptr,
+            .semaphore   = fence.vk_semaphore,
+            .value       = ++fence.value,
+            .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .deviceIndex = 0U,
+        },
+        {
+            .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .pNext       = nullptr,
+            .semaphore   = signal.vk_semaphore,
+            .value       = signal.value,
+            .stageMask   = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .deviceIndex = 0U,
+        },
+    };
+    submit_info.signalSemaphoreInfoCount = sizeof(signal_semaphore_infos) / sizeof(signal_semaphore_infos[0U]);
+    submit_info.pSignalSemaphoreInfos = signal_semaphore_infos;
 
     VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
+
+    return fence.value;
 }
 
-void vkdevice::present(handle<device_surface> surface_handle, handle<device_semaphore> semaphore_handle) {
-    const auto& surface = vkdevice::get_render_device().get_surface(surface_handle);
+void vkdevice::present(handle<device_surface> surface_handle) {
+    auto& surface = vkdevice::get_render_device().get_surface(surface_handle);
     VkResult result;
     VkPresentInfoKHR present_info{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -451,15 +603,14 @@ void vkdevice::present(handle<device_surface> surface_handle, handle<device_sema
         .pResults = &result,
     };
 
-    if (semaphore_handle.is_valid()) {
-        const auto& semaphore = vkdevice::get_render_device().get_semaphore(semaphore_handle);
-        present_info.waitSemaphoreCount = 1U;
-        present_info.pWaitSemaphores = &semaphore.vk_semaphore;
-    }
+    const auto& semaphore = get_semaphore(surface.submit_semaphores[surface.frame_index]);
+    present_info.waitSemaphoreCount = 1U;
+    present_info.pWaitSemaphores = &semaphore.vk_semaphore;
 
     VKCHECK(vkQueuePresentKHR(queues[static_cast<uint32_t>(QueueType::GRAPHICS)].vk_queue, &present_info));
 
     VKCHECK(result);
+    surface.frame_index = (surface.frame_index + 1) % surface.image_count;
 }
 
 // private
@@ -847,6 +998,7 @@ void vkdevice::create_debug_layer_callback() {
 
 idlist<> device_texture::sampled_indices = {};
 idlist<> device_texture::storage_indices = {};
+idlist<> device_sampler::sampler_indices = {};
 
 void device_texture::init(const texture_desc& desc) {
     auto& render_device = vkdevice::get_render_device();
@@ -1009,14 +1161,67 @@ void device_texture::create_views() {
 }
 
 
-void device_surface::acquire_image_index(handle<device_semaphore> signal_handle) {
+void device_sampler::init(const sampler_desc& desc) {
     auto& render_device = vkdevice::get_render_device();
+    // const auto& bindless = render_device.get_bindingmodel();
     auto* device = render_device.get_device();
-    const auto& signal = render_device.get_semaphore(signal_handle);
 
-    vkAcquireNextImageKHR(device, vk_swapchain, -1, signal.vk_semaphore, nullptr, &image_index);
+    VkSamplerCreateInfo sampler_create_info{
+        .sType                      = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext                      = nullptr,
+        .flags                      = 0U,
+        .magFilter                  = desc.mag_filter,
+        .minFilter                  = desc.min_filter,
+        .mipmapMode                 = desc.mipmap_mode,
+        .addressModeU               = desc.address_mode_u,
+        .addressModeV               = desc.address_mode_v,
+        .addressModeW               = desc.address_mode_w,
+        .mipLodBias                 = desc.mip_lod_bias,
+        .anisotropyEnable           = desc.anisotropy,
+        .maxAnisotropy              = desc.max_anisotropy,
+        .compareEnable              = desc.compare_enabled,
+        .compareOp                  = desc.compare_op,
+        .minLod                     = desc.min_lod,
+        .maxLod                     = desc.max_lod,
+        .borderColor                = desc.border_color,
+        .unnormalizedCoordinates    = desc.unnomalized_coords,
+    };
+
+    VKCHECK(vkCreateSampler(device, &sampler_create_info, nullptr, &vk_sampler));
+
+    sampler_index = sampler_indices.add();
+
+    // VkWriteDescriptorSet write_descriptor_set{
+    //     .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    //     .pNext            = nullptr,
+    //     .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+    //     .dstBinding       = 1U,
+    //     .dstArrayElement  = sampler_index.id,
+    //     .descriptorCount  = 1U,
+    //     .descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+    //     .pImageInfo       = images_info,
+    //     .pBufferInfo      = nullptr,
+    //     .pTexelBufferView = nullptr,
+    // });
 }
 
-handle<device_texture> device_surface::get_backbuffer_image() const {
-    return swapchain_images[image_index];
+
+uint32_t vkdevice::acquire_image_index(handle<device_surface> surface_handle) {
+    auto& render_device = vkdevice::get_render_device();
+    auto* device = render_device.get_device();
+    auto& surface = get_surface(surface_handle);
+    const auto& signal = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
+
+    VkSemaphoreWaitInfo wait_info {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .pNext = nullptr,
+        .flags = 0U,
+        .semaphoreCount = 1U,
+        .pSemaphores = &timeline_semaphore.vk_semaphore,
+        .pValues = &timeline_semaphore.value,
+    };
+    vkWaitSemaphores(device, &wait_info, -1);
+    VKCHECK(vkAcquireNextImageKHR(device, surface.vk_swapchain, -1, signal.vk_semaphore, nullptr, &surface.image_index));
+
+    return surface.image_index;
 }

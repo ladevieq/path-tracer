@@ -1,12 +1,18 @@
 #include "vk-bindless.hpp"
 
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan_core.h>
 
 #include "vk-device.hpp"
 #include "vk-utils.hpp"
 #include "vulkan-loader.hpp"
 
-const device_buffer& bindless_model::get_uniform_buffer() const {
+device_buffer& bindless_model::get_globals_uniform_buffer() const {
+    auto& render_device = vkdevice::get_render_device();
+    return render_device.get_buffer(globals_uniform_buffer_handle);
+}
+
+device_buffer& bindless_model::get_draws_uniform_buffer() const {
     auto& render_device = vkdevice::get_render_device();
     return render_device.get_buffer(draws_uniform_buffer_handle);
 }
@@ -21,67 +27,96 @@ bindless_model bindless_model::create_bindless_model() {
     bindless.create_descriptor_pool(device);
     bindless.allocate_sets(device);
 
-    VkWriteDescriptorSet writes_descriptor_set[2U];
+    // VkWriteDescriptorSet writes_descriptor_set[BindlessSetType::MAX];
 
-    {
-        bindless.instances_uniform_buffer_handle = render_device.create_buffer({
-            .size = instances_uniform_buffer_size,
+    // {
+        bindless.globals_uniform_buffer_handle = render_device.create_buffer({
+            .size = globals_uniform_buffer_size,
             .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         });
 
-        const auto& buffer = render_device.get_buffer(bindless.instances_uniform_buffer_handle);
-        VkDescriptorBufferInfo buffer_info {
-            .buffer = buffer.vk_buffer,
-            .offset = 0U,
-            .range = VK_WHOLE_SIZE,
-        };
+    //     const auto& buffer = render_device.get_buffer(bindless.globals_uniform_buffer_handle);
+    //     VkDescriptorBufferInfo buffer_info {
+    //         .buffer = buffer.vk_buffer,
+    //         .offset = 0U,
+    //         .range = VK_WHOLE_SIZE,
+    //     };
 
-        writes_descriptor_set[0U] = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext = nullptr,
-            .dstSet = bindless.sets[BindlessSetType::INSTANCES_UNIFORMS],
-            .dstBinding = 0U,
-            .dstArrayElement = 0U,
-            .descriptorCount = 1U,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .pImageInfo = nullptr,
-            .pBufferInfo = &buffer_info,
-            .pTexelBufferView = nullptr,
-        };
-    }
+    //     writes_descriptor_set[BindlessSetType::GLOBAL] = {
+    //         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    //         .pNext = nullptr,
+    //         .dstSet = bindless.sets[BindlessSetType::GLOBAL],
+    //         .dstBinding = 3U,
+    //         .dstArrayElement = 0U,
+    //         .descriptorCount = 1U,
+    //         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+    //         .pImageInfo = nullptr,
+    //         .pBufferInfo = &buffer_info,
+    //         .pTexelBufferView = nullptr,
+    //     };
+    // }
 
-    {
+    // {
+    //     bindless.instances_uniform_buffer_handle = render_device.create_buffer({
+    //         .size = instances_uniform_buffer_size,
+    //         .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    //         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    //         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    //     });
+
+    //     const auto& buffer = render_device.get_buffer(bindless.instances_uniform_buffer_handle);
+    //     VkDescriptorBufferInfo buffer_info {
+    //         .buffer = buffer.vk_buffer,
+    //         .offset = 0U,
+    //         .range = VK_WHOLE_SIZE,
+    //     };
+
+    //     writes_descriptor_set[BindlessSetType::INSTANCES_UNIFORMS] = {
+    //         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    //         .pNext = nullptr,
+    //         .dstSet = bindless.sets[BindlessSetType::INSTANCES_UNIFORMS],
+    //         .dstBinding = 0U,
+    //         .dstArrayElement = 0U,
+    //         .descriptorCount = 1U,
+    //         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+    //         .pImageInfo = nullptr,
+    //         .pBufferInfo = &buffer_info,
+    //         .pTexelBufferView = nullptr,
+    //     };
+    // }
+
+    // {
         bindless.draws_uniform_buffer_handle = render_device.create_buffer({
             .size = draws_uniform_buffer_size,
-            .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .usages = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         });
 
-        const auto& buffer = render_device.get_buffer(bindless.draws_uniform_buffer_handle);
-        VkDescriptorBufferInfo buffer_info {
-            .buffer = buffer.vk_buffer,
-            .offset = 0U,
-            .range = VK_WHOLE_SIZE,
-        };
+    //     const auto& buffer = render_device.get_buffer(bindless.draws_uniform_buffer_handle);
+    //     VkDescriptorBufferInfo buffer_info {
+    //         .buffer = buffer.vk_buffer,
+    //         .offset = 0U,
+    //         .range = draws_uniform_buffer_size,
+    //     };
 
-        writes_descriptor_set[1U] = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext = nullptr,
-            .dstSet = bindless.sets[BindlessSetType::DRAWS_UNIFORMS],
-            .dstBinding = 0U,
-            .dstArrayElement = 0U,
-            .descriptorCount = 1U,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .pImageInfo = nullptr,
-            .pBufferInfo = &buffer_info,
-            .pTexelBufferView = nullptr,
-        };
-    }
+    //     writes_descriptor_set[BindlessSetType::DRAWS_UNIFORMS] = {
+    //         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    //         .pNext = nullptr,
+    //         .dstSet = bindless.sets[BindlessSetType::DRAWS_UNIFORMS],
+    //         .dstBinding = 0U,
+    //         .dstArrayElement = 0U,
+    //         .descriptorCount = 1U,
+    //         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+    //         .pImageInfo = nullptr,
+    //         .pBufferInfo = &buffer_info,
+    //         .pTexelBufferView = nullptr,
+    //     };
+    // }
 
-    vkUpdateDescriptorSets(device, sizeof(writes_descriptor_set) / sizeof(VkWriteDescriptorSet), writes_descriptor_set, 0U, nullptr);
+    // vkUpdateDescriptorSets(device, sizeof(writes_descriptor_set) / sizeof(VkWriteDescriptorSet), writes_descriptor_set, 0U, nullptr);
 #else
     VkBufferCreateInfo create_info{
         .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -126,11 +161,12 @@ void bindless_model::destroy_bindless_model(bindless_model& bindless) {
         vkDestroyDescriptorSetLayout(device, bindless.sets_layout[index], nullptr);
     }
 
-    vkDestroyPipelineLayout(device, bindless.layout, nullptr);
+    vkDestroyPipelineLayout(device, bindless.graphics_layout, nullptr);
+    vkDestroyPipelineLayout(device, bindless.compute_layout, nullptr);
 
     bindless.destroy_immutable_samplers(device);
 
-    render_device.destroy_buffer(bindless.instances_uniform_buffer_handle);
+    // render_device.destroy_buffer(bindless.instances_uniform_buffer_handle);
     render_device.destroy_buffer(bindless.draws_uniform_buffer_handle);
 }
 
@@ -139,6 +175,7 @@ void bindless_model::create_layout(VkDevice device) {
     //  Binding 0 Storage images
     //  Binding 1 Sampled images
     //  Binding 2 Samplers
+    //  Binding 3 Dynamic Uniform Buffer
     {
         VkDescriptorSetLayoutBinding set_layout_bindings[]{
             {
@@ -162,12 +199,21 @@ void bindless_model::create_layout(VkDevice device) {
                 .stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = nullptr,
             },
+            // {
+            //     .binding            = 3U,
+            //     .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            //     .descriptorCount    = 1U,
+            //     .stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            //     .pImmutableSamplers = nullptr,
+            // },
         };
 
         VkDescriptorBindingFlags flags[]{
             VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT,
             VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT,
             VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT,
+            // VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT,
+            // 0U,
         };
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo layout_binding_flags{
@@ -195,7 +241,7 @@ void bindless_model::create_layout(VkDevice device) {
             {
                 .binding            = 0U,
                 .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                .descriptorCount    = 1,
+                .descriptorCount    = 1U,
                 .stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = nullptr,
             },
@@ -236,17 +282,50 @@ void bindless_model::create_layout(VkDevice device) {
         VKCHECK(vkCreateDescriptorSetLayout(device, &create_info, nullptr, &sets_layout[BindlessSetType::DRAWS_UNIFORMS]));
     }
 
-    VkPipelineLayoutCreateInfo create_info{
-        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext                  = nullptr,
-        .flags                  = 0U,
-        .setLayoutCount         = sizeof(sets_layout) / sizeof(VkDescriptorSetLayout),
-        .pSetLayouts            = sets_layout,
-        .pushConstantRangeCount = 0U,
-        .pPushConstantRanges    = nullptr,
-    };
+    {
+        VkPushConstantRange push_constants[] {
+            {
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                .offset = 0U,
+                .size = max_push_constants_slots_size * (max_push_constants_slots),
+            },
+        };
 
-    VKCHECK(vkCreatePipelineLayout(device, &create_info, nullptr, &layout));
+        VkPipelineLayoutCreateInfo create_info{
+            .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pNext                  = nullptr,
+            .flags                  = 0U,
+            .setLayoutCount         = sizeof(sets_layout) / sizeof(VkDescriptorSetLayout),
+            .pSetLayouts            = sets_layout,
+            .pushConstantRangeCount = sizeof(push_constants) / sizeof(push_constants[0]),
+            .pPushConstantRanges    = push_constants,
+        };
+
+        VKCHECK(vkCreatePipelineLayout(device, &create_info, nullptr, &graphics_layout));
+    }
+
+    {
+        VkPushConstantRange push_constants[] {
+            {
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                .offset = 0U,
+                .size = max_push_constants_slots_size * max_push_constants_slots,
+            },
+        };
+
+
+        VkPipelineLayoutCreateInfo create_info{
+            .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pNext                  = nullptr,
+            .flags                  = 0U,
+            .setLayoutCount         = sizeof(sets_layout) / sizeof(VkDescriptorSetLayout),
+            .pSetLayouts            = sets_layout,
+            .pushConstantRangeCount = sizeof(push_constants) / sizeof(push_constants[0]),
+            .pPushConstantRanges    = push_constants,
+        };
+
+        VKCHECK(vkCreatePipelineLayout(device, &create_info, nullptr, &compute_layout));
+    }
 }
 
 #ifndef USE_VK_DESCRIPTOR_BUFFER
@@ -266,7 +345,7 @@ void bindless_model::create_descriptor_pool(VkDevice device) {
         },
         {
             .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .descriptorCount = set_descriptors_count,
+            .descriptorCount = 8U,
         },
     };
 
@@ -307,7 +386,7 @@ void bindless_model::create_immutable_samplers(VkDevice device) {
         .mipLodBias              = 0.f,
         .anisotropyEnable        = VK_FALSE,
         .compareEnable           = VK_FALSE,
-        .compareOp               = VK_COMPARE_OP_ALWAYS,
+        .compareOp               = VK_COMPARE_OP_NEVER,
         .minLod                  = 0.f,
         .maxLod                  = 0.f,
         .borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
