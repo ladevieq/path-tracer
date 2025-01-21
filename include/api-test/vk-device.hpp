@@ -152,7 +152,7 @@ class vkdevice {
 
     device_semaphore            timeline_semaphore;
 
-    static vkdevice            render_device;
+    static vkdevice             render_device;
 
 #ifdef _DEBUG
     VkDebugUtilsMessengerEXT debug_messenger;

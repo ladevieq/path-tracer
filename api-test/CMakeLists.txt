@@ -5,6 +5,7 @@ add_executable(
     command-buffer.cpp
     vk-bindless.cpp
     vk-utils.cpp
+    dx12-device.cpp
     ${CMAKE_SOURCE_DIR}/src/window.cpp
     ${CMAKE_SOURCE_DIR}/src/utils.cpp
     ${CMAKE_SOURCE_DIR}/src/vulkan-loader.cpp
@@ -26,4 +27,4 @@ target_include_directories(api-test SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(api-test SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty)
 target_include_directories(api-test PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(api-test PUBLIC ${CMAKE_SOURCE_DIR}/include/api-test)
-target_link_libraries(api-test PRIVATE imgui::imgui)
+target_link_libraries(api-test PRIVATE imgui::imgui dxgi d3d12)
