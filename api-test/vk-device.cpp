@@ -17,7 +17,7 @@ void vkdevice::init() {
                   VK_QUEUE_COMPUTE_BIT |
                   VK_QUEUE_TRANSFER_BIT,
     };
-   queues[1U] = {
+    queues[1U] = {
         .usages = VK_QUEUE_COMPUTE_BIT,
     };
     queues[2U] = {
