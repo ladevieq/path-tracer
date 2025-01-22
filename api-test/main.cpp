@@ -114,8 +114,9 @@ int main() {
 #endif
     device.init();
 
-    auto main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
+    // auto main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
 
+#ifdef VK
     auto surface_handle = device.create_surface({
         .window_handle = wnd.handle,
         .surface_format = {
@@ -125,6 +126,14 @@ int main() {
         .present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR,
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
     });
+#else
+    auto surface_handle = device.create_surface({
+        .window_handle = wnd.handle,
+        .surface_format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        .present_mode = DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        .usages = DXGI_USAGE_UNORDERED_ACCESS | DXGI_USAGE_RENDER_TARGET_OUTPUT,
+    });
+#endif
     auto& surface = device.get_surface(surface_handle);
 
 #ifdef VK

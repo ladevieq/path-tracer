@@ -37,17 +37,35 @@ void dx12device::init() {
     SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[2U])));
 }
 
-void dx12device::create_surface(const surface_desc& desc)
+handle<dx12::device_surface> dx12device::create_surface(const dx12::surface_desc& desc) {
+    dx12::device_surface surface {
+    };
     DXGI_MODE_DESC mode_desc{
-        .Width = desc.
+        .Width = 0U,
+        .Height = 0U,
+        .RefreshRate = {
+            .Numerator = 1U,
+            .Denominator = 60U,
+        },
+        .Format = desc.surface_format,
+        .ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+        .Scaling = DXGI_MODE_SCALING_CENTERED,
     };
     DXGI_SAMPLE_DESC sample_desc{
-
+        .Count = 1U,
+        .Quality = 0U,
     };
     DXGI_SWAP_CHAIN_DESC swapchain_desc{
         .BufferDesc = mode_desc,
         .SampleDesc = sample_desc,
-        .BufferUsage = DXGI_USAGE_UNORDERED_ACCESS | DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        .BufferUsage = desc.usages,
+        .BufferCount = desc.image_count,
+        .OutputWindow = desc.window_handle,
+        .Windowed = TRUE,
+        .SwapEffect = desc.present_mode,
+        .Flags = 0U,
     };
-    factory->CreateSwapChain(device, )
+    HRESULT hr = factory->CreateSwapChain(device, &swapchain_desc, &surface.swapchain);
+
+    return surfaces.add(surface);
 }
