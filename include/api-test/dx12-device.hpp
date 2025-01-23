@@ -4,6 +4,9 @@
 #include "dx12-device-types.hpp"
 
 class dx12device {
+    struct queue {
+        ID3D12CommandQueue* dx_queue;
+    };
     public:
     void init();
 
@@ -36,7 +39,7 @@ class dx12device {
     IDXGIAdapter* adapter;
 
     ID3D12Device* device;
-    ID3D12CommandQueue* queues[3U];
+    queue queues[static_cast<uint32_t>(dx12::QueueType::MAX)];
 
     freelist<dx12::device_surface>    surfaces;
 

@@ -9,13 +9,7 @@
 
 #include "vec3.hpp"
 
-enum class QueueType : uint32_t {
-    GRAPHICS,
-    ASYNC_COMPUTE,
-    TRANSFER,
-    MAX,
-};
-
+#include "vk-device-types.hpp"
 
 struct device_texture;
 struct device_buffer;

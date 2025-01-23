@@ -2,6 +2,13 @@
 #include <dxgi.h>
 
 namespace dx12 {
+    enum class QueueType : uint32_t {
+        GRAPHICS,
+        ASYNC_COMPUTE,
+        TRANSFER,
+        MAX,
+    };
+
     struct texture_desc {
     };
 

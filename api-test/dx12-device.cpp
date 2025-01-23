@@ -26,15 +26,15 @@ void dx12device::init() {
         .Flags = D3D12_COMMAND_QUEUE_FLAGS::D3D12_COMMAND_QUEUE_FLAG_NONE,
         .NodeMask = 0U,
     };
-    SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[0U])));
+    SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[0U].dx_queue)));
 
     queue_desc.Type = D3D12_COMMAND_LIST_TYPE::D3D12_COMMAND_LIST_TYPE_COMPUTE;
     queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY::D3D12_COMMAND_QUEUE_PRIORITY_HIGH,
-    SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[1U])));
+    SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[1U].dx_queue)));
 
     queue_desc.Type = D3D12_COMMAND_LIST_TYPE::D3D12_COMMAND_LIST_TYPE_COPY;
     queue_desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY::D3D12_COMMAND_QUEUE_PRIORITY_HIGH,
-    SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[2U])));
+    SUCCEEDED(device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&queues[2U].dx_queue)));
 }
 
 handle<dx12::device_surface> dx12device::create_surface(const dx12::surface_desc& desc) {
@@ -65,7 +65,7 @@ handle<dx12::device_surface> dx12device::create_surface(const dx12::surface_desc
         .SwapEffect = desc.present_mode,
         .Flags = 0U,
     };
-    HRESULT hr = factory->CreateSwapChain(device, &swapchain_desc, &surface.swapchain);
+    HRESULT hr = factory->CreateSwapChain(queues[static_cast<uint32_t>(dx12::QueueType::GRAPHICS)].dx_queue, &swapchain_desc, &surface.swapchain);
 
     return surfaces.add(surface);
 }
