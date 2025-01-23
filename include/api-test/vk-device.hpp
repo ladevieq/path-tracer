@@ -8,7 +8,6 @@
 #include "command-buffer.hpp"
 #include "freelist.hpp"
 #include "vk-bindless.hpp"
-#include "vk-device-types.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
 

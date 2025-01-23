@@ -12,15 +12,15 @@
 vkdevice vkdevice::render_device = vkdevice();
 
 void vkdevice::init() {
-    queues[0U] = {
+    queues[static_cast<uint32_t>(QueueType::GRAPHICS)] = {
         .usages = VK_QUEUE_GRAPHICS_BIT |
                   VK_QUEUE_COMPUTE_BIT |
                   VK_QUEUE_TRANSFER_BIT,
     };
-    queues[1U] = {
+    queues[static_cast<uint32_t>(QueueType::ASYNC_COMPUTE)] = {
         .usages = VK_QUEUE_COMPUTE_BIT,
     };
-    queues[2U] = {
+    queues[static_cast<uint32_t>(QueueType::TRANSFER)] = {
         .usages = VK_QUEUE_TRANSFER_BIT,
     };
 

@@ -8,6 +8,13 @@
 
 using VmaAllocation = struct VmaAllocation_T*;
 
+enum class QueueType : uint32_t {
+    GRAPHICS,
+    ASYNC_COMPUTE,
+    TRANSFER,
+    MAX,
+};
+
 struct texture_desc {
     uint32_t              width  = 1U;
     uint32_t              height = 1U;
