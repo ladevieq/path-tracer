@@ -3,6 +3,10 @@
 
 #include <cstdint>
 
+#ifdef API_TEST
+#include "vk-device-types.hpp"
+#include "vk-device.hpp"
+#endif // API_TEST
 #include "camera.hpp"
 
 class Buffer;
@@ -33,6 +37,23 @@ public:
 
     metadata meta;
 
+#ifdef API_TEST
+    handle<device_buffer>    scene_buffer_handle;
+    handle<device_buffer>    indices_buffer_handle;
+    handle<device_buffer>    positions_buffer_handle;
+    handle<device_buffer>    normals_buffer_handle;
+    handle<device_buffer>    uvs_buffer_handle;
+    handle<device_buffer>    bvh_buffer_handle;
+    handle<device_buffer>    materials_buffer_handle;
+
+    uint64_t scene_buffer_address() { return vkdevice::get_render_device().get_buffer(scene_buffer_handle).device_address; };
+    uint64_t indices_buffer_address() { return vkdevice::get_render_device().get_buffer(indices_buffer_handle).device_address; };
+    uint64_t positions_buffer_address() { return vkdevice::get_render_device().get_buffer(positions_buffer_handle).device_address; };
+    uint64_t normals_buffer_address() { return vkdevice::get_render_device().get_buffer(normals_buffer_handle).device_address; };
+    uint64_t uvs_buffer_address() { return vkdevice::get_render_device().get_buffer(uvs_buffer_handle).device_address; };
+    uint64_t bvh_buffer_address() { return vkdevice::get_render_device().get_buffer(bvh_buffer_handle).device_address; };
+    uint64_t materials_buffer_address() { return vkdevice::get_render_device().get_buffer(materials_buffer_handle).device_address; };
+#else
     Buffer*                 scene_buffer;
     Buffer*                 indices_buffer;
     Buffer*                 positions_buffer;
@@ -40,6 +61,7 @@ public:
     Buffer*                 uvs_buffer;
     Buffer*                 bvh_buffer;
     Buffer*                 materials_buffer;
+#endif // API_TEST
 };
 
 #endif // !__SCENE_HPP_

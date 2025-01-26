@@ -73,11 +73,11 @@ vec3 vec3::cross(const vec3& vec) const {
     return _mm_sub_ps(tmp3, tmp4);
 }
 
-vec3 vec3::min(const vec3& vec) const {
+vec3 (vec3::min)(const vec3& vec) const {
     return { _mm_min_ps(v, vec.v) };
 }
 
-vec3 vec3::max(const vec3& vec) const {
+vec3 (vec3::max)(const vec3& vec) const {
     return { _mm_max_ps(v, vec.v) };
 }
 

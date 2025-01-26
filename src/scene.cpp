@@ -3,7 +3,12 @@
 #include <filesystem>
 #include <queue>
 
+#ifdef API_TEST
+#include <vk_mem_alloc.h>
+#else
 #include "vk-renderer.hpp"
+#endif // API_TEST
+
 #include "gltf.hpp"
 #include "bvh.hpp"
 #include "material.hpp"
@@ -63,6 +68,10 @@ scene::metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
 
 scene::scene(const camera& cam, uint32_t width, uint32_t height)
     :meta(cam, width, height){
+
+#ifdef API_TEST
+    auto& device = vkdevice::get_render_device();
+#endif
 
     // Geometry & BVH
     std::vector<uint32_t>       indices;
@@ -145,7 +154,7 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
 //                 const auto& albedo_image = vkrenderer::api.get_image(material.base_color_texture->device_image);
 //                 const auto& albedo_sampler = vkrenderer::api.get_sampler(material.base_color_texture->sampler->device_sampler);
 
-                materials.emplace_back(gpu_material {
+                auto& mat = materials.emplace_back(gpu_material {
                     .base_color = material.base_color,
 //                     .albedo_texture_id = albedo_image.bindless_sampled_index,
 //                     .albedo_texture_sampler_id = albedo_sampler.bindless_index,
@@ -153,14 +162,26 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                     .roughness = material.roughness
                 });
 
+#ifdef API_TEST
+                if (material.base_color_texture.id != handle<device_texture>::invalid_id) {
+                    mat.albedo_texture_id = device.get_texture(material.base_color_texture).get_sampled_index();
+                    // mat.albedo_texture_sampler_id = device.get_sampler(0);
+                }
+
+                if (material.metallic_roughness_texture.id != handle<device_texture>::invalid_id) {
+                    mat.metallic_roughness_texture_id = device.get_texture(material.metallic_roughness_texture).get_sampled_index();
+                    // mat.metallic_roughness_texture_sampler_id = device.get_sampler(0);
+                }
+#else
                 if (material.metallic_roughness_texture != nullptr) {
-                    auto& gpu_material = materials.back();
+                    // auto& gpu_material = materials.back();
 //                     const auto& metallic_roughness_image = vkrenderer::api.get_image(material.metallic_roughness_texture->device_image);
 //                     const auto& metallic_roughness_sampler = vkrenderer::api.get_sampler(material.metallic_roughness_texture->sampler->device_sampler);
 
 //                    gpu_material.metallic_roughness_texture_id = metallic_roughness_image.bindless_sampled_index;
 //                    gpu_material.metallic_roughness_texture_sampler_id = metallic_roughness_sampler.bindless_index;
                 }
+#endif
 
             }
 
@@ -180,6 +201,94 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     bvh builder(triangles, packed_nodes);
     // bvh builder(spheres, packed_nodes);
 
+#ifdef API_TEST
+    {
+        scene_buffer_handle = device.create_buffer({
+            .size = sizeof(meta) * 3U,
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+
+        const auto& scene_buffer = device.get_buffer(scene_buffer_handle);
+        uint8_t* ptr = static_cast<uint8_t*>(scene_buffer.mapped_ptr);
+        memcpy(static_cast<void*>(ptr), &meta, sizeof(meta));
+        memcpy(static_cast<void*>(ptr + sizeof(meta)), &meta, sizeof(meta));
+        memcpy(static_cast<void*>(ptr + sizeof(meta) * 2U), &meta, sizeof(meta));
+    }
+
+    {
+        indices_buffer_handle = device.create_buffer({
+            .size = indices.size() * sizeof(indices[0]),
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+        const auto& indices_buffer = device.get_buffer(indices_buffer_handle);
+        void* ptr = indices_buffer.mapped_ptr;
+        memcpy(ptr, indices.data(), indices.size() * sizeof(indices[0]));
+    }
+
+    {
+        positions_buffer_handle = device.create_buffer({
+            .size = positions.size() * sizeof(positions[0]),
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+        const auto& positions_buffer = device.get_buffer(positions_buffer_handle);
+        void* ptr = positions_buffer.mapped_ptr;
+        memcpy(ptr, positions.data(), positions.size() * sizeof(positions[0]));
+    }
+
+    {
+        normals_buffer_handle = device.create_buffer({
+            .size = normals.size() * sizeof(normals[0]),
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+        const auto& normals_buffer = device.get_buffer(normals_buffer_handle);
+        void* ptr = normals_buffer.mapped_ptr;
+        memcpy(ptr, normals.data(), normals.size() * sizeof(normals[0]));
+    }
+
+    {
+        uvs_buffer_handle = device.create_buffer({
+            .size = uvs.size() * sizeof(uvs[0]),
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+        const auto& uvs_buffer = device.get_buffer(uvs_buffer_handle);
+        void* ptr = uvs_buffer.mapped_ptr;
+        memcpy(ptr, uvs.data(), uvs.size() * sizeof(uvs[0]));
+    }
+
+    {
+        bvh_buffer_handle = device.create_buffer({
+            .size = packed_nodes.size() * sizeof(packed_nodes[0]),
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+        const auto& bvh_buffer = device.get_buffer(bvh_buffer_handle);
+        void* ptr = bvh_buffer.mapped_ptr;
+        memcpy(ptr, packed_nodes.data(), packed_nodes.size() * sizeof(packed_nodes[0]));
+    }
+
+    {
+        materials_buffer_handle = device.create_buffer({
+            .size = materials.size() * sizeof(materials[0]),
+            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        });
+        const auto& materials_buffer = device.get_buffer(materials_buffer_handle);
+        void* ptr = materials_buffer.mapped_ptr;
+        memcpy(ptr, materials.data(), materials.size() * sizeof(materials[0]));
+    }
+#else
     scene_buffer = vkrenderer::create_buffer(sizeof(meta) * vkrenderer::virtual_frames_count);
     scene_buffer->write(&meta, 0, sizeof(meta));
     scene_buffer->write(&meta, sizeof(meta), sizeof(meta));
@@ -202,4 +311,5 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
 
     materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
     materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
+#endif // API_TEST
 }

@@ -6,8 +6,10 @@
 
 struct vec3u {
     union {
-        uint32_t vec[3];
-        uint32_t x, y, z;
+        uint32_t arr[3];
+        struct {
+            uint32_t x, y, z;
+        } vec;
     };
 };
 
@@ -35,6 +37,9 @@ class vec3 {
     vec3 operator<(const vec3& vec) const;
 
     vec3 operator>(const vec3& vec) const;
+
+    [[nodiscard]]vec3 (min)(const vec3& vec) const;
+    [[nodiscard]]vec3 (max)(const vec3& vec) const;
 
     float operator[](int axis);
 

@@ -5,15 +5,31 @@
 #include <filesystem>
 #include <fstream>
 
+#ifndef API_TEST
 #define STB_IMAGE_IMPLEMENTATION
+#endif
 #include <stb_image.h>
 
 #include "utils.hpp"
+#ifdef API_TEST
+#include "vk-device-types.hpp"
+#include "vk-device.hpp"
+#include <vk_mem_alloc.h>
+#else
 #include "vk-renderer.hpp"
+#endif
+
+#ifdef TRACY_ENABLE
+#include "tracy/Tracy.hpp"
+#endif
 
 gltf::gltf(const std::filesystem::path& filepath) {
     auto parent_path = filepath.parent_path();
     std::fstream f{ filepath };
+
+    if (!f.is_open()) {
+        OutputDebugStringA("failed to open!");
+    }
 
     f >> gltf_json;
 
@@ -119,6 +135,42 @@ void gltf::load_textures(const std::filesystem::path& path) {
     std::vector<size_t> v(images_count);
     std::iota(v.begin(), v.end(), 0);
 
+    const auto& gltf_textures = gltf_json["textures"];
+    auto textures_count = gltf_textures.size();
+    textures.resize(textures_count);
+
+#ifdef API_TEST
+    auto& device = vkdevice::get_render_device();
+
+    constexpr auto buffers_count = 2U;
+    auto total_size = images_count * 4096U * 4096 * sizeof(uint32_t);
+    auto buffer_size = total_size / 32U;
+
+    handle<device_buffer> staging_buffers_handle[buffers_count] = {
+        device.create_buffer({
+            .size = buffer_size,
+            .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        }),
+        device.create_buffer({
+            .size = buffer_size,
+            .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        }),
+    };
+
+    graphics_command_buffer command_buffers[buffers_count];
+    device.allocate_command_buffers(command_buffers, buffers_count, QueueType::GRAPHICS);
+    auto buffer_index = 0U;
+    auto command_buffer = command_buffers[buffer_index];
+    auto buffer_handle = staging_buffers_handle[buffer_index];
+    auto buffer = device.get_buffer(buffer_handle);
+
+    command_buffer.start();
+#endif // API_TEST
+
     std::for_each(std::execution::par, v.begin(), v.end(), [&](const size_t image_index) {
         const auto& gltf_image = gltf_images[image_index];
         auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
@@ -130,14 +182,69 @@ void gltf::load_textures(const std::filesystem::path& path) {
     // auto samplers_count = gltf_samplers.size();
     // std::vector<Sampler *> samplers{samplers_count};
 
-    Sampler* sampler = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+#ifdef API_TEST
+    const auto &gltf_samplers = gltf_json["samplers"];
+    auto samplers_count = gltf_samplers.size();
+    std::vector<handle<device_sampler>> samplers{samplers_count};
+
+    // auto sampler = device.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     // for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
     //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     // }
 
-    const auto& gltf_textures = gltf_json["textures"];
-    auto textures_count = gltf_textures.size();
-    textures.resize(textures_count);
+    for (size_t texture_index = 0; texture_index < textures_count; texture_index++) {
+        auto gltf_texture = gltf_textures[texture_index];
+        auto& image = images[gltf_texture["source"].get<uint32_t>()];
+        // if (gltf_texture.contains("sampler")) {
+        //     auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
+        //     sampler = samplers[sampler_index];
+        // }
+
+        auto texture = device.create_texture({
+            .width  = static_cast<uint32_t>(image.width),
+            .height = static_cast<uint32_t>(image.height),
+            .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .type   = VK_IMAGE_TYPE_2D,
+        });
+
+        uint64_t size = image.width * image.height * sizeof(uint32_t);
+        auto offset = buffer.offset;
+        if (offset + size > buffer_size) {
+            command_buffer.stop();
+
+            device.submit(&command_buffer, 1 );
+
+            buffer_index = (++buffer_index) % buffers_count;
+            command_buffer = command_buffers[buffer_index];
+            buffer_handle = staging_buffers_handle[buffer_index];
+            buffer = device.get_buffer(buffer_handle);
+            buffer.reset();
+            device.wait();
+            command_buffer.start();
+            offset = 0U;
+        }
+
+        void* ptr = buffer.allocate(size);
+        memcpy(ptr, image.data, size);
+
+        command_buffer.barrier(texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        command_buffer.copy(buffer_handle, texture, static_cast<VkDeviceSize>(offset));
+        command_buffer.barrier(texture, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+
+        textures[texture_index] = texture;
+    }
+
+    command_buffer.stop();
+    device.submit(&command_buffer, 1);
+    device.wait();
+    device.destroy_buffer(staging_buffers_handle[0]);
+    device.destroy_buffer(staging_buffers_handle[1]);
+#else
+    Sampler* sampler = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    // for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
+    //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    // }
 
     for (size_t texture_index = 0; texture_index < textures_count; texture_index++) {
         auto gltf_texture = gltf_textures[texture_index];
@@ -154,6 +261,7 @@ void gltf::load_textures(const std::filesystem::path& path) {
 
         textures[texture_index] = texture;
     }
+#endif
 }
 
 void gltf::load_materials() {
