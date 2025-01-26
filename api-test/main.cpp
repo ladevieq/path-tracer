@@ -2,7 +2,9 @@
 #include <cstdio>
 #include <array>
 #include <chrono>
-#include <vk_mem_alloc.h>
+
+#include <Windows.h>
+#include <debugapi.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -14,9 +16,11 @@
 #include "utils.hpp"
 
 #ifdef VK
+#include <vk_mem_alloc.h>
 #include "vk-device.hpp"
 #else
 #include "dx12-device.hpp"
+#include "dx12-command-buffer.hpp"
 #endif
 
 struct device_texture;
@@ -64,22 +68,22 @@ void ui(uint32_t frame_time) {
     ImGui::Render();
 }
 
-void update_buffers(ImDrawData* draw_data, const device_buffer& vertex_buffer, const device_buffer& index_buffer) {
-    off_t vertex_offset = 0;
-    off_t index_offset = 0;
-    for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
-        auto* cmd_list = draw_data->CmdLists[index];
-
-        size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
-        auto* vtx_ptr = static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset;
-        memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
-        vertex_offset += static_cast<off_t>(vertex_bytes_size);
-
-        size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
-        memcpy(static_cast<uint8_t*>(index_buffer.mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
-        index_offset += static_cast<off_t>(index_bytes_size);
-    }
-}
+// void update_buffers(ImDrawData* draw_data, const device_buffer& vertex_buffer, const device_buffer& index_buffer) {
+//     off_t vertex_offset = 0;
+//     off_t index_offset = 0;
+//     for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
+//         auto* cmd_list = draw_data->CmdLists[index];
+// 
+//         size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
+//         auto* vtx_ptr = static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset;
+//         memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
+//         vertex_offset += static_cast<off_t>(vertex_bytes_size);
+// 
+//         size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
+//         memcpy(static_cast<uint8_t*>(index_buffer.mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
+//         index_offset += static_cast<off_t>(index_bytes_size);
+//     }
+// }
 
 int main() {
 
@@ -110,80 +114,105 @@ int main() {
 #ifdef VK
     auto& device = vkdevice::get_render_device();
 #else
-    auto& device = dx12device::get_render_device();
+    auto& device = dx12::device::get_render_device();
 #endif
     device.init();
 
     // auto main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
 
-#ifdef VK
     auto surface_handle = device.create_surface({
         .window_handle = wnd.handle,
+#ifdef VK
         .surface_format = {
             .format = VK_FORMAT_B8G8R8A8_UNORM,
             .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
         },
         .present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR,
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-    });
 #else
-    auto surface_handle = device.create_surface({
-        .window_handle = wnd.handle,
-        .surface_format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        .surface_format = DXGI_FORMAT_R16G16B16A16_FLOAT,
         .present_mode = DXGI_SWAP_EFFECT_FLIP_DISCARD,
-        .usages = DXGI_USAGE_UNORDERED_ACCESS | DXGI_USAGE_RENDER_TARGET_OUTPUT,
-    });
+        .usages = DXGI_USAGE_RENDER_TARGET_OUTPUT,
 #endif
+    });
     auto& surface = device.get_surface(surface_handle);
 
-#ifdef VK
     constexpr size_t image_size = 1024U;
     constexpr size_t image_count = 4U;
     auto staging_buffer_handle = device.create_buffer({
         .size = image_size * image_size * sizeof(uint32_t) * image_count,
+#ifdef VK
         .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+#else
+        
+        .map        = true,
+        .states     = D3D12_RESOURCE_STATE_COPY_SOURCE,
+        .usages     = D3D12_RESOURCE_FLAG_NONE,
+        .heap_type  = D3D12_HEAP_TYPE_UPLOAD,
+#endif
     });
     const auto& staging_buffer = device.get_buffer(staging_buffer_handle);
 
     // API test code
-    // int width;
-    // int height;
-    // int channels;
-    // uint8_t* data = stbi_load("../models/sponza/466164707995436622.jpg", &width, &height, &channels, 4);
-    // size_t size = static_cast<size_t>(width) * height * 4U;
-    // memcpy(staging_buffer.mapped_ptr, data, size);
+    int width;
+    int height;
+    int channels;
+    uint8_t* data = stbi_load("../models/sponza/466164707995436622.jpg", &width, &height, &channels, 4);
+    size_t size = static_cast<size_t>(width) * height * 4U;
+    memcpy(staging_buffer.mapped_ptr, data, size);
 
-    // auto gpu_texture_handle = device.create_texture({
-    //     .width  = static_cast<uint32_t>(width),
-    //     .height = static_cast<uint32_t>(height),
-    //     .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-    //     .format = VK_FORMAT_R8G8B8A8_UNORM,
-    //     .type   = VK_IMAGE_TYPE_2D,
-    // });
+    auto gpu_texture_handle = device.create_texture({
+        .width  = static_cast<uint32_t>(width),
+        .height = static_cast<uint32_t>(height),
+#ifdef VK
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .type   = VK_IMAGE_TYPE_2D,
+#else
+        .states = D3D12_RESOURCE_STATE_COPY_DEST,
+        .usages = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        .format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .type   = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
+    });
 
-    // off_t offset = width * height * 4;
-    // data = stbi_load("../models/sponza/715093869573992647.jpg", &width, &height, &channels, 4);
-    // size = static_cast<size_t>(width) * height * 4U;
-    // auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + offset);
-    // memcpy(addr, data, size);
+    off_t offset = width * height * 4;
+    data = stbi_load("../models/sponza/715093869573992647.jpg", &width, &height, &channels, 4);
+    size = static_cast<size_t>(width) * height * 4U;
+    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + offset);
+    memcpy(addr, data, size);
 
-    // auto second_texture = device.create_texture({
-    //     .width  = static_cast<uint32_t>(width),
-    //     .height = static_cast<uint32_t>(height),
-    //     .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-    //     .format = VK_FORMAT_R8G8B8A8_UNORM,
-    //     .type   = VK_IMAGE_TYPE_2D,
-    // });
+    auto second_texture = device.create_texture({
+        .width  = static_cast<uint32_t>(width),
+        .height = static_cast<uint32_t>(height),
+#ifdef VK
+        .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .type   = VK_IMAGE_TYPE_2D,
+#else
+        .states = D3D12_RESOURCE_STATE_COPY_DEST,
+        .usages = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        .format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .type   = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
+    });
 
-    // auto output_texture_handle = device.create_texture({
-    //     .width  = static_cast<uint32_t>(width),
-    //     .height = static_cast<uint32_t>(height),
-    //     .usages = VK_IMAGE_USAGE_STORAGE_BIT,
-    //     .format = VK_FORMAT_R8G8B8A8_UNORM,
-    //     .type   = VK_IMAGE_TYPE_2D,
-    // });
+    auto output_texture_handle = device.create_texture({
+        .width  = static_cast<uint32_t>(width),
+        .height = static_cast<uint32_t>(height),
+#ifdef VK
+        .usages = VK_IMAGE_USAGE_STORAGE_BIT,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .type   = VK_IMAGE_TYPE_2D,
+#else
+        .usages = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        .format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .type   = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
+    });
+
 
     uint8_t *pixels = nullptr;
     int atlas_width;
@@ -192,9 +221,16 @@ int main() {
     const auto ui_texture_handle = device.create_texture({
         .width = static_cast<uint32_t>(atlas_width),
         .height = static_cast<uint32_t>(atlas_height),
+#ifdef VK
         .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .type = VK_IMAGE_TYPE_2D,
+#else
+        .states = D3D12_RESOURCE_STATE_COPY_DEST,
+        .usages = D3D12_RESOURCE_FLAG_NONE,
+        .format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .type = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
     });
     const auto& ui_texture = device.get_texture(ui_texture_handle);
     io.Fonts->SetTexID(*(void **)&ui_texture_handle.id);
@@ -206,20 +242,27 @@ int main() {
 
     auto vertex_buffer_handle = device.create_buffer({
         .size = Mb * sizeof(uint32_t),
+#ifdef VK
         .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+#else
+        #endif
     });
     auto vertex_buffer = device.get_buffer(vertex_buffer_handle);
 
     auto index_buffer_handle = device.create_buffer({
         .size = Mb * sizeof(uint32_t),
+#ifdef VK
         .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+#else
+#endif
     });
     auto index_buffer = device.get_buffer(index_buffer_handle);
 
+#ifdef VK
     auto code = read_file("shaders/test.comp.spv");
     auto compute = device.create_compute_pipeline({
         .cs_code = code,
@@ -233,24 +276,45 @@ int main() {
     auto tonemapping = device.create_compute_pipeline({
         .cs_code = tonemapping_code,
     });
+#endif
     const auto acc_handle = device.create_texture({
         .width = static_cast<uint32_t>(window_width),
         .height = static_cast<uint32_t>(window_height),
+#ifdef VK
         .usages = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
         .type = VK_IMAGE_TYPE_2D,
+#else
+        .states = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        .usages = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        .format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+        .type = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
     });
+
+#ifdef VK
     auto acc_storage_index = device.get_texture(acc_handle).get_storage_index();
+#endif
 
     const auto result_handle = device.create_texture({
         .width = static_cast<uint32_t>(window_width),
         .height = static_cast<uint32_t>(window_height),
+#ifdef VK
         .usages = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
         .type = VK_IMAGE_TYPE_2D,
+#else
+        .states = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        .usages = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        .format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+        .type = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
     });
+#ifdef VK
     auto result_storage_index = device.get_texture(result_handle).get_storage_index();
+#endif
 
+#ifdef VK
     std::array<VkFormat, 1U> formats { surface.surface_format.format };
     auto vertex_code = read_file("shaders/api-test-ui.vert.spv");
     auto fragment_code = read_file("shaders/api-test-ui.frag.spv");
@@ -259,47 +323,58 @@ int main() {
         .fs_code = fragment_code,
         .color_attachments_format = formats
     });
+#endif
 
+#ifdef VK
     std::array<graphics_command_buffer, 4U> graphics_command_buffers;
     device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), QueueType::GRAPHICS);
+#else
+    std::array<dx12::graphics_command_buffer, 4U> graphics_command_buffers;
+    device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), dx12::QueueType::GRAPHICS);
+#endif
 
     // API test code
-    // RD_START_CAPTURE;
+    RD_START_CAPTURE;
 
-    // graphics_command_buffers[0].start();
+    graphics_command_buffers[0].start();
 
-    // graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    // graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    // graphics_command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    // graphics_command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
-    // graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, static_cast<VkDeviceSize>(offset));
-    // graphics_command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, static_cast<VkDeviceSize>(ui_offset));
+#ifdef VK
+    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    graphics_command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+#endif
 
-    // graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
-    // graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    graphics_command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
+    graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, offset);
+    graphics_command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, ui_offset);
+#ifdef VK
+    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
-    // {
-    //     graphics_command_buffers[0].dispatch({
-    //         .pipeline = compute,
-    //         .group_size = { .vec = { image_size, image_size, 1U }},
-    //         .local_group_size = { .vec = { 8U, 8U, 1U }},
-    //         .params = {
-    //             device.get_texture(second_texture).get_storage_index(),         // Input 1
-    //             device.get_texture(gpu_texture_handle).get_storage_index(),     // Input 2
-    //             device.get_texture(output_texture_handle).get_storage_index(),  // Output
-    //         },
-    //     });
-    // }
+    {
+        graphics_command_buffers[0].dispatch({
+            .pipeline = compute,
+            .group_size = { .vec = { image_size, image_size, 1U }},
+            .local_group_size = { .vec = { 8U, 8U, 1U }},
+            .params = {
+                device.get_texture(second_texture).get_storage_index(),         // Input 1
+                device.get_texture(gpu_texture_handle).get_storage_index(),     // Input 2
+                device.get_texture(output_texture_handle).get_storage_index(),  // Output
+            },
+        });
+    }
 
-    // graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+#endif
 
-    // graphics_command_buffers[0].stop();
+    graphics_command_buffers[0].stop();
 
-    // device.submit(graphics_command_buffers.data(), 1);
-    // device.wait();
+    device.submit(graphics_command_buffers.data(), 1);
+    device.wait();
 
-    // RD_END_CAPTURE;
+    RD_END_CAPTURE;
 
+#ifdef VK
     std::array<handle<device_texture>, 1U> color_attachment {};
     constexpr uint32_t virtual_frames_count = 2U;
     uint32_t frame_time = 1U;
@@ -473,6 +548,7 @@ int main() {
     device.destroy_buffer(staging_buffer_handle);
     device.destroy_buffer(vertex_buffer_handle);
     device.destroy_buffer(index_buffer_handle);
+    device.deinit();
 
     ImGui::DestroyContext();
 #endif // VK

@@ -5,12 +5,13 @@
 
 #include <vulkan/vulkan_core.h>
 
-#include "command-buffer.hpp"
 #include "freelist.hpp"
+#include "vk-device-types.hpp"
 #include "vk-bindless.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
 
+struct command_buffer;
 class window;
 
 class vkdevice {
@@ -23,6 +24,7 @@ class vkdevice {
 
     public:
     void init();
+    void deinit();
 
     static inline vkdevice& get_render_device() {
         return render_device;
@@ -106,7 +108,7 @@ class vkdevice {
 
     private:
     vkdevice() = default;
-    ~vkdevice();
+    ~vkdevice() = default;
 
     void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type);
 

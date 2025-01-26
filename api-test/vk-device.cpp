@@ -8,6 +8,7 @@
 
 #include "vk-utils.hpp"
 #include "vulkan-loader.hpp"
+#include "vk-command-buffer.hpp"
 
 vkdevice vkdevice::render_device = vkdevice();
 
@@ -44,7 +45,7 @@ void vkdevice::init() {
     timeline_semaphore = get_semaphore(semaphore);
 }
 
-vkdevice::~vkdevice() {
+void vkdevice::deinit() {
     vkDeviceWaitIdle(device);
 
     bindless_model::destroy_bindless_model(bindless);
@@ -65,6 +66,7 @@ vkdevice::~vkdevice() {
 
     vkDestroyInstance(instance, nullptr);
 }
+
 
 void vkdevice::wait() { vkDeviceWaitIdle(device); };
 
