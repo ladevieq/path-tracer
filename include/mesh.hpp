@@ -4,7 +4,11 @@
 #include <vector>
 #include <array>
 
+#ifdef API_TEST
+#include "vk-device-types.hpp"
+#else
 #include "vk-renderer.hpp"
+#endif // API_TEST
 
 enum ATTRIBUTE_TYPE {
     POSITION,
@@ -89,9 +93,15 @@ private:
     std::vector<submesh_info> submeshes;
 
     struct gpu_mesh {
+#ifdef API_TEST
+        std::array<handle<device_buffer>, ATTRIBUTE_TYPE::MAX_ATTRIBUTE> attributes;
+        const device_buffer& indices;
+        const device_buffer& submeshes;
+#else
         std::array<Buffer*, ATTRIBUTE_TYPE::MAX_ATTRIBUTE> attributes;
         Buffer* indices;
         Buffer* submeshes;
+#endif // API_TEST
     };
 
     // allocate gpu mesh upon instanciation

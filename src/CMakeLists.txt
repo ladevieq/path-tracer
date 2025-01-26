@@ -1,6 +1,6 @@
 set(LIBRARIES imgui::imgui)
 
-set(DEFINES -DNOMINMAX -D_USE_MATH_DEFINES -DVK_NO_PROTOTYPES)
+set(DEFINES -DNOMINMAX -D_USE_MATH_DEFINES -DVK_NO_PROTOTYPES TRACY_ENABLE)
 
 if(UNIX AND NOT APPLE)
     set(DEFINES ${DEFINES} -DLINUX -DVK_USE_PLATFORM_XCB_KHR)
@@ -30,6 +30,8 @@ add_executable(
     bvh.cpp
     mesh.cpp
     resource-manager.cpp
+
+    ${CMAKE_SOURCE_DIR}/tracy/public/TracyClient.cpp
 )
 
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -57,11 +59,17 @@ target_link_directories(path-tracer PRIVATE "C:\\Program Files\\LLVM\\lib\\clang
 
 target_compile_definitions(path-tracer PUBLIC ${DEFINES})
 
-target_include_directories(path-tracer SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty)
+target_include_directories(path-tracer
+    SYSTEM PUBLIC
 
-target_include_directories(path-tracer SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
+    ${CMAKE_SOURCE_DIR}/thirdparty
+    ${CMAKE_SOURCE_DIR}/tracy/public
+    ${Vulkan_INCLUDE_DIRS}
 
-target_include_directories(path-tracer PUBLIC ${CMAKE_SOURCE_DIR}/include)
+    PUBLIC
+
+    ${CMAKE_SOURCE_DIR}/include
+)
 
 if(UNIX AND NOT APPLE)
     target_include_directories(path-tracer PUBLIC ${X11_xcb_INCLUDE_PATH})

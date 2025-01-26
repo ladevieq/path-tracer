@@ -142,13 +142,15 @@ vec3 ray_color(ray r, uint seed) {
         vec3 diffuse_color = srgb_to_linear(texture(
             sampler2D(
                 textures[nonuniformEXT(tri.mat.base_color_texture.texture_id)],
-                samplers[nonuniformEXT(tri.mat.base_color_texture.sampler_id)]
+                // samplers[nonuniformEXT(tri.mat.base_color_texture.sampler_id)]
+                samplers[1]
             ), uv
         ).xyz) * tri.mat.base_color.xyz;
         vec2 metalness_roughness = texture(
             sampler2D(
                 textures[nonuniformEXT(tri.mat.metallic_roughness_texture.texture_id)],
-                samplers[nonuniformEXT(tri.mat.metallic_roughness_texture.sampler_id)]
+                // samplers[nonuniformEXT(tri.mat.metallic_roughness_texture.sampler_id)]
+                samplers[1]
             ), uv
         ).xy * vec2(tri.mat.metalness, tri.mat.roughness);
 
@@ -281,9 +283,10 @@ void main() {
     vec3 acc_color = srgb_to_linear(imageLoad(images[nonuniformEXT(bufs.accumulation_image_index)], coords).xyz);
     out_color = linear_to_srgb(mix(acc_color, out_color, spp_scale));
 
-    for (uint i = 0; i < bufs.scene.downscale_factor; i++) {
-        for (uint j = 0; j < bufs.scene.downscale_factor; j++) {
-            imageStore(images[nonuniformEXT(bufs.output_image_index)], coords + ivec2(i, j), vec4(out_color, 1.0));
-        }
-    }
+    // for (uint i = 0; i < bufs.scene.downscale_factor; i++) {
+    //     for (uint j = 0; j < bufs.scene.downscale_factor; j++) {
+    //         imageStore(images[nonuniformEXT(bufs.output_image_index)], coords + ivec2(i, j), vec4(out_color, 1.0));
+    //     }
+    // }
+    imageStore(images[nonuniformEXT(bufs.output_image_index)], coords, vec4(out_color, 1.0));
 }

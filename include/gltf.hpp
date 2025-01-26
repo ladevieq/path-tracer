@@ -49,7 +49,12 @@ private:
     json gltf_json;
     std::vector<Mesh> meshes;
     std::vector<material> materials;
+#ifdef API_TEST
+    std::vector<handle<device_texture>> textures;
+    // handle<device_sampler> samplers;
+#else
     std::vector<Texture*> textures;
+#endif // API_TEST
     std::vector<std::vector<uint8_t>> buffers;
 };
 
