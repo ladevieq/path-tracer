@@ -809,7 +809,7 @@ VkSurfaceKHR vkapi::create_surface(window& wnd) const {
     create_info.pNext = nullptr;
     create_info.flags = 0;
     create_info.hinstance = GetModuleHandle(nullptr);
-    create_info.hwnd = wnd.window_handle;
+    create_info.hwnd = wnd.handle;
 
     VKRESULT(vkCreateWin32SurfaceKHR(context.instance, &create_info, nullptr, &surface))
 #elif defined(MACOS)
