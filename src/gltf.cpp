@@ -14,6 +14,7 @@
 #ifdef API_TEST
 #include "vk-device-types.hpp"
 #include "vk-device.hpp"
+#include "vk-command-buffer.hpp"
 #include <vk_mem_alloc.h>
 #else
 #include "vk-renderer.hpp"

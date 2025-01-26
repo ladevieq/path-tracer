@@ -2,10 +2,12 @@ add_executable(
     api-test
     main.cpp
     vk-device.cpp
-    command-buffer.cpp
+    vk-command-buffer.cpp
     vk-bindless.cpp
     vk-utils.cpp
     dx12-device.cpp
+    dx12-command-buffer.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/D3D12MemAlloc.cpp
     ${CMAKE_SOURCE_DIR}/src/window.cpp
     ${CMAKE_SOURCE_DIR}/src/utils.cpp
     ${CMAKE_SOURCE_DIR}/src/vulkan-loader.cpp

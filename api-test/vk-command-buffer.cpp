@@ -1,4 +1,4 @@
-#include "command-buffer.hpp"
+#include "vk-command-buffer.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -82,7 +82,7 @@ void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineSt
     texture.access = access;
 }
 
-void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle, VkDeviceSize offset) const {
+void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle, uint64_t offset) const {
     auto&                    device      = vkdevice::get_render_device();
     const auto&              buffer      = device.get_buffer(buffer_handle);
     const auto&              texture     = device.get_texture(texture_handle);

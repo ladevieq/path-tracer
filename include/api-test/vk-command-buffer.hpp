@@ -79,7 +79,7 @@ struct command_buffer {
 
     void            barrier(handle<device_texture> texture_handle, VkPipelineStageFlags2 stage, VkAccessFlags2 access, VkImageLayout layout) const;
 
-    void            copy(handle<device_buffer> buffer_handle, handle<device_texture> texture_handle, VkDeviceSize offset = 0) const;
+    void            copy(handle<device_buffer> buffer_handle, handle<device_texture> texture_handle, uint64_t offset = 0) const;
 
     VkCommandBuffer vk_command_buffer;
     QueueType       queue_type;
