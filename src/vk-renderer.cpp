@@ -10,6 +10,8 @@
 #include "compute-renderpass.hpp"
 #include "primitive-renderpass.hpp"
 
+#include "texture.hpp"
+
 #include "window.hpp"
 
 #ifdef _DEBUG
