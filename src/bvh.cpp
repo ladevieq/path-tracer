@@ -3,7 +3,8 @@
 #include <cassert>
 
 #include <algorithm>
-#include <iostream>
+#include <cstdint>
+#include <cstdio>
 
 // bvh::bvh(std::vector<sphere>& spheres, std::vector<packed_bvh_node>& packed_nodes)
 //     :spheres(spheres) {
@@ -60,8 +61,8 @@ bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_
 
     temp_nodes[0] = temp_node();
 
-    temp_nodes[0].bounding_box = compute_bounds(0, triangles.size());
-    subdivide(0, 0, triangles.size());
+    temp_nodes[0].bounding_box = compute_bounds(0, static_cast<uint32_t>(triangles.size()));
+    subdivide(0, 0, static_cast<uint32_t>(triangles.size()));
 
     set_depth_first_order();
 
@@ -71,13 +72,13 @@ bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_
 
         node.primitive_id = old_node.primitive_id;
 
-        node.min[0] = old_node.bounding_box.minimum.v[0];
-        node.min[1] = old_node.bounding_box.minimum.v[1];
-        node.min[2] = old_node.bounding_box.minimum.v[2];
+        node.min[0] = old_node.bounding_box.minimum.get<0>();
+        node.min[1] = old_node.bounding_box.minimum.get<1>();
+        node.min[2] = old_node.bounding_box.minimum.get<2>();
 
-        node.max[0] = old_node.bounding_box.maximum.v[0];
-        node.max[1] = old_node.bounding_box.maximum.v[1];
-        node.max[2] = old_node.bounding_box.maximum.v[2];
+        node.max[0] = old_node.bounding_box.maximum.get<0>();
+        node.max[1] = old_node.bounding_box.maximum.get<1>();
+        node.max[2] = old_node.bounding_box.maximum.get<2>();
 
         if (old_node.next_id != -1) {
             node.next_id = temp_nodes[old_node.next_id].df_id;
@@ -89,13 +90,13 @@ bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_
 // BVH exporter for graphviz
 //-------------------------
 void bvh::exporter() {
-    std::cout << "digraph bvh {\n";
+    printf("digraph bvh {\n");
 
     traverse_depth_first(temp_nodes, 0);
 
     // traverse_depth_first_ordered(-1, 0);
 
-    std::cout << "}\n";
+    printf("}\n");
 }
 
 bool bvh::traverse_depth_first(std::vector<temp_node>& nodes, int32_t id) {
@@ -104,8 +105,8 @@ bool bvh::traverse_depth_first(std::vector<temp_node>& nodes, int32_t id) {
     }
 
     if (traverse_depth_first(nodes, nodes[id].left_id)) {
-        std::cout << id << " -> " << nodes[id].left_id << ";\n";
-        std::cout << id << " -> " << nodes[id].left_id + 1 << ";\n";
+        printf("%d -> %d;\n", id, nodes[id].left_id);
+        printf("%d -> %d;\n", id, nodes[id].left_id + 1);
 
         traverse_depth_first(nodes, nodes[id].left_id + 1);
     }
@@ -121,17 +122,17 @@ int32_t bvh::traverse_depth_first_ordered(std::vector<bvh_node>& nodes, int32_t 
         int32_t left = id + 1;
         int32_t next_id;
 
-        std::cout << "\t " << parent_id << " -> " << id << ";\n";
+        printf("\t %d -> %d;\n", parent_id, id);
         next_id = traverse_depth_first_ordered(nodes, id, left);
 
         if (next_id != -1) {
             return traverse_depth_first_ordered(nodes, id, next_id);
         }
     } else if (nodes[id].next_id != -1) {
-        std::cout << "\t " << parent_id << " -> " << id << ";\n";
+        printf("\t %d -> %d;\n", parent_id, id);
         return nodes[id].next_id;
     } else {
-        std::cout << "\t " << parent_id << " -> " << id << ";\n";
+        printf("\t %d -> %d;\n", parent_id, id);
     }
 
     return -1;
@@ -148,7 +149,8 @@ aabb bvh::compute_bounds(uint32_t begin, uint32_t end) {
 }
 
 void bvh::subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
-    const size_t count = end - begin;
+    assert(end > begin);
+    const uint32_t count = end - begin;
 
      if (count == 1) {
         temp_nodes[parent_id] = std::move(leafs[begin]);
@@ -210,7 +212,7 @@ void bvh::subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
         auto& primitive = triangles[leafs[i].primitive_id];
         // auto& primitive = spheres[leafs[i].primitive_id];
         auto normalized_offset = (primitive.center[split_axis] - centroid_bounds.minimum[split_axis]) / split_axis_size;
-        uint32_t bucket_index = normalized_offset * buckets_count;
+        uint32_t bucket_index = static_cast<uint32_t>(normalized_offset * buckets_count);
         if (bucket_index == buckets_count) {
             bucket_index -= 1;
         }
@@ -242,7 +244,7 @@ void bvh::subdivide(uint32_t parent_id, uint32_t begin, uint32_t end) {
 
     float min_cost = buckets_cost[0];
     uint32_t min_cost_bucket = 0;
-    for (size_t bucket_index = 1; bucket_index < buckets_count - 1; bucket_index++) {
+    for (uint32_t bucket_index = 1; bucket_index < buckets_count - 1; bucket_index++) {
         if (buckets_cost[bucket_index] < min_cost) {
             min_cost = buckets_cost[bucket_index];
             min_cost_bucket = bucket_index;

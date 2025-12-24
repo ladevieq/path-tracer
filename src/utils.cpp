@@ -66,27 +66,30 @@ void log_last_error() {
     std::cerr << error_message << std::endl;
 }
 
-bool watcher::watch_file(std::filesystem::path&& filepath, std::function<void()> callback) {
-    if (!std::filesystem::exists(filepath))
+bool watcher::watch_file(const char* filepath, watcher::func callback) {
+    DWORD attrib = GetFileAttributes(filepath);
+    if (attrib == INVALID_FILE_ATTRIBUTES)
         return false;
 
-    if (!watcher::watch_dir(filepath.parent_path()))
+    std::filesystem::path path(filepath);
+    if (!watcher::watch_dir(path.parent_path().string().c_str()))
         return false;
 
-    auto [_, is_inserted] = watcher::callbacks.emplace(filepath.filename().string(), callback);
+    auto [_, is_inserted] = watcher::callbacks.emplace(filepath, callback);
 
     return is_inserted;
 }
 
-bool watcher::watch_dir(std::filesystem::path&& dir_path) {
-    if (!std::filesystem::exists(dir_path))
+bool watcher::watch_dir(const char* dir_path) {
+    DWORD attrib = GetFileAttributes(dir_path);
+    if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY) == 0U )
         return false;
 
-    if (watcher::watched_dirs.find(dir_path.string()) != watcher::watched_dirs.end())
+    if (watcher::watched_dirs.find(dir_path) != watcher::watched_dirs.end())
         return true;
 
-    HANDLE dir_handle = CreateFileW(
-        dir_path.c_str(),
+    HANDLE dir_handle = CreateFileA(
+        dir_path,
         FILE_LIST_DIRECTORY,
         FILE_SHARE_WRITE | FILE_SHARE_READ,
         nullptr,
@@ -100,7 +103,7 @@ bool watcher::watch_dir(std::filesystem::path&& dir_path) {
         return false;
     }
 
-    auto [dir, _] = watcher::watched_dirs.emplace(dir_path.string(), watch_data{ .dir_handle = dir_handle });
+    auto [dir, _] = watcher::watched_dirs.emplace(dir_path, watch_data{ .dir_handle = dir_handle, .overlapped{}, .buffer{} });
 
     if (FAILED(ReadDirectoryChangesW(dir_handle, dir->second.buffer, sizeof(watch_data::buffer), FALSE, FILE_NOTIFY_CHANGE_LAST_WRITE, nullptr, &dir->second.overlapped, nullptr))) {
         log_last_error();
@@ -119,10 +122,16 @@ void watcher::pull_changes() {
         auto* dir_event = (PFILE_NOTIFY_INFORMATION)watch_data.buffer;
         do {
             if (dir_event->Action == FILE_ACTION_MODIFIED) {
-                auto w_filename = std::wstring{ dir_event->FileName, dir_event->FileNameLength / sizeof(wchar_t) };
-                auto filename = std::string{w_filename.begin(), w_filename.end()};
+                int len = WideCharToMultiByte(CP_UTF8, 0, dir_event->FileName, -1, NULL, 0, NULL, NULL);
+
+                char* filename = static_cast<char*>(alloca(len));
+                WideCharToMultiByte(CP_UTF8, 0, dir_event->FileName, -1, filename, len, NULL, NULL);
                 if (callbacks.contains(filename))
                     callbacks[filename]();
+                // auto w_filename = std::wstring{ dir_event->FileName, dir_event->FileNameLength / sizeof(wchar_t) };
+                // auto filename = std::string{w_filename.begin(), w_filename.end()};
+                // if (callbacks.contains(filename.c_str()))
+                //     callbacks[filename.c_str()]();
             }
 
             dir_event += dir_event->NextEntryOffset;

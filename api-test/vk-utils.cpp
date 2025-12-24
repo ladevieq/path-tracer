@@ -1,6 +1,6 @@
 #include "vk-utils.hpp"
 
-#include <iostream>
+#include <cstdio>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
                                               VkDebugUtilsMessageTypeFlagsEXT             type,
@@ -39,6 +39,6 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBit
         break;
     }
 
-    std::cerr << "[" << severity_cstr << "_" << type_cstr << "]: " << data->pMessage << std::endl;
+    fprintf(stderr, "[%s_%s]:%s\n", severity_cstr, type_cstr, data->pMessage);
     return VK_FALSE;
 }

@@ -42,7 +42,7 @@ class vkdevice {
 
     handle<device_surface>   create_surface(const surface_desc& desc);
 
-    handle<device_semaphore> create_semaphore(const semaphore_desc& desc);
+    handle<device_semaphore> create_semaphore(const semaphore_desc& desc, const char* name);
 
     void                     destroy_texture(handle<device_texture> handle);
 
@@ -57,8 +57,8 @@ class vkdevice {
     void                     destroy_surface(handle<device_surface> handle);
 
     template<typename buffer_type>
-    void allocate_command_buffers(buffer_type* buffers, size_t count, QueueType queue_type) {
-        allocate_command_buffers(static_cast<command_buffer*>(buffers), count, queue_type);
+    void allocate_command_buffers(buffer_type* buffers, size_t count, QueueType queue_type, const char* name) {
+        allocate_command_buffers(static_cast<command_buffer*>(buffers), count, queue_type, name);
     }
 
     [[nodiscard]] inline device_texture& get_texture(handle<device_texture> handle) {
@@ -99,8 +99,8 @@ class vkdevice {
 
     // uint64_t submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle);
     uint32_t acquire_image_index(handle<device_surface> surface_handle);
-    uint32_t submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count);
-    uint32_t submit(command_buffer* buffers, uint32_t count);
+    uint64_t submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count);
+    uint64_t submit(command_buffer* buffers, uint32_t count);
 
     void present(handle<device_surface> surface_handle);
 
@@ -110,7 +110,7 @@ class vkdevice {
     vkdevice() = default;
     ~vkdevice() = default;
 
-    void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type);
+    void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type, const char* name);
 
     VkShaderModule create_shader_module(const std::span<uint8_t>& shader_code);
 

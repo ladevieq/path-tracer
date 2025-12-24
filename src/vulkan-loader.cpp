@@ -3,9 +3,9 @@
 #include <cassert>
 
 #if defined(WINDOWS)
-#include <windows.h>
-
-HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
+// extern "C" void* GetProcAddress(HMODULE, const char*);
+// extern "C" HMODULE LoadLibraryA(const char*);
+HMODULE vulkanLibrary = LoadLibraryA("vulkan-1.dll");
 
 #define LoadProcAddress GetProcAddress
 

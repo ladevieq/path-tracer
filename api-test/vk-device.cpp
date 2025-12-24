@@ -3,6 +3,8 @@
 #include <cassert>
 #include <vector>
 
+#include <vulkan/vulkan_core.h>
+
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
@@ -41,7 +43,7 @@ void vkdevice::init() {
 
     auto semaphore = create_semaphore({
         .type = VK_SEMAPHORE_TYPE_TIMELINE,
-    });
+    }, "timeline_semaphore");
     timeline_semaphore = get_semaphore(semaphore);
 }
 
@@ -271,6 +273,17 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
         vkDestroyShaderModule(device, stage_create_info.module, nullptr);
     }
 
+    if (desc.name) {
+        VkDebugUtilsObjectNameInfoEXT object_name{
+            .sType          = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext          = nullptr,
+            .objectType     = VK_OBJECT_TYPE_PIPELINE,
+            .objectHandle   = reinterpret_cast<uint64_t>(device_pipeline.vk_pipeline),
+            .pObjectName    = desc.name,
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &object_name);
+    }
+
     return pipelines.add(device_pipeline);
 }
 
@@ -303,6 +316,17 @@ handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline
 
     vkDestroyShaderModule(device, stage_create_info.module, nullptr);
 
+    if (desc.name) {
+        VkDebugUtilsObjectNameInfoEXT object_name{
+            .sType          = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext          = nullptr,
+            .objectType     = VK_OBJECT_TYPE_PIPELINE,
+            .objectHandle   = reinterpret_cast<uint64_t>(device_pipeline.vk_pipeline),
+            .pObjectName    = desc.name,
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &object_name);
+    }
+
     return pipelines.add(device_pipeline);
 }
 
@@ -329,16 +353,16 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
     for (uint32_t index = 0u; index < device_surface.image_count; index++) {
         device_surface.acquire_semaphores[index] = create_semaphore({
             .type = VK_SEMAPHORE_TYPE_BINARY,
-        });
+        }, "acquire_semaphore");
         device_surface.submit_semaphores[index]  = create_semaphore({
             .type = VK_SEMAPHORE_TYPE_BINARY,
-        });
+        }, "submit_semaphore");
     }
 
     return surfaces.add(device_surface);
 }
 
-handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc) {
+handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc, const char* name) {
     device_semaphore semaphore {
         .value = desc.initial_value,
     };
@@ -357,6 +381,16 @@ handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc) 
 
     VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
 
+    if (name) {
+        VkDebugUtilsObjectNameInfoEXT object_name{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext = nullptr,
+            .objectType = VK_OBJECT_TYPE_SEMAPHORE,
+            .objectHandle = reinterpret_cast<uint64_t>(semaphore.vk_semaphore),
+            .pObjectName = name,
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &object_name);
+    }
     return semaphores.add(semaphore);
 }
 
@@ -483,11 +517,12 @@ void vkdevice::destroy_surface(handle<device_surface> handle) {
 //     return ret;
 // }
 
-uint32_t vkdevice::submit(command_buffer* buffers, uint32_t count) {
+uint64_t vkdevice::submit(command_buffer* buffers, uint32_t count) {
     assert((max_submitable_command_buffers - count) >= 0);
     const auto queue_type = buffers[0].queue_type;
 
-    VkCommandBufferSubmitInfo command_buffers_info[count];
+    // VkCommandBufferSubmitInfo command_buffers_info[count];
+    VkCommandBufferSubmitInfo command_buffers_info[max_submitable_command_buffers];
 
     for (auto index{ 0U }; index < count; index++) {
         assert(queue_type == buffers[index].queue_type);
@@ -528,11 +563,12 @@ uint32_t vkdevice::submit(command_buffer* buffers, uint32_t count) {
     return fence.value;
 }
 
-uint32_t vkdevice::submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count) {
+uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count) {
     assert((max_submitable_command_buffers - count) >= 0);
     const auto queue_type = buffers[0].queue_type;
 
-    VkCommandBufferSubmitInfo command_buffers_info[count];
+    // VkCommandBufferSubmitInfo command_buffers_info[count];
+    VkCommandBufferSubmitInfo command_buffers_info[max_submitable_command_buffers];
 
     for (auto index{ 0U }; index < count; index++) {
         assert(queue_type == buffers[index].queue_type);
@@ -616,7 +652,7 @@ void vkdevice::present(handle<device_surface> surface_handle) {
 }
 
 // private
-void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type) {
+void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type, const char* name) {
     assert((max_allocable_command_buffers - count) >= 0);
     const auto&                 queue = queues[static_cast<uint32_t>(type)];
     VkCommandBuffer             command_buffers[max_allocable_command_buffers];
@@ -634,6 +670,17 @@ void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, Q
     for (auto index{ 0U }; index < count; index++) {
         buffers[index].vk_command_buffer = command_buffers[index];
         buffers[index].queue_type        = type;
+
+        if (name) {
+            VkDebugUtilsObjectNameInfoEXT object_name{
+                .sType          = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                .pNext          = nullptr,
+                .objectType     = VK_OBJECT_TYPE_COMMAND_BUFFER,
+                .objectHandle   = reinterpret_cast<uint64_t>(command_buffers[index]),
+                .pObjectName    = name,
+            };
+            vkSetDebugUtilsObjectNameEXT(device, &object_name);
+        }
     }
 }
 
@@ -1054,6 +1101,17 @@ void device_texture::init(const texture_desc& desc) {
         VKCHECK(vmaCreateImage(render_device.get_allocator(), &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
     }
 
+    if (desc.name) {
+        VkDebugUtilsObjectNameInfoEXT object_name{
+            .sType          = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext          = nullptr,
+            .objectType     = VK_OBJECT_TYPE_IMAGE,
+            .objectHandle   = reinterpret_cast<uint64_t>(vk_image),
+            .pObjectName    = desc.name,
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &object_name);
+    }
+
     create_views();
 
     // TODO: Handle mips views
@@ -1099,7 +1157,7 @@ void device_texture::init(const texture_desc& desc) {
         });
     }
 
-    vkUpdateDescriptorSets(device, write_descriptor_sets.size(), write_descriptor_sets.data(), 0U, nullptr);
+    vkUpdateDescriptorSets(device, static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0U, nullptr);
 }
 
 void device_texture::release() {
@@ -1209,8 +1267,6 @@ void device_sampler::init(const sampler_desc& desc) {
 
 
 uint32_t vkdevice::acquire_image_index(handle<device_surface> surface_handle) {
-    auto& render_device = vkdevice::get_render_device();
-    auto* device = render_device.get_device();
     auto& surface = get_surface(surface_handle);
     const auto& signal = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
 
@@ -1222,8 +1278,8 @@ uint32_t vkdevice::acquire_image_index(handle<device_surface> surface_handle) {
         .pSemaphores = &timeline_semaphore.vk_semaphore,
         .pValues = &timeline_semaphore.value,
     };
-    vkWaitSemaphores(device, &wait_info, -1);
-    VKCHECK(vkAcquireNextImageKHR(device, surface.vk_swapchain, -1, signal.vk_semaphore, nullptr, &surface.image_index));
+    vkWaitSemaphores(device, &wait_info, UINT64_MAX);
+    VKCHECK(vkAcquireNextImageKHR(device, surface.vk_swapchain, UINT64_MAX, signal.vk_semaphore, nullptr, &surface.image_index));
 
     return surface.image_index;
 }

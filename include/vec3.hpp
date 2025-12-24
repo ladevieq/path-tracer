@@ -41,7 +41,13 @@ class vec3 {
     [[nodiscard]]vec3 (min)(const vec3& vec) const;
     [[nodiscard]]vec3 (max)(const vec3& vec) const;
 
-    float operator[](int axis);
+    template<int axis>
+    [[nodiscard]] float get() const;
+
+    template<int axis>
+    void set(float val);
+
+    [[nodiscard]] float operator[](int axis) const;
 
     [[nodiscard]] float length() const;
 
@@ -61,7 +67,10 @@ class vec3 {
 
     static vec3 random(float min, float max);
 
-    __m128 v;
+    union {
+        __m128 v;
+        float arr[4];
+    };
 };
 
 vec3 lerp(const vec3& u, const vec3& v, float t);

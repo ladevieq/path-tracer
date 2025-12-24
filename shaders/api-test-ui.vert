@@ -8,7 +8,7 @@ struct vertex {
     uint    color;
 };
 
-layout(buffer_reference) readonly buffer params {
+layout(buffer_reference, buffer_reference_align = 8) readonly buffer params {
     vec2 scale;
     vec2 translate;
     uint texture_index;

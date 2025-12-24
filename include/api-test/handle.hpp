@@ -18,7 +18,7 @@ struct handle {
 
     [[nodiscard]] inline bool is_valid() const { return id != handle::invalid_id; }
 
-    static constexpr uint32_t invalid_id = -1U;
+    static constexpr uint32_t invalid_id = UINT32_MAX;
 
     // static constexpr handle<U> invalid_handle {};
 };

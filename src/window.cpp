@@ -194,10 +194,11 @@ void message_loop(void* wnd) {
     ((window*)wnd)->message_loop();
 }
 
-window::window(uint32_t desired_width, uint32_t desired_height) 
-    : width(desired_width), height(desired_height) {
+window::window(uint32_t desired_width, uint32_t desired_height)
+    : window_class_name("default-window"), width(desired_width), height(desired_height) {
     auto *process_handle = GetModuleHandleA(nullptr);
 
+    WNDCLASS            window_class {};
     window_class.style          = 0;
     window_class.lpfnWndProc    = &window::window_procedure;
     window_class.cbClsExtra     = 0;
@@ -207,7 +208,7 @@ window::window(uint32_t desired_width, uint32_t desired_height)
     window_class.hCursor        = nullptr;
     window_class.hbrBackground  = nullptr;
     window_class.lpszMenuName   = nullptr;
-    window_class.lpszClassName  = "default-window";
+    window_class.lpszClassName  = window_class_name;
 
     RegisterClass(&window_class);
 
@@ -242,7 +243,7 @@ window::window(uint32_t desired_width, uint32_t desired_height)
 
 window::~window() {
     DestroyWindow(handle);
-    UnregisterClassA(window_class.lpszClassName, GetModuleHandleA(nullptr));
+    UnregisterClassA(window_class_name, GetModuleHandleA(nullptr));
 }
 
 void window::message_loop() {
@@ -253,7 +254,9 @@ void window::message_loop() {
         for (size_t virtual_key { KEYS::LSHIFT }; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
             if (keyboard[virtual_key]) {
                 events.push_back({ 
-                    .key = (KEYS)virtual_key,
+                    .data {
+                        .key = (KEYS)virtual_key,
+                    },
                     .type = EVENT_TYPES::KEY_PRESS,
                 });
             }
@@ -278,7 +281,7 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
         case WM_CLOSE:
         case WM_DESTROY:
         case WM_QUIT: {
-            events.push_back({ .type = EVENT_TYPES::QUIT });
+            events.push_back({ .data {}, .type = EVENT_TYPES::QUIT });
             isOpen = false;
             break;
         }
@@ -287,8 +290,12 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
             height = HIWORD(lparam);
 
             events.push_back({
-                .width = width,
-                .height = height,
+                .data {
+                    .size {
+                        .width = width,
+                        .height = height,
+                    },
+                },
                 .type = EVENT_TYPES::RESIZE
             });
             break;
@@ -298,7 +305,9 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
             keyboard[wparam] = true;
 
             events.push_back({ 
-                .key = (KEYS)wparam,
+                .data {
+                    .key = (KEYS)wparam,
+                },
                 .type = EVENT_TYPES::KEY_PRESS,
             });
             break;
@@ -308,7 +317,9 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
             keyboard[wparam] = false;
 
             events.push_back({ 
-                .key = (KEYS)wparam,
+                .data {
+                    .key = (KEYS)wparam,
+                },
                 .type = EVENT_TYPES::KEY_RELEASE,
             });
             break;
@@ -316,50 +327,66 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
 
         case WM_LBUTTONDOWN: {
             events.push_back({ 
-                .button = BUTTONS::LEFT,
+                .data {
+                    .button = BUTTONS::LEFT,
+                },
                 .type = EVENT_TYPES::BUTTON_PRESS,
             });
             break;
         }
         case WM_LBUTTONUP: {
             events.push_back({ 
-                .button = BUTTONS::LEFT,
+                .data {
+                    .button = BUTTONS::LEFT,
+                },
                 .type = EVENT_TYPES::BUTTON_RELEASE,
             });
             break;
         }
         case WM_RBUTTONDOWN: {
             events.push_back({ 
-                .button = BUTTONS::RIGHT,
+                .data {
+                    .button = BUTTONS::RIGHT,
+                },
                 .type = EVENT_TYPES::BUTTON_PRESS,
             });
             break;
         }
         case WM_RBUTTONUP: {
             events.push_back({ 
-                .button = BUTTONS::RIGHT,
+                .data {
+                    .button = BUTTONS::RIGHT,
+                },
                 .type = EVENT_TYPES::BUTTON_RELEASE,
             });
             break;
         }
         case WM_MBUTTONDOWN: {
             events.push_back({ 
-                .button = BUTTONS::MIDDLE,
+                .data {
+                    .button = BUTTONS::MIDDLE,
+                },
                 .type = EVENT_TYPES::BUTTON_PRESS,
             });
             break;
         }
         case WM_MBUTTONUP: {
             events.push_back({ 
-                .button = BUTTONS::MIDDLE,
+                .data {
+                    .button = BUTTONS::MIDDLE,
+                },
                 .type = EVENT_TYPES::BUTTON_RELEASE,
             });
             break;
         }
         case WM_MOUSEMOVE: {
             events.push_back({ 
-                .x = GET_X_LPARAM(lparam),
-                .y = GET_Y_LPARAM(lparam),
+                .data {
+                    .position {
+                        .x = GET_X_LPARAM(lparam),
+                        .y = GET_Y_LPARAM(lparam),
+                   },
+                },
                 .type = EVENT_TYPES::MOUSE_MOVE,
             });
             break;

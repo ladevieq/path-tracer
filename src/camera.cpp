@@ -1,5 +1,3 @@
-#include <cmath>
-
 #include "camera.hpp"
 #include "utils.hpp"
 
@@ -38,8 +36,12 @@ void camera::move(const vec3& v) {
 }
 
 void camera::rotate_y(float theta) {
-    forward.v[0] = forward.v[0] * cos(theta) - forward.v[2] * sin(theta);
-    forward.v[2] = forward.v[0] * sin(theta) + forward.v[2] * cos(theta);
+    float v0 = forward.get<0>();
+    float v2 = forward.get<2>();
+    float new_v0 = v0 * cos(theta) - v2 * sin(theta);
+    float new_v2 = v0 * sin(theta) + v2 * cos(theta);
+    forward.set<0>(new_v0);
+    forward.set<2>(new_v2);
     forward.normalize();
 
     right = forward.cross(vec3{ 0.0, 1.0, 0.0 }).normalize();
