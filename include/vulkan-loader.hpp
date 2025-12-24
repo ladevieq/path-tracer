@@ -1,6 +1,8 @@
 #ifndef __VULKAN_LOADER_HPP_
 #define __VULKAN_LOADER_HPP_
 
+#define VK_NO_PROTOTYPES
+
 #if defined(WINDOWS)
 #include <vulkan/vk_platform.h>
 #include <vulkan/vulkan_core.h>
@@ -8,10 +10,12 @@ typedef unsigned long DWORD;
 typedef const wchar_t* LPCWSTR;
 typedef void* HANDLE;
 typedef struct HINSTANCE__* HINSTANCE;
+typedef HINSTANCE HMODULE;
 typedef struct HWND__* HWND;
 typedef struct HMONITOR__* HMONITOR;
 typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
 #include <vulkan/vulkan_win32.h>
+#define VK_USE_PLATFORM_WIN32_KHR
 #else
 #include <vulkan/vulkan.h>
 #endif
@@ -58,6 +62,7 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkGetPhysicalDeviceMemoryProperties)       \
     X(vkCreateDevice)                            \
     X(vkEnumerateDeviceExtensionProperties)      \
+    X(vkSetDebugUtilsObjectNameEXT)              \
     X(vkCreateDebugUtilsMessengerEXT)            \
     X(vkDestroyDebugUtilsMessengerEXT)
 

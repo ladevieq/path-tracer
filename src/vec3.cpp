@@ -1,5 +1,5 @@
-#include <climits>
 #include <cmath>
+#include <cassert.>
 #include <smmintrin.h>
 
 #include "utils.hpp"
@@ -47,22 +47,51 @@ vec3& vec3::operator/=(float numerator) {
     return *this;
 }
 
-float vec3::operator[](const int axis) {
-    if (axis > 2) {
+
+template<int axis>
+float vec3::get() const {
+    if constexpr (axis > 2) {
         return std::numeric_limits<float>::infinity();
     }
 
-    return v[axis];
+    return arr[axis];
+    // return static_cast<float>(_mm_extract_ps(v, 3 - axis));
+}
+
+template<int axis>
+void vec3::set(float val) {
+    if constexpr (axis > 2) {
+        assert(false);
+    }
+
+    arr[axis] = val;
+    // return static_cast<float>(_mm_extract_ps(v, axis));
+}
+
+template float vec3::get<0>(void) const;
+template float vec3::get<1>(void) const;
+template float vec3::get<2>(void) const;
+
+template void vec3::set<0>(float);
+template void vec3::set<1>(float);
+template void vec3::set<2>(float);
+
+float vec3::operator[](int axis) const {
+    if (axis > 2) {
+        assert(false);
+    }
+
+    return arr[axis];
 }
 
 float vec3::length() const {
     __m128 t = _mm_dp_ps(v, v, 0b11110001);
-    return std::sqrt(t[0]);
+    return static_cast<float>(std::sqrt(_mm_extract_ps(t, 0)));
 }
 
-float vec3::length_sq() const { return (_mm_dp_ps(v, v, 0b11110001))[0]; }
+float vec3::length_sq() const { return static_cast<float>(_mm_extract_ps(_mm_dp_ps(v, v, 0b11110001), 0)); }
 
-float vec3::dot(const vec3& vec) const { return (_mm_dp_ps(v, vec.v, 0b11110001))[0]; }
+float vec3::dot(const vec3& vec) const { return static_cast<float>(_mm_extract_ps(_mm_dp_ps(v, vec.v, 0b11110001), 0)); }
 
 vec3 vec3::cross(const vec3& vec) const {
     __m128 tmp0 = _mm_shuffle_ps(v, v, _MM_SHUFFLE(3, 0, 2, 1));
@@ -90,11 +119,14 @@ vec3& vec3::normalize() {
 bool vec3::near_zero() const {
     // __m128 e = _mm_set1_ps(EPSILON);
     // _mm_cmplt_ps(_mm_andnot_ps(_mm_set1_ps(-0.0f), v), e);
-    return (fabs(v[0]) < EPSILON) && (fabs(v[1]) < EPSILON) && (fabs(v[2]) < EPSILON);
+    float v0 = fabs(static_cast<float>(_mm_extract_ps(v, 0)));
+    float v1 = fabs(static_cast<float>(_mm_extract_ps(v, 1)));
+    float v2 = fabs(static_cast<float>(_mm_extract_ps(v, 2)));
+    return (v0 < EPSILON) && (v1 < EPSILON) && (v2 < EPSILON);
 }
 
 void vec3::print() const {
-    printf("%f %f %f\n", v[0], v[1], v[2]);
+    printf("%f %f %f\n", get<0>(), get<1>(), get<2>());
 }
 
 vec3 vec3::random() { return { randd(), randd(), randd() }; }

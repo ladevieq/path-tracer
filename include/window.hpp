@@ -10,7 +10,14 @@ class vkrenderer;
 
 #include <xkbcommon/xkbcommon.h>
 #elif defined(WINDOWS)
-#include <Windows.h>
+// #include <Windows.h>
+typedef struct HWND__* HWND;
+typedef int64_t LRESULT;
+typedef int64_t LPARAM;
+typedef uint64_t WPARAM;
+typedef unsigned int UINT;
+typedef void* LPVOID;
+#define CALLBACK __stdcall
 #endif
 
 // enum MODIFIERS: uint32_t {
@@ -122,13 +129,28 @@ enum EVENT_TYPES: int32_t {
     MOUSE_MOVE
 };
 
+// struct event {
+//     uint32_t    width;
+//     uint32_t    height;
+//     KEYS        key;
+//     BUTTONS     button;
+//     int32_t     x;
+//     int32_t     y;
+//     EVENT_TYPES type;
+// };
 struct event {
-    uint32_t    width;
-    uint32_t    height;
-    KEYS        key;
-    BUTTONS     button;
-    int32_t     x;
-    int32_t     y;
+    union {
+        struct {
+            uint32_t    width;
+            uint32_t    height;
+        } size;
+        struct {
+            int32_t     x;
+            int32_t     y;
+        } position;
+        KEYS        key;
+        BUTTONS     button;
+    } data;
     EVENT_TYPES type;
 };
 
@@ -147,7 +169,7 @@ class window {
         static LRESULT CALLBACK window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
         HWND                handle {};
-        WNDCLASS            window_class {};
+        const char*         window_class_name;
         LPVOID              main_fiber;
         LPVOID              message_loop_fiber;
 #elif defined(LINUX)

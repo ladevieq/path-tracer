@@ -1,23 +1,41 @@
-#include <cassert>
-#include <cstdio>
-#include <array>
-#include <chrono>
-
-#include <Windows.h>
-#include <debugapi.h>
+// #include <cassert>
+// #include <cstdio>
+// #include <array>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+// #include <stb_image.h>
 
-#include "imgui.h"
+#include "imgui.cpp"
+#include "imgui_draw.cpp"
+#include "imgui_tables.cpp"
+#include "imgui_widgets.cpp"
+#include "imgui_demo.cpp"
 
-#include "handle.hpp"
-#include "window.hpp"
-#include "utils.hpp"
+#define API_TEST
+
+#include "../src/vulkan-loader.cpp"
+#include "../src/window.cpp"
+#include "../src/vec3.cpp"
+#include "../src/camera.cpp"
+#include "../src/scene.cpp"
+#include "../src/utils.cpp"
+#include "../src/bvh.cpp"
+#include "../src/gltf.cpp"
+#include "../src/mesh.cpp"
+
+#include "vk-utils.cpp"
+#include "vk-device.cpp"
+#include "vk-bindless.cpp"
+#include "vk-command-buffer.cpp"
+
+// #include "handle.hpp"
+// #include "window.hpp"
+// #include "utils.hpp"
 
 #ifdef VK
 #include <vk_mem_alloc.h>
 #include "vk-device.hpp"
+#include "vk-command-buffer.hpp"
 #else
 #include "dx12-device.hpp"
 #include "dx12-command-buffer.hpp"
@@ -25,7 +43,10 @@
 
 struct device_texture;
 
-#ifdef _DEBUG
+#define VK
+// #define DX12
+
+#ifdef DEBUG
 #define ENABLE_RENDERDOC
 #endif // _DEBUG
 
@@ -33,12 +54,12 @@ struct device_texture;
 #include "scene.hpp"
 
 #ifdef ENABLE_RENDERDOC
-#include <renderdoc.h>
+#include <renderdoc_app.h>
 
 #define RD_START_CAPTURE if(rdoc_api != nullptr) rdoc_api->StartFrameCapture(nullptr, nullptr)
 #define RD_END_CAPTURE if(rdoc_api != nullptr) rdoc_api->EndFrameCapture(nullptr, nullptr)
 
-RENDERDOC_API_1_4_1 *rdoc_api = nullptr;
+RENDERDOC_API_1_6_0 *rdoc_api = nullptr;
 #else
 #define RD_START_CAPTURE (0)
 #define RD_END_CAPTURE (0)
@@ -47,10 +68,10 @@ RENDERDOC_API_1_4_1 *rdoc_api = nullptr;
 static constexpr size_t Kb = 1024U;
 static constexpr size_t Mb = 1024U * Kb;
 
-void ui(uint32_t frame_time) {
+void ui(uint64_t frame_time) {
     static float max_fps = 0.f;
-    static uint32_t max_frame_time = 1000U;
-    float fps = 1000000U / frame_time;
+    static uint64_t max_frame_time = 1000U;
+    float fps = static_cast<float>(1000000U / frame_time);
     if (fps > max_fps) {
         max_fps = fps;
     }
@@ -58,39 +79,60 @@ void ui(uint32_t frame_time) {
         max_frame_time = frame_time;
     }
     ImGui::NewFrame();
-    // bool open = true;
-    // ImGui::ShowDemoWindow(&open);
+    bool open = true;
     ImGui::Text("FPS : %f\n", fps);
     ImGui::Text("Max FPS : %f\n", max_fps);
     ImGui::Text("frame_time : %f ms\n", frame_time / 1000.f);
     ImGui::Text("max frame_time : %f ms\n", max_frame_time / 1000.f);
+
+    ImGui::Text("LUT");
+    ImGui::Image(45, ImVec2(128, 128));
     ImGui::EndFrame();
     ImGui::Render();
 }
 
-// void update_buffers(ImDrawData* draw_data, const device_buffer& vertex_buffer, const device_buffer& index_buffer) {
-//     off_t vertex_offset = 0;
-//     off_t index_offset = 0;
-//     for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
-//         auto* cmd_list = draw_data->CmdLists[index];
-// 
-//         size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
-//         auto* vtx_ptr = static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset;
-//         memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
-//         vertex_offset += static_cast<off_t>(vertex_bytes_size);
-// 
-//         size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
-//         memcpy(static_cast<uint8_t*>(index_buffer.mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
-//         index_offset += static_cast<off_t>(index_bytes_size);
-//     }
-// }
+void update_buffers(ImDrawData* draw_data, const device_buffer& vertex_buffer, const device_buffer& index_buffer) {
+    off_t vertex_offset = 0;
+    off_t index_offset = 0;
+    for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
+        auto* cmd_list = draw_data->CmdLists[index];
+
+        size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
+        auto* vtx_ptr = static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset;
+        memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
+        vertex_offset += static_cast<off_t>(vertex_bytes_size);
+
+        size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
+        memcpy(static_cast<uint8_t*>(index_buffer.mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
+        index_offset += static_cast<off_t>(index_bytes_size);
+    }
+}
 
 int main() {
+    LARGE_INTEGER freq;
+    // From Microsoft doc
+    // https://learn.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancefrequency
+    // The frequency of the performance counter is fixed at system boot and is
+    // consistent across all processors so you only need to query the frequency
+    // from QueryPerformanceFrequency as the application initializes,
+    // and then cache the result.
+    QueryPerformanceFrequency(&freq);
 
 #ifdef ENABLE_RENDERDOC
-    if (HMODULE mod = GetModuleHandleA("renderdoc.dll")) {
-        auto RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-        assert(RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api) == 1);
+    {
+        HMODULE mod = GetModuleHandleA("renderdoc.dll");
+        // if (!mod) {
+        //     mod = LoadLibraryA("renderdoc.dll");
+        // }
+
+        if (mod) {
+            auto RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+            assert(RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void **)&rdoc_api) == 1);
+        }
+
+        // if (!rdoc_api->IsTargetControlConnected()) {
+        //     rdoc_api->LaunchReplayUI(true, nullptr);
+        // }
     }
 #endif
 
@@ -103,7 +145,7 @@ int main() {
     io.DisplaySize.x = window_width;
     io.DisplaySize.y = window_height;
 
-    const float aspect_ratio = 16.0 / 9.0;
+    const float aspect_ratio = 16.f / 9.f;
 
     point3 position { 13.f, 2.f, -3.f };
     point3 target {};
@@ -118,7 +160,9 @@ int main() {
 #endif
     device.init();
 
-    // auto main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
+#ifdef VK
+    auto main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
+#endif
 
     auto surface_handle = device.create_surface({
         .window_handle = wnd.handle,
@@ -134,6 +178,7 @@ int main() {
         .present_mode = DXGI_SWAP_EFFECT_FLIP_DISCARD,
         .usages = DXGI_USAGE_RENDER_TARGET_OUTPUT,
 #endif
+        .image_count = 2U,
     });
     auto& surface = device.get_surface(surface_handle);
 
@@ -178,10 +223,10 @@ int main() {
 #endif
     });
 
-    off_t offset = width * height * 4;
+    off_t buffer_offset = width * height * 4;
     data = stbi_load("../models/sponza/715093869573992647.jpg", &width, &height, &channels, 4);
     size = static_cast<size_t>(width) * height * 4U;
-    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + offset);
+    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + buffer_offset);
     memcpy(addr, data, size);
 
     auto second_texture = device.create_texture({
@@ -213,7 +258,6 @@ int main() {
 #endif
     });
 
-
     uint8_t *pixels = nullptr;
     int atlas_width;
     int atlas_height;
@@ -233,9 +277,10 @@ int main() {
 #endif
     });
     const auto& ui_texture = device.get_texture(ui_texture_handle);
-    io.Fonts->SetTexID(*(void **)&ui_texture_handle.id);
+    // io.Fonts->SetTexID(*(void **)&ui_texture_handle.id);
+    io.Fonts->SetTexID(reinterpret_cast<void*>(ui_texture.get_sampled_index()));
 
-    off_t ui_offset = 2L * offset;
+    off_t ui_offset = 2L * buffer_offset;
     size = static_cast<size_t>(atlas_width) * atlas_height * 4U;
     addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + ui_offset);
     memcpy(addr, pixels, size);
@@ -327,11 +372,35 @@ int main() {
 
 #ifdef VK
     std::array<graphics_command_buffer, 4U> graphics_command_buffers;
-    device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), QueueType::GRAPHICS);
+    device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), QueueType::GRAPHICS, "graphics_cmd_buf");
 #else
     std::array<dx12::graphics_command_buffer, 4U> graphics_command_buffers;
     device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), dx12::QueueType::GRAPHICS);
 #endif
+
+
+    handle<device_texture> transmittance_lut_handle = device.create_texture({
+        .width  = static_cast<uint32_t>(1024),
+        .height = static_cast<uint32_t>(1024),
+#ifdef VK
+        .usages = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .type   = VK_IMAGE_TYPE_2D,
+#else
+        .usages = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        .format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .type   = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+#endif
+        .name   = "transmittance_lut",
+    });
+    device_texture transmittance_lut = device.get_texture(transmittance_lut_handle);
+
+    std::vector<uint8_t> transmittance_lut_code = read_file("shaders/transmittance_lut.comp.spv");
+    handle<device_pipeline> transmittance_lut_compute = device.create_compute_pipeline({
+        .cs_code = transmittance_lut_code,
+        .name = "transmittance_lut_comp",
+    });
+
 
     // API test code
     RD_START_CAPTURE;
@@ -345,7 +414,7 @@ int main() {
 #endif
 
     graphics_command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
-    graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, offset);
+    graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, buffer_offset);
     graphics_command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, ui_offset);
 #ifdef VK
     graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
@@ -362,6 +431,15 @@ int main() {
                 device.get_texture(output_texture_handle).get_storage_index(),  // Output
             },
         });
+
+        graphics_command_buffers[0].dispatch({
+            .pipeline = transmittance_lut_compute,
+            .group_size = { .vec = { 1024U, 1024U, 1U }},
+            .local_group_size = { .vec { 8U, 8U, 1U }},
+            .params = {
+                transmittance_lut.get_storage_index(),
+            }
+        });
     }
 
     graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -374,21 +452,28 @@ int main() {
 
     RD_END_CAPTURE;
 
+    // watcher::watch_file(std::filesystem::path("../shaders/compute.comp"), [&]() {
+    //     printf("change");
+    // });
+
 #ifdef VK
     std::array<handle<device_texture>, 1U> color_attachment {};
     constexpr uint32_t virtual_frames_count = 2U;
-    uint32_t frame_time = 1U;
+    uint64_t frame_time = 1U;
     uint32_t frame_count = 0U;
     while(wnd.isOpen) {
-        auto start = std::chrono::system_clock::now();
+        LARGE_INTEGER start_qpc;
+        QueryPerformanceCounter(&start_qpc);
         wnd.poll_events();
+
+        watcher::pull_changes();
 
         uint32_t virtual_frame_index = frame_count % virtual_frames_count;
         auto command_buffer = graphics_command_buffers[2U + virtual_frame_index];
         for (auto& event : wnd.events) {
             if (event.type == EVENT_TYPES::MOUSE_MOVE) {
-                io.MousePos.x = static_cast<float>(event.x);
-                io.MousePos.y = static_cast<float>(event.y);
+                io.MousePos.x = static_cast<float>(event.data.position.x);
+                io.MousePos.y = static_cast<float>(event.data.position.y);
             }
 
             io.MouseDown[0] = event.type == EVENT_TYPES::BUTTON_PRESS;
@@ -410,7 +495,7 @@ int main() {
         auto backbuffer = surface.swapchain_images[device.acquire_image_index(surface_handle)];
         color_attachment[0] = backbuffer;
 
-        RD_START_CAPTURE;
+        // RD_START_CAPTURE;
         command_buffer.start();
 
         command_buffer.barrier(backbuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
@@ -475,43 +560,49 @@ int main() {
         });
 
         auto& draws_uniform_buffer = device.get_bindingmodel().get_draws_uniform_buffer();
+        uint32_t vertex_offset = 0;
+        uint32_t index_offset = 0;
         for (auto index {0} ; index < draw_data->CmdListsCount; index++) {
             auto* cmd_list = draw_data->CmdLists[index];
-            auto offset = draws_uniform_buffer.offset;
-            {
-                struct ui_params {
-                    // uintptr_t vertex_buffer;
-                    float scale[2U];
-                    float translate[2U];
-                    uint32_t texture_index;
-                };
-                auto* ui_param = draws_uniform_buffer.allocate<ui_params>();
-                *ui_param = ui_params{
-                    // .vertex_buffer = vertex_buffer.device_address,
-                    .scale {
-                        2.f / draw_data->DisplaySize.x,
-                        2.f / draw_data->DisplaySize.y,
-                    },
-                    .translate {
-                        -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
-                        -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
-                    },
-                    .texture_index = ui_texture.get_sampled_index(),
-                };
-            }
 
             for (auto& draw_command : cmd_list->CmdBuffer) {
+                auto offset = draws_uniform_buffer.offset;
+                ImTextureID texture_id = draw_command.TexRef.GetTexID();
+                {
+                    struct ui_params {
+                        // uintptr_t vertex_buffer;
+                        float scale[2U];
+                        float translate[2U];
+                        uint32_t texture_index;
+                    };
+                    auto* ui_param = draws_uniform_buffer.allocate<ui_params>();
+                    *ui_param = ui_params{
+                        // .vertex_buffer = vertex_buffer.device_address,
+                        .scale {
+                            2.f / draw_data->DisplaySize.x,
+                            2.f / draw_data->DisplaySize.y,
+                        },
+                        .translate {
+                            -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
+                            -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
+                        },
+                        .texture_index = *reinterpret_cast<uint32_t*>(&texture_id),
+                    };
+                }
+
                 command_buffer.draw_indexed({
                     .pipeline = graphics,
                     .index_buffer = index_buffer_handle,
                     .vertex_count = draw_command.ElemCount,
-                    .vertex_offset = draw_command.VtxOffset,
-                    .index_offset = draw_command.IdxOffset,
+                    .vertex_offset = draw_command.VtxOffset + vertex_offset,
+                    .index_offset = draw_command.IdxOffset + index_offset,
                     .instance_count = 1U,
                     .uniforms_address = draws_uniform_buffer.device_address + offset,
                     .vertex_address = vertex_buffer.device_address,
                 });
             }
+            vertex_offset += cmd_list->VtxBuffer.size();
+            index_offset += cmd_list->IdxBuffer.size();
         }
 
         command_buffer.end_renderpass();
@@ -523,11 +614,13 @@ int main() {
         device.present(surface_handle);
         device.wait();
 
-        auto end = std::chrono::system_clock::now();
-        frame_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        LARGE_INTEGER end_qpc;
+        QueryPerformanceCounter(&end_qpc);
+        LONGLONG diff_qpc = end_qpc.QuadPart - start_qpc.QuadPart;
+        frame_time = (diff_qpc * 1000000ULL) / freq.QuadPart;
         frame_count++;
 
-        RD_END_CAPTURE;
+        // RD_END_CAPTURE;
     }
 
     device.wait();

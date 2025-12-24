@@ -25,7 +25,7 @@ class scene {
 
         uint32_t enable_dof = (uint32_t)false;
         uint32_t debug_bvh  = (uint32_t)false;
-        int32_t downscale_factor = 1;
+        int32_t downscale_factor = 2;
 
         metadata(const camera &cam, uint32_t width, uint32_t height);
     };

@@ -1,9 +1,6 @@
 #ifndef __AABB_HPP_
 #define __AABB_HPP_
 
-#include <cmath>
-#include <climits>
-
 #include "vec3.hpp"
 #include "triangle.hpp"
 
@@ -33,11 +30,14 @@ class aabb {
 
         int32_t maximum_axis() const {
             vec3 diag = diagonal();
+            float v0 = diag.get<0>();
+            float v1 = diag.get<1>();
+            float v2 = diag.get<2>();
 
-            if (diag.v[0] > diag.v[1] && diag.v[0] > diag.v[2]) {
+            if (v0 > v1 && v0 > v2) {
                 return 0;
             }
-            if (diag.v[1] > diag.v[2]) {
+            if (v1 > v2) {
                 return 1;
             }
             return 2;
@@ -53,7 +53,10 @@ class aabb {
 
         float surface_area() const {
             auto diag = diagonal();
-            return 2.f * (diag.v[0] * diag.v[1] + diag.v[0] * diag.v[2] + diag.v[1] * diag.v[2]);
+            float v0 = diag.get<0>();
+            float v1 = diag.get<1>();
+            float v2 = diag.get<2>();
+            return 2.f * (v0 * v1 + v0 * v2 + v1 * v2);
         }
 
         vec3 minimum = vec3(std::numeric_limits<float>::max());

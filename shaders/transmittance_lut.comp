@@ -1,0 +1,83 @@
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_nonuniform_qualifier : require
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler samplers[];
+layout(set = 0, binding = 1) uniform texture2D textures[];
+layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
+
+layout(push_constant) uniform buffers {
+    uint output_image_index;
+    uvec2 tex_size;
+    uint padding;
+} params;
+
+vec2 sphere_intersect( in vec3 pos, in vec3 dir, float radius )
+{
+    float b = dot( pos, rd );
+    float c = dot( pos, pos ) - radius * radius;
+    float h = b * b - c;
+    if( h<0.0 ) return vec2(-1.0); // no intersection
+    h = sqrt( h );
+    return vec2( -b - h, -b + h );
+}
+
+vec3 rayleigh_scattering = vec3(5.8f, 13.5f, 33.1f);
+vec3 rayleigh_extinction = -rayleigh_scattering;
+
+vec3 mie_scattering = vec3(0.f);
+vec3 mie_extinction = vec3(0.f);
+
+void main() {
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    vec3 out_color = vec3(0);
+    if (coords.x % 2 == 0 ) {
+        out_color = vec3(1);
+    }
+    if (coords.y % 2 == 1 ) {
+        out_color = vec3(1);
+    }
+    imageStore(images[nonuniformEXT(params.output_image_index)], coords, vec4(out_color, 1.0));
+
+    const uint raymarching_steps = 10U;
+
+    const float ground_radius = 6360.f;
+    const float top_radius = 6420.f;
+    const float atmosphere_radius = top_radius - ground_radius;
+
+    vec2 uvs = coords / params.tex_size;
+
+    float mu = uvs.y * 2.f - 1.f;
+    float theta = acos(mu);
+    float height = atmosphere_radius *  uvs.x;
+
+    vec2 pos = vec2(0.f, ground_radius + height);
+    vec2 dir vec2(mu, sin(theta));
+    vec3 transmittance = vec3(0);
+
+    // find ground hit
+    float t = 0.f;
+    vec2 ground_intersection = sphere_intersection(pos, dir, ground_radius);
+    t = ground_intersection.x;
+
+    // find atmosphere hit
+    if (ground_intersection.y < 0.f) {
+        vec2 top_intersection = sphere_intersection(pos, dir, top_radius);
+        t = top_intersection.y;
+    }
+
+    vec2 hit = pos + dir * t;
+
+    // raymarching
+    float step = t / raymarching_steps;
+    float dist = 0.f
+    for (dist < t) {
+        vec2 cur = pos + dir * dist;
+        dist += step;
+
+        
+    }
+
+    imageStore(images[nonuniformEXT(params.output_image_index)], vec2(mu, height), vec4(out_color, 1.0));
+}

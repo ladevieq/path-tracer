@@ -24,6 +24,7 @@ struct texture_desc {
     VkFormat              format;
     VkImageType           type;
     VkImage               vk_image = nullptr;
+    const char*           name = nullptr;
 
     static constexpr auto max_mips = 16U;
 };
@@ -111,11 +112,14 @@ struct buffer_desc {
     uint32_t              memory_usage;
 };
 
+#define ALIGN(value, alignment) \
+    (((value) + ((alignment) - 1)) & ~((alignment) - 1))
+
 struct device_buffer {
     template<typename T>
     T* allocate() {
         // size_t alloc_size = (sizeof(T) + 0x100) & 0xffffff00;
-        size_t alloc_size = sizeof(T);
+        size_t alloc_size = ALIGN(sizeof(T), 16);
         if (offset + alloc_size > size) {
             reset();
         }
@@ -127,6 +131,7 @@ struct device_buffer {
 
     void* allocate(uint64_t alloc_size) {
         // size_t alloc_size = (sizeof(T) + 0x100) & 0xffffff00;
+        alloc_size = ALIGN(alloc_size, 16);
         if (offset + alloc_size > size) {
             reset();
         }
@@ -140,7 +145,7 @@ struct device_buffer {
         offset = 0U;
     }
 
-    uint32_t        offset = 0U;
+    uint64_t        offset = 0U;
     VkBuffer        vk_buffer;
     VmaAllocation   alloc;
     VkDeviceAddress device_address = 0U;
@@ -154,10 +159,12 @@ struct graphics_pipeline_desc {
     std::span<VkFormat> color_attachments_format;
     VkFormat            depth_attachment_format;
     VkFormat            stencil_attachment_format;
+    const char*         name;
 };
 
 struct compute_pipeline_desc {
     std::span<uint8_t>  cs_code;
+    const char*         name;
 };
 
 struct device_pipeline {

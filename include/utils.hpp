@@ -1,21 +1,15 @@
 #pragma once
 
 #include <vector>
-#include <functional>
 #include <unordered_map>
-#include <string>
 
 std::vector<uint8_t> read_file(const char* path);
 
 #define PI 3.14159265359
 #define EPSILON 0.000001
 
-namespace std::filesystem {
-    class path;
-}
-
 inline float deg_to_rad(float deg) {
-    return deg * PI / 180.f;
+    return static_cast<float>(deg * PI / 180.f);
 }
 
 inline float randd() {
@@ -45,9 +39,11 @@ void log_last_error();
 
 class watcher {
 public:
-    static bool watch_file(std::filesystem::path&& filepath, std::function<void()> callback);
+    typedef void(*func)(void);
 
-    static bool watch_dir(std::filesystem::path&& dir_path);
+    static bool watch_file(const char* filepath, func callback);
+
+    static bool watch_dir(const char* dir_path);
 
     static void pull_changes();
 
@@ -59,7 +55,7 @@ private:
         DWORD       buffer[512];
     };
 
-    inline static std::unordered_map<std::string, std::function<void()>> callbacks;
-    inline static std::unordered_map<std::string, watch_data> watched_dirs;
+    inline static std::unordered_map<const char*, func> callbacks;
+    inline static std::unordered_map<const char*, watch_data> watched_dirs;
 };
 #endif

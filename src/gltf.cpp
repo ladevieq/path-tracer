@@ -1,8 +1,6 @@
 #include "gltf.hpp"
 
-#include <algorithm>
 #include <execution>
-#include <filesystem>
 #include <fstream>
 
 #ifndef API_TEST
@@ -18,10 +16,6 @@
 #include <vk_mem_alloc.h>
 #else
 #include "vk-renderer.hpp"
-#endif
-
-#ifdef TRACY_ENABLE
-#include "tracy/Tracy.hpp"
 #endif
 
 gltf::gltf(const std::filesystem::path& filepath) {
@@ -50,7 +44,7 @@ gltf::gltf(const std::filesystem::path& filepath) {
     load_meshes();
 
     auto& root_children = scene["nodes"];
-    uint32_t root_children_count = scene["nodes"].size();
+    size_t root_children_count = scene["nodes"].size();
     root_node.children.resize(root_children_count);
 
     for (size_t child_index = 0; child_index < root_children_count; child_index++) {
@@ -163,7 +157,7 @@ void gltf::load_textures(const std::filesystem::path& path) {
     };
 
     graphics_command_buffer command_buffers[buffers_count];
-    device.allocate_command_buffers(command_buffers, buffers_count, QueueType::GRAPHICS);
+    device.allocate_command_buffers(command_buffers, buffers_count, QueueType::GRAPHICS, "upload_buffer");
     auto buffer_index = 0U;
     auto command_buffer = command_buffers[buffer_index];
     auto buffer_handle = staging_buffers_handle[buffer_index];
@@ -279,10 +273,10 @@ void gltf::load_materials() {
 
             if (pbr_params.contains("baseColorFactor")) {
                 const auto& base_color = pbr_params["baseColorFactor"];
-                material.base_color.v[0] = base_color[0].get<float>();
-                material.base_color.v[1] = base_color[1].get<float>();
-                material.base_color.v[2] = base_color[2].get<float>();
-                material.base_color.v[3] = base_color[3].get<float>();
+                material.base_color.set<0>(base_color[0].get<float>());
+                material.base_color.set<1>(base_color[1].get<float>());
+                material.base_color.set<2>(base_color[2].get<float>());
+                material.base_color.arr[3] = base_color[3].get<float>(); // Since we use a vec3 for colors we are not allowed toset fourth value with set<3>
             } else {
                 material.base_color = vec3(1.f);
             }

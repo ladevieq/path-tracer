@@ -1,6 +1,6 @@
 #include "scene.hpp"
 
-#include <filesystem>
+#include <cstdint>
 #include <queue>
 
 #ifdef API_TEST
@@ -11,7 +11,7 @@
 
 #include "gltf.hpp"
 #include "bvh.hpp"
-#include "material.hpp"
+// #include "material.hpp"
 
 // void scene::random_scene() {
 //     material ground_material = { { 0.5, 0.5, 0.5 } };
@@ -146,9 +146,9 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
 
                     auto triangle_offset = triangles_offset * 3 + index_offset;
 
-                    indices[triangle_offset]        = (submesh_level_index_1 + vertex_offset) | (0xff000000 & (materials.size() << 8));
-                    indices[triangle_offset + 1]    = (submesh_level_index_2 + vertex_offset) | (0xff000000 & (materials.size() << 16));
-                    indices[triangle_offset + 2]    = (submesh_level_index_3 + vertex_offset) | (0xff000000 & (materials.size() << 24));
+                    indices[triangle_offset]        = static_cast<uint32_t>((submesh_level_index_1 + vertex_offset) | (0xff000000 & (materials.size() << 8)));
+                    indices[triangle_offset + 1]    = static_cast<uint32_t>((submesh_level_index_2 + vertex_offset) | (0xff000000 & (materials.size() << 16)));
+                    indices[triangle_offset + 2]    = static_cast<uint32_t>((submesh_level_index_3 + vertex_offset) | (0xff000000 & (materials.size() << 24)));
                 }
 
 //                 const auto& albedo_image = vkrenderer::api.get_image(material.base_color_texture->device_image);
