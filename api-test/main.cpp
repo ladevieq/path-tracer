@@ -68,6 +68,8 @@ RENDERDOC_API_1_6_0 *rdoc_api = nullptr;
 static constexpr size_t Kb = 1024U;
 static constexpr size_t Mb = 1024U * Kb;
 
+static uintptr_t transmittance_LUT_tex_id = 0U;
+
 void ui(uint64_t frame_time) {
     static float max_fps = 0.f;
     static uint64_t max_frame_time = 1000U;
@@ -79,14 +81,13 @@ void ui(uint64_t frame_time) {
         max_frame_time = frame_time;
     }
     ImGui::NewFrame();
-    bool open = true;
     ImGui::Text("FPS : %f\n", fps);
     ImGui::Text("Max FPS : %f\n", max_fps);
     ImGui::Text("frame_time : %f ms\n", frame_time / 1000.f);
     ImGui::Text("max frame_time : %f ms\n", max_frame_time / 1000.f);
 
     ImGui::Text("LUT");
-    ImGui::Image(45, ImVec2(128, 128));
+    ImGui::Image(transmittance_LUT_tex_id, ImVec2(128, 128));
     ImGui::EndFrame();
     ImGui::Render();
 }
@@ -394,6 +395,7 @@ int main() {
         .name   = "transmittance_lut",
     });
     device_texture transmittance_lut = device.get_texture(transmittance_lut_handle);
+    transmittance_LUT_tex_id = transmittance_lut.get_sampled_index();
 
     std::vector<uint8_t> transmittance_lut_code = read_file("shaders/transmittance_lut.comp.spv");
     handle<device_pipeline> transmittance_lut_compute = device.create_compute_pipeline({

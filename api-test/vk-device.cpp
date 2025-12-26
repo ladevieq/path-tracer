@@ -977,6 +977,23 @@ void vkdevice::pick_physical_device() {
 }
 
 bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
+    // limits
+    {
+        VkPhysicalDeviceProperties2 props{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+            .pNext = nullptr,
+        };
+        vkGetPhysicalDeviceProperties2(physical_dev, &props);
+
+        VkPhysicalDeviceLimits* limits = &props.properties.limits;
+        if (limits->maxPerStageDescriptorSampledImages < 0x10000 ||
+            limits->maxPerStageDescriptorStorageImages < 0x10000 ||
+            limits->maxDescriptorSetSampledImages      < 0x10000 ||
+            limits->maxDescriptorSetStorageImages      < 0x10000) {
+            return false;
+        }
+    }
+
     // Vulkan 1.2 physical device features support
     {
         VkPhysicalDeviceVulkan12Features vulkan_12_features{
