@@ -440,6 +440,7 @@ int main() {
             .local_group_size = { .vec { 8U, 8U, 1U }},
             .params = {
                 transmittance_lut.get_storage_index(),
+                uint64_t(transmittance_lut.width) << 32U | transmittance_lut.height,
             }
         });
     }
