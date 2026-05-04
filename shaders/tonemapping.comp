@@ -3,28 +3,63 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(buffer_reference) readonly buffer scene_metadata {
-    uint[39] unused;
+layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
+
+struct camera {
+    vec4 position;
+
+    vec4 forward;
+    vec4 up;
+    vec4 right;
+
+    vec4 horizontal;
+    vec4 vertical;
+    vec4 first_pixel;
+
+    float lens_radius;
+    float fov;
+    float focus_distance;
+    float aspect_ratio;
+};
+
+layout(buffer_reference) readonly buffer global_params {
+    camera cam;
+
+    uint max_bounce;
+    uint min_bounce;
+    uint width;
+    uint height;
+
+    uint sample_index;
+    uint enable_dof;
+    uint debug_bvh;
     int downscale_factor;
 };
 
-layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
+layout(buffer_reference) readonly buffer pass_params {
+    uint padding;
+};
 
-layout(push_constant) uniform constants {
-    scene_metadata scene;
-    layout(offset = 56) uint output_image_index;
-    layout(offset = 60) uint accumulation_image_index;
-} consts;
+layout(buffer_reference) readonly buffer draw_params {
+    uint output_image_index;
+    uint accumulation_image_index;
+};
+
+layout(push_constant) uniform registers {
+    global_params globals;
+    pass_params pass;
+    draw_params draw;
+} regs;
 
 void main() {
-    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * consts.scene.downscale_factor;
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * regs.globals.downscale_factor;
 
-    vec3 color = imageLoad(images[nonuniformEXT(consts.accumulation_image_index)], coords).rgb;
+    vec3 color = imageLoad(images[nonuniformEXT(regs.draw.accumulation_image_index)], coords).rgb;
     vec3 out_color = sqrt(color);
 
-    for (uint i = 0; i < consts.scene.downscale_factor; i++) {
-        for (uint j = 0; j < consts.scene.downscale_factor; j++) {
-            imageStore(images[nonuniformEXT(consts.output_image_index)], coords + ivec2(i, j), vec4(out_color, 1.0));
+    for (uint i = 0; i < regs.globals.downscale_factor; i++) {
+        for (uint j = 0; j < regs.globals.downscale_factor; j++) {
+            imageStore(images[nonuniformEXT(regs.draw.output_image_index)], coords + ivec2(i, j), vec4(out_color, 1.0));
         }
     }
 }
