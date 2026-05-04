@@ -1,5 +1,4 @@
 #include "camera.hpp"
-#include "utils.hpp"
 
 camera::camera(
         point3 position,

@@ -1,54 +1,46 @@
 #include "utils.hpp"
 
-#if defined(WINDOWS)
-#include <windows.h>
-#endif
+#include <unordered_map>
 
-#include <filesystem>
-#include <iostream>
+uint8_t* read_file(const char* path, size_t* size) {
+#if _WIN32
+    HANDLE f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
-std::vector<uint8_t> read_file(const char* path) {
-#if defined(WINDOWS)
-    FILE* f = nullptr;
-    errno_t err = fopen_s(&f, path, "rb");
-
-    if (err != 0) {
-        std::cerr << "Cannot open file !" << std::endl;
-        return {};
+    if (f == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "Cannot open file !\n");
+        return nullptr;
     }
-#elif defined(LINUX)
+#elif LINUX
     FILE* f = fopen(path, "rb");
 
     if (!f) {
-        std::cerr << "Cannot open file !" << std::endl;
+        fprintf(stderr, "Cannot open file !\n");
         return {};
     }
 #endif
 
-    if (fseek(f, 0, SEEK_END) != 0) {
-        return {};
+    LARGE_INTEGER file_size = { .QuadPart = 0ULL };
+    if (!GetFileSizeEx(f, &file_size)) {
+        return nullptr;
+    }
+    *size = file_size.LowPart;
+
+    void* content = malloc(*size);
+
+    DWORD bread = 0U;
+    if (!ReadFile(f, content, static_cast<DWORD>(*size), &bread, NULL) || bread != *size) {
+        fprintf(stderr, "Reading file content failed\n");
+        return nullptr;
     }
 
-    std::vector<uint8_t> file_content(ftell(f));
+    CloseHandle(f);
 
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        return {};
-    }
-
-    if (fread(file_content.data(), sizeof(uint8_t), file_content.size(), f) != file_content.size()) {
-        std::cerr << "Reading file content failed" << std::endl;
-        return {};
-    }
-
-    fclose(f);
-
-    return file_content;
+    return (uint8_t*)content;
 }
 
-
-#ifdef WINDOWS
+#if _WIN32
 void log_last_error() {
-    auto error_code = GetLastError();
+    DWORD error_code = GetLastError();
     const char* error_message = nullptr;
 
     FormatMessageA(
@@ -63,29 +55,49 @@ void log_last_error() {
         nullptr
     );
 
-    std::cerr << error_message << std::endl;
+    fprintf(stderr, "%s\n", error_message);
 }
 
-bool watcher::watch_file(const char* filepath, watcher::func callback) {
+struct watch_data {
+    HANDLE      dir_handle;
+    OVERLAPPED  overlapped;
+    DWORD       buffer[512];
+};
+
+static std::unordered_map<const char*, func> callbacks;
+static std::unordered_map<const char*, watch_data> watched_dirs;
+
+bool watch_file(const char* filepath, func callback) {
     DWORD attrib = GetFileAttributes(filepath);
     if (attrib == INVALID_FILE_ATTRIBUTES)
         return false;
 
-    std::filesystem::path path(filepath);
-    if (!watcher::watch_dir(path.parent_path().string().c_str()))
-        return false;
+    size_t buffer_size = 2048U;
+    char* fullpath = static_cast<char*>(malloc(buffer_size));
+    char* filename = nullptr;
+    GetFullPathNameA( filepath, 2028, fullpath, &filename);
 
-    auto [_, is_inserted] = watcher::callbacks.emplace(filepath, callback);
+    size_t dir_len = filename - fullpath;
+    char* parent_dir = static_cast<char*>(malloc(dir_len));
+    strncpy(parent_dir, fullpath, dir_len);
+
+    free(fullpath);
+
+    if (!watch_dir(parent_dir)) {
+        return false;
+    }
+
+    auto [_, is_inserted] = callbacks.emplace(filepath, callback);
 
     return is_inserted;
 }
 
-bool watcher::watch_dir(const char* dir_path) {
+bool watch_dir(const char* dir_path) {
     DWORD attrib = GetFileAttributes(dir_path);
     if (attrib == INVALID_FILE_ATTRIBUTES || (attrib & FILE_ATTRIBUTE_DIRECTORY) == 0U )
         return false;
 
-    if (watcher::watched_dirs.find(dir_path) != watcher::watched_dirs.end())
+    if (watched_dirs.find(dir_path) != watched_dirs.end())
         return true;
 
     HANDLE dir_handle = CreateFileA(
@@ -103,7 +115,7 @@ bool watcher::watch_dir(const char* dir_path) {
         return false;
     }
 
-    auto [dir, _] = watcher::watched_dirs.emplace(dir_path, watch_data{ .dir_handle = dir_handle, .overlapped{}, .buffer{} });
+    auto [dir, _] = watched_dirs.emplace(dir_path, watch_data{ .dir_handle = dir_handle, .overlapped{}, .buffer{} });
 
     if (FAILED(ReadDirectoryChangesW(dir_handle, dir->second.buffer, sizeof(watch_data::buffer), FALSE, FILE_NOTIFY_CHANGE_LAST_WRITE, nullptr, &dir->second.overlapped, nullptr))) {
         log_last_error();
@@ -113,8 +125,8 @@ bool watcher::watch_dir(const char* dir_path) {
     return true;
 }
 
-void watcher::pull_changes() {
-    for (auto& dir : watcher::watched_dirs) {
+void pull_changes() {
+    for (auto& dir : watched_dirs) {
         auto& watch_data = dir.second;
         if (!HasOverlappedIoCompleted(&watch_data.overlapped))
             continue;

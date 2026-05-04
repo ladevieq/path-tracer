@@ -1,15 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <vector>
-#include <array>
-
-#ifdef API_TEST
-#include "vk-device-types.hpp"
-#else
-#include "vk-renderer.hpp"
-#endif // API_TEST
-
 enum ATTRIBUTE_TYPE {
     POSITION,
     NORMAL,
@@ -34,15 +24,15 @@ public:
     };
 
     struct attribute {
-        uint8_t* data = nullptr;
+        const uint8_t* data = nullptr;
         size_t length = 0;
     };
 
     struct submesh {
         attribute indices;
         std::array<attribute, ATTRIBUTE_TYPE::MAX_ATTRIBUTE> attributes;
-        uint32_t vertex_count = 0;
-        uint32_t index_count = 0;
+        u32 vertex_count = 0;
+        u32 index_count = 0;
         // material& material;
     };
 
@@ -93,15 +83,9 @@ private:
     std::vector<submesh_info> submeshes;
 
     struct gpu_mesh {
-#ifdef API_TEST
         std::array<handle<device_buffer>, ATTRIBUTE_TYPE::MAX_ATTRIBUTE> attributes;
         const device_buffer& indices;
         const device_buffer& submeshes;
-#else
-        std::array<Buffer*, ATTRIBUTE_TYPE::MAX_ATTRIBUTE> attributes;
-        Buffer* indices;
-        Buffer* submeshes;
-#endif // API_TEST
     };
 
     // allocate gpu mesh upon instanciation

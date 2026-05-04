@@ -1,6 +1,5 @@
 #include "window.hpp"
 
-
 #ifdef LINUX
 #include <iostream>
 
@@ -169,10 +168,23 @@ void window::poll_events() {
     }
 }
 
-#elif defined(WINDOWS)
-#include <windowsx.h>
+#elif _WIN32
+#define GET_X_LPARAM(lp)                        ((int)(short)LOWORD(lp))
+#define GET_Y_LPARAM(lp)                        ((int)(short)HIWORD(lp))
 
-#include "utils.hpp"
+HCURSOR window::cursors[CURSOR_TYPE::MAX_CURSOR] = {
+    LoadCursorA(NULL, IDC_ARROW),
+    LoadCursorA(NULL, IDC_IBEAM),
+    LoadCursorA(NULL, IDC_SIZEALL),
+    LoadCursorA(NULL, IDC_SIZENS),
+    LoadCursorA(NULL, IDC_SIZEWE),
+    LoadCursorA(NULL, IDC_SIZENESW),
+    LoadCursorA(NULL, IDC_SIZENWSE),
+    LoadCursorA(NULL, IDC_HAND),
+    LoadCursorA(NULL, IDC_WAIT),
+    LoadCursorA(NULL, IDC_APPSTARTING),
+    LoadCursorA(NULL, IDC_NO),
+};
 
 LRESULT CALLBACK window::window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     window* win = nullptr;
@@ -250,22 +262,18 @@ void window::message_loop() {
     MSG msg {};
 
     while(true) {
-        // Generate keydown events pressed keys
-        for (size_t virtual_key { KEYS::LSHIFT }; virtual_key < KEYS::MAX_KEYS; virtual_key++) {
-            if (keyboard[virtual_key]) {
-                events.push_back({ 
-                    .data {
-                        .key = (KEYS)virtual_key,
-                    },
-                    .type = EVENT_TYPES::KEY_PRESS,
-                });
-            }
-        }
-
-
         while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
+        }
+
+        for (u32 key_index = 0U; key_index <= KEY::MAX_KEY; key_index++) {
+            events.push_back(event {
+                .data {
+                    .key = (KEY)key_index,
+                },
+                .type = keyboard[key_index] ? EVENT_TYPE::KEY_DOWN : EVENT_TYPE::KEY_UP,
+            });
         }
 
         SwitchToFiber(main_fiber);
@@ -273,6 +281,8 @@ void window::message_loop() {
 }
 
 void window::poll_events() {
+    events.clear();
+
     SwitchToFiber(message_loop_fiber);
 }
 
@@ -281,7 +291,10 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
         case WM_CLOSE:
         case WM_DESTROY:
         case WM_QUIT: {
-            events.push_back({ .data {}, .type = EVENT_TYPES::QUIT });
+            events.push_back({
+                .data {},
+                .type = EVENT_TYPE::QUIT
+            });
             isOpen = false;
             break;
         }
@@ -296,86 +309,90 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
                         .height = height,
                     },
                 },
-                .type = EVENT_TYPES::RESIZE
+                .type = EVENT_TYPE::RESIZE
             });
             break;
         }
 
         case WM_KEYDOWN: {
-            keyboard[wparam] = true;
-
             events.push_back({ 
                 .data {
-                    .key = (KEYS)wparam,
+                    .key = (KEY)wparam,
                 },
-                .type = EVENT_TYPES::KEY_PRESS,
+                .type = EVENT_TYPE::KEY_PRESS,
             });
+            keyboard[wparam] = true;
             break;
         }
 
         case WM_KEYUP: {
-            keyboard[wparam] = false;
-
             events.push_back({ 
                 .data {
-                    .key = (KEYS)wparam,
+                    .key = (KEY)wparam,
                 },
-                .type = EVENT_TYPES::KEY_RELEASE,
+                .type = EVENT_TYPE::KEY_RELEASE,
             });
+            keyboard[wparam] = false;
             break;
         }
 
         case WM_LBUTTONDOWN: {
+            mouse[BUTTON::LEFT] = true;
             events.push_back({ 
                 .data {
-                    .button = BUTTONS::LEFT,
+                    .button = BUTTON::LEFT,
                 },
-                .type = EVENT_TYPES::BUTTON_PRESS,
+                .type = EVENT_TYPE::BUTTON_PRESS,
             });
             break;
         }
         case WM_LBUTTONUP: {
+            mouse[BUTTON::LEFT] = false;
             events.push_back({ 
                 .data {
-                    .button = BUTTONS::LEFT,
+                    .button = BUTTON::LEFT,
                 },
-                .type = EVENT_TYPES::BUTTON_RELEASE,
+                .type = EVENT_TYPE::BUTTON_RELEASE,
             });
             break;
         }
         case WM_RBUTTONDOWN: {
+            mouse[BUTTON::RIGHT] = true;
             events.push_back({ 
                 .data {
-                    .button = BUTTONS::RIGHT,
+                    .button = BUTTON::RIGHT,
                 },
-                .type = EVENT_TYPES::BUTTON_PRESS,
+                .type = EVENT_TYPE::BUTTON_PRESS,
             });
             break;
         }
         case WM_RBUTTONUP: {
+            mouse[BUTTON::RIGHT] = false;
             events.push_back({ 
                 .data {
-                    .button = BUTTONS::RIGHT,
+                    .button = BUTTON::RIGHT,
                 },
-                .type = EVENT_TYPES::BUTTON_RELEASE,
+                .type = EVENT_TYPE::BUTTON_RELEASE,
             });
             break;
         }
         case WM_MBUTTONDOWN: {
+            mouse[BUTTON::MIDDLE] = true;
             events.push_back({ 
                 .data {
-                    .button = BUTTONS::MIDDLE,
+                    .button = BUTTON::MIDDLE,
                 },
-                .type = EVENT_TYPES::BUTTON_PRESS,
+                .type = EVENT_TYPE::BUTTON_PRESS,
             });
             break;
         }
         case WM_MBUTTONUP: {
+            mouse[BUTTON::MIDDLE] = false;
             events.push_back({ 
                 .data {
-                    .button = BUTTONS::MIDDLE,
+                    .button = BUTTON::MIDDLE,
                 },
-                .type = EVENT_TYPES::BUTTON_RELEASE,
+                .type = EVENT_TYPE::BUTTON_RELEASE,
             });
             break;
         }
@@ -387,7 +404,19 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
                         .y = GET_Y_LPARAM(lparam),
                    },
                 },
-                .type = EVENT_TYPES::MOUSE_MOVE,
+                .type = EVENT_TYPE::MOUSE_MOVE,
+            });
+            break;
+        }
+        case WM_MOUSEWHEEL: {
+            events.push_back({ 
+                .data {
+                    .delta {
+                        .x = 0,
+                        .y = GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA,
+                   },
+                },
+                .type = EVENT_TYPE::MOUSE_WHEEL,
             });
             break;
         }
@@ -399,6 +428,10 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
     SwitchToFiber(main_fiber);
 
     return 0;
+}
+
+void window::set_cursor(enum CURSOR_TYPE type) {
+    SetCursor(window::cursors[type]);
 }
 #elif defined(MACOS)
 window::window(uint32_t width, uint32_t height) {

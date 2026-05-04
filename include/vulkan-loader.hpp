@@ -3,8 +3,7 @@
 
 #define VK_NO_PROTOTYPES
 
-#if defined(WINDOWS)
-#include <vulkan/vk_platform.h>
+#if _WIN32
 #include <vulkan/vulkan_core.h>
 typedef unsigned long DWORD;
 typedef const wchar_t* LPCWSTR;
@@ -23,7 +22,6 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
 #define VULKAN_EXPORTED_FUNCTIONS \
     X(vkGetInstanceProcAddr)      \
     X(vkGetDeviceProcAddr)
-
 
 #define VULKAN_APPLICATION_FUNCTIONS          \
     X(vkCreateInstance)                       \
@@ -154,32 +152,15 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkDestroyBuffer)                \
     X(vkDestroyRenderPass)
 
+
 #define X(name) extern PFN_##name name;
-    VULKAN_EXPORTED_FUNCTIONS
     VULKAN_APPLICATION_FUNCTIONS
     VULKAN_INSTANCE_FUNCTIONS
     VULKAN_DEVICE_FUNCTIONS
 #undef X
-
-
-#define X(name) void Load_##name();
-    VULKAN_EXPORTED_FUNCTIONS
-    VULKAN_APPLICATION_FUNCTIONS
-#undef X
-
-#define X(name) void Load_##name(VkInstance _instance);
-    VULKAN_INSTANCE_FUNCTIONS
-#undef X
-
-#define X(name) void Load_##name(VkDevice _device);
-    VULKAN_DEVICE_FUNCTIONS
-#undef X
-
 
 void load_vulkan();
-
 void load_instance_functions(VkInstance instance);
-
 void load_device_functions(VkDevice device);
 
 #endif // !__VULKAN_LOADER_HPP_

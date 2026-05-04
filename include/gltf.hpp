@@ -3,59 +3,60 @@
 
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
-
-#include "material.hpp"
+#include "utils.hpp"
+#include "handle.hpp"
 #include "mesh.hpp"
+#include "material.hpp"
 
 struct node {
-    std::vector<node>   children;
-    Mesh*               mesh = nullptr;
+    std::vector<uint32_t>    children;
+    u32                 mesh;
 };
 
 struct raw_image {
     int32_t width;
     int32_t height;
     int32_t channels;
-    uint8_t *data;
+    const uint8_t *data;
 };
 
-namespace std::filesystem {
-    class path;
-}
+struct buffer {
+    u8* bytes;
+    size_t size;
+};
 
 class gltf {
     public:
-    gltf(const std::filesystem::path &filepath);
+    gltf(const char* filepath);
+    void deinit();
 
-    node root_node;
+    std::vector<u32> root_nodes;
 
-private:
-
-    void load_node(uint32_t index, node &parent);
-
-    void load_meshes();
-
-    Mesh::submesh load_primitive(const json &primitive);
-
-    Mesh::attribute load_attribute(uint32_t accessor_index);
-
-    void load_textures(const std::filesystem::path &path);
-
-    void load_materials();
-
-    json gltf_json;
+    std::vector<node> nodes;
     std::vector<Mesh> meshes;
     std::vector<material> materials;
-#ifdef API_TEST
     std::vector<handle<device_texture>> textures;
     // handle<device_sampler> samplers;
-#else
-    std::vector<Texture*> textures;
-#endif // API_TEST
-    std::vector<std::vector<uint8_t>> buffers;
+    std::vector<struct buffer> buffers;
+
+
+    // gbl only
+    struct glb_chunk {
+        u32 length;
+        u32 type;
+        u8 data[1];
+    };
+
+    struct glb_header {
+        u32 magic;
+        u32 version;
+        u32 length;
+    };
+    std::vector<struct glb_chunk*> chunks;
+    glb_header* header;
+
+    // TODO: remove
+    bool is_glb;
 };
 
 #endif

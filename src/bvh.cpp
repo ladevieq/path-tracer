@@ -1,11 +1,5 @@
 #include "bvh.hpp"
 
-#include <cassert>
-
-#include <algorithm>
-#include <cstdint>
-#include <cstdio>
-
 // bvh::bvh(std::vector<sphere>& spheres, std::vector<packed_bvh_node>& packed_nodes)
 //     :spheres(spheres) {
 //     packed_nodes.resize(2 * spheres.size() - 1);
@@ -48,6 +42,7 @@
 
 bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_nodes)
     :triangles(triangles) {
+    BEGIN_MARKER(GENERATE_BVH);
 
     assert(!triangles.empty());
     packed_nodes.resize(2 * triangles.size() - 1);
@@ -84,6 +79,8 @@ bvh::bvh(std::vector<triangle>& triangles, std::vector<packed_bvh_node>& packed_
             node.next_id = temp_nodes[old_node.next_id].df_id;
         }
     }
+
+    END_MARKER(GENERATE_BVH);
 }
 
 //-------------------------

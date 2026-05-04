@@ -1,23 +1,10 @@
 #ifndef __WINDOW_HPP_
 #define __WINDOW_HPP_
 
-#include <vector>
-
-class vkrenderer;
-
 #if defined(LINUX)
 #include <xcb/xcb.h>
 
 #include <xkbcommon/xkbcommon.h>
-#elif defined(WINDOWS)
-// #include <Windows.h>
-typedef struct HWND__* HWND;
-typedef int64_t LRESULT;
-typedef int64_t LPARAM;
-typedef uint64_t WPARAM;
-typedef unsigned int UINT;
-typedef void* LPVOID;
-#define CALLBACK __stdcall
 #endif
 
 // enum MODIFIERS: uint32_t {
@@ -37,14 +24,22 @@ typedef void* LPVOID;
 // };
 
 // TODO improve this
-#if defined(WINDOWS)
-enum KEYS: uint32_t {
+#if _WIN32
+enum KEY: uint32_t {
     LSHIFT = 0x10,
     RSHIFT = 0x10,
     LCTRL = 0x11,
     RCTRL = 0x11,
     ALT,
     SPACE = 0x20,
+    PAGE_UP,
+    PAGE_DOWN,
+    END,
+    HOME,
+    LEFT_ARROW,
+    UP_ARROW,
+    RIGHT_ARROW,
+    DOWN_ARROW,
     A = 0x41,
     B,
     C,
@@ -71,10 +66,22 @@ enum KEYS: uint32_t {
     X,
     Y,
     Z,
-    MAX_KEYS = 255
+    F1 = 0x70,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    MAX_KEY = 0xff
 };
 #else
-enum KEYS: uint32_t {
+enum KEY: uint32_t {
     SPACE = 32,
     A = 0x61,
     B,
@@ -108,25 +115,43 @@ enum KEYS: uint32_t {
     RCTRL,
     LALT = 65513,
     RALT,
-    MAX_KEYS = 0xffff
+    MAX_KEY = 0xffff
 };
 #endif
 
-enum BUTTONS: uint32_t {
+enum BUTTON: uint32_t {
     LEFT,
     RIGHT,
     MIDDLE,
-    MAX_BUTTONS = 255
+    MAX_BUTTON = 255
 };
 
-enum EVENT_TYPES: int32_t {
+enum EVENT_TYPE: int32_t {
     QUIT,
     RESIZE,
     KEY_PRESS,
+    KEY_DOWN,
     KEY_RELEASE,
+    KEY_UP,
     BUTTON_PRESS,
     BUTTON_RELEASE,
-    MOUSE_MOVE
+    MOUSE_MOVE,
+    MOUSE_WHEEL,
+};
+
+enum CURSOR_TYPE: int32_t {
+    ARROW,
+    TEXT_INPUT,
+    SIZE_ALL,
+    SIZE_NS,
+    SIZE_WE,
+    SIZE_NESW,
+    SIZE_NWSE,
+    HAND,
+    WAIT,
+    PROGRESS,
+    NOT_ALLOWED,
+    MAX_CURSOR,
 };
 
 // struct event {
@@ -148,10 +173,14 @@ struct event {
             int32_t     x;
             int32_t     y;
         } position;
-        KEYS        key;
-        BUTTONS     button;
+        struct {
+            int32_t     x;
+            int32_t     y;
+        } delta;
+        KEY        key;
+        BUTTON     button;
     } data;
-    EVENT_TYPES type;
+    EVENT_TYPE type;
 };
 
 class window {
@@ -161,12 +190,14 @@ class window {
 
         void poll_events();
 
-#if defined(WINDOWS)
+#if _WIN32
         void message_loop();
 
         LRESULT message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 
         static LRESULT CALLBACK window_procedure(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
+
+        static void set_cursor(enum CURSOR_TYPE type);
 
         HWND                handle {};
         const char*         window_class_name;
@@ -190,8 +221,10 @@ class window {
 
         bool                isOpen;
 
-        bool keyboard[KEYS::MAX_KEYS] { false };
-        bool mouse[BUTTONS::MAX_BUTTONS] { false };
+        bool keyboard[KEY::MAX_KEY] { false };
+        bool mouse[BUTTON::MAX_BUTTON] { false };
+
+        static HCURSOR cursors[CURSOR_TYPE::MAX_CURSOR];
 };
 
 #endif // !__WINDOW_HPP_

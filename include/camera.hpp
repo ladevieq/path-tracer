@@ -1,8 +1,6 @@
 #ifndef __CAMERA_HPP_
 #define __CAMERA_HPP_
 
-#include "vec3.hpp"
-
 class camera {
     public:
         camera(

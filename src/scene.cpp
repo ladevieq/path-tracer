@@ -1,17 +1,5 @@
 #include "scene.hpp"
-
-#include <cstdint>
-#include <queue>
-
-#ifdef API_TEST
-#include <vk_mem_alloc.h>
-#else
-#include "vk-renderer.hpp"
-#endif // API_TEST
-
-#include "gltf.hpp"
-#include "bvh.hpp"
-// #include "material.hpp"
+#include "mesh.hpp"
 
 // void scene::random_scene() {
 //     material ground_material = { { 0.5, 0.5, 0.5 } };
@@ -63,15 +51,19 @@
 // }
 
 
-scene::metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
+metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
     : cam(cam), width(width), height(height) {}
 
 scene::scene(const camera& cam, uint32_t width, uint32_t height)
-    :meta(cam, width, height){
+    // :model("../models/sponza/Sponza.gltf"), meta(cam, width, height) {
+    // :model("../models/BistroInterior/BistroInterior.gltf"), meta(cam, width, height) {
+    // :model("../models/BistroExterior/BistroExterior.gltf"), meta(cam, width, height) {
+    // :model("../models/sponza-avif-hi.glb"), meta(cam, width, height) {
+    // :model("../models/main_sponza/NewSponza_Main_glTF_003.gltf"), meta(cam, width, height) {
+    // :model("../models/pkg_a_curtains/NewSponza_Curtains_glTF.gltf"), meta(cam, width, height) {
+    :model("../models/sponza.glb"), meta(cam, width, height) {
 
-#ifdef API_TEST
-    auto& device = vkdevice::get_render_device();
-#endif
+    auto& device = vkdevice::get();
 
     // Geometry & BVH
     std::vector<uint32_t>       indices;
@@ -81,51 +73,50 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     std::vector<gpu_material>   materials;
     std::vector<packed_bvh_node> packed_nodes;
 
-    // auto root_node = gltf::load("../models/BistroInterior", "BistroInterior.gltf");
-    auto gltf_model = gltf("../models/sponza/Sponza.gltf");
-
     std::vector<triangle> triangles;
-    size_t triangles_offset = 0;
-    size_t vertices_offset = 0;
-    std::queue<node> nodes_to_load {};
-    nodes_to_load.push(gltf_model.root_node);
+    u32 triangles_offset = 0U;
+    u32 vertices_offset = 0U;
+    u32 positions_count = 0U;
+    u32 normals_count = 0U;
+    u32 uvs_count = 0U;
+    std::vector<u32> nodes_to_load = model.root_nodes;
 
-    while(!nodes_to_load.empty()) {
-        auto &node = nodes_to_load.front();
+    for (u32 cur_node_index = 0U; cur_node_index < nodes_to_load.size(); cur_node_index++) {
+        struct node &node = model.nodes[nodes_to_load[cur_node_index]];
 
-        if (node.mesh != nullptr) {
-            const auto* mesh = node.mesh;
-            const auto& mesh_positions = mesh->get_attribute(ATTRIBUTE_TYPE::POSITION);
-            const auto& mesh_normals = mesh->get_attribute(ATTRIBUTE_TYPE::NORMAL);
-            const auto& mesh_uvs_0 = mesh->get_attribute(ATTRIBUTE_TYPE::UV_0);
-            const auto& mesh_indices = mesh->get_indices();
+        if (node.mesh != UINT32_MAX) {
+            const Mesh& mesh = model.meshes[node.mesh];
+            const auto& mesh_positions = mesh.get_attribute(ATTRIBUTE_TYPE::POSITION);
+            const auto& mesh_normals = mesh.get_attribute(ATTRIBUTE_TYPE::NORMAL);
+            const auto& mesh_uvs_0 = mesh.get_attribute(ATTRIBUTE_TYPE::UV_0);
+            const auto& mesh_indices = mesh.get_indices();
 
-            indices.resize(indices.size()      + mesh_indices.size());
-            positions.resize(vertices_offset   + mesh_positions.size());
-            normals.resize(vertices_offset     + mesh_normals.size());
-            uvs.resize(vertices_offset         + mesh_uvs_0.size());
+            indices.resize(indices.size() + mesh_indices.size());
+            positions.resize(positions_count + mesh_positions.size());
+            normals.resize(normals_count + mesh_normals.size());
+            uvs.resize(uvs_count + mesh_uvs_0.size());
 
             std::memcpy(
-               positions.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION),
+               positions.data() + positions_count,
                mesh_positions.data(),
-               mesh_positions.size() * sizeof(float)
+               mesh_positions.size() * sizeof(mesh_positions[0U])
             );
 
             std::memcpy(
-               normals.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL),
+               normals.data() + normals_count,
                mesh_normals.data(),
-               mesh_normals.size() * sizeof(float)
+               mesh_normals.size() * sizeof(mesh_normals[0U])
             );
 
             std::memcpy(
-                uvs.data() + vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0),
+                uvs.data() + uvs_count,
                 mesh_uvs_0.data(),
-                mesh_uvs_0.size() * sizeof(float)
+                mesh_uvs_0.size() * sizeof(mesh_uvs_0[0U])
             );
 
             auto index_offset { 0U };
             // Add offset to indices in order to have absolute indices
-            for (const auto& submesh: mesh->get_submeshes()) {
+            for (const auto& submesh: mesh.get_submeshes()) {
                 auto vertex_offset = vertices_offset + submesh.vertex_offset;
                 const auto& material = submesh.material;
 
@@ -151,9 +142,6 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                     indices[triangle_offset + 2]    = static_cast<uint32_t>((submesh_level_index_3 + vertex_offset) | (0xff000000 & (materials.size() << 24)));
                 }
 
-//                 const auto& albedo_image = vkrenderer::api.get_image(material.base_color_texture->device_image);
-//                 const auto& albedo_sampler = vkrenderer::api.get_sampler(material.base_color_texture->sampler->device_sampler);
-
                 auto& mat = materials.emplace_back(gpu_material {
                     .base_color = material.base_color,
 //                     .albedo_texture_id = albedo_image.bindless_sampled_index,
@@ -162,7 +150,6 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                     .roughness = material.roughness
                 });
 
-#ifdef API_TEST
                 if (material.base_color_texture.id != handle<device_texture>::invalid_id) {
                     mat.albedo_texture_id = device.get_texture(material.base_color_texture).get_sampled_index();
                     // mat.albedo_texture_sampler_id = device.get_sampler(0);
@@ -172,28 +159,18 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                     mat.metallic_roughness_texture_id = device.get_texture(material.metallic_roughness_texture).get_sampled_index();
                     // mat.metallic_roughness_texture_sampler_id = device.get_sampler(0);
                 }
-#else
-                if (material.metallic_roughness_texture != nullptr) {
-                    // auto& gpu_material = materials.back();
-//                     const auto& metallic_roughness_image = vkrenderer::api.get_image(material.metallic_roughness_texture->device_image);
-//                     const auto& metallic_roughness_sampler = vkrenderer::api.get_sampler(material.metallic_roughness_texture->sampler->device_sampler);
-
-//                    gpu_material.metallic_roughness_texture_id = metallic_roughness_image.bindless_sampled_index;
-//                    gpu_material.metallic_roughness_texture_sampler_id = metallic_roughness_sampler.bindless_index;
-                }
-#endif
-
             }
 
-            triangles_offset += mesh->triangle_count();
-            vertices_offset += mesh->vertices_count();
+            triangles_offset += mesh.triangle_count();
+            vertices_offset += mesh.vertices_count();
+            positions_count = vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::POSITION);
+            normals_count = vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::NORMAL);
+            uvs_count = vertices_offset * Mesh::attribute_components(ATTRIBUTE_TYPE::UV_0);
         }
 
-        for (auto &new_node: node.children) {
-            nodes_to_load.push(new_node);
+        for (u32 child_index: node.children) {
+            nodes_to_load.push_back(child_index);
         }
-
-        nodes_to_load.pop();
     }
 
     // random_scene();
@@ -201,28 +178,13 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     bvh builder(triangles, packed_nodes);
     // bvh builder(spheres, packed_nodes);
 
-#ifdef API_TEST
-    {
-        scene_buffer_handle = device.create_buffer({
-            .size = sizeof(meta) * 3U,
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-        });
-
-        const auto& scene_buffer = device.get_buffer(scene_buffer_handle);
-        uint8_t* ptr = static_cast<uint8_t*>(scene_buffer.mapped_ptr);
-        memcpy(static_cast<void*>(ptr), &meta, sizeof(meta));
-        memcpy(static_cast<void*>(ptr + sizeof(meta)), &meta, sizeof(meta));
-        memcpy(static_cast<void*>(ptr + sizeof(meta) * 2U), &meta, sizeof(meta));
-    }
-
     {
         indices_buffer_handle = device.create_buffer({
             .size = indices.size() * sizeof(indices[0]),
             .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "indices",
         });
         const auto& indices_buffer = device.get_buffer(indices_buffer_handle);
         void* ptr = indices_buffer.mapped_ptr;
@@ -235,6 +197,7 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "positions",
         });
         const auto& positions_buffer = device.get_buffer(positions_buffer_handle);
         void* ptr = positions_buffer.mapped_ptr;
@@ -247,6 +210,7 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "normals",
         });
         const auto& normals_buffer = device.get_buffer(normals_buffer_handle);
         void* ptr = normals_buffer.mapped_ptr;
@@ -259,6 +223,7 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "uvs",
         });
         const auto& uvs_buffer = device.get_buffer(uvs_buffer_handle);
         void* ptr = uvs_buffer.mapped_ptr;
@@ -271,6 +236,7 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "bvh",
         });
         const auto& bvh_buffer = device.get_buffer(bvh_buffer_handle);
         void* ptr = bvh_buffer.mapped_ptr;
@@ -283,33 +249,21 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
             .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "materials",
         });
         const auto& materials_buffer = device.get_buffer(materials_buffer_handle);
         void* ptr = materials_buffer.mapped_ptr;
         memcpy(ptr, materials.data(), materials.size() * sizeof(materials[0]));
     }
-#else
-    scene_buffer = vkrenderer::create_buffer(sizeof(meta) * vkrenderer::virtual_frames_count);
-    scene_buffer->write(&meta, 0, sizeof(meta));
-    scene_buffer->write(&meta, sizeof(meta), sizeof(meta));
-    scene_buffer->write(&meta, sizeof(meta) * 2, sizeof(meta));
+}
 
-    indices_buffer = vkrenderer::create_buffer(indices.size() * sizeof(indices[0]));
-    indices_buffer->write(indices.data(), 0, indices.size() * sizeof(indices[0]));
+void scene::deinit() {
+    vkdevice::get().destroy_buffer(indices_buffer_handle);
+    vkdevice::get().destroy_buffer(positions_buffer_handle);
+    vkdevice::get().destroy_buffer(normals_buffer_handle);
+    vkdevice::get().destroy_buffer(uvs_buffer_handle);
+    vkdevice::get().destroy_buffer(bvh_buffer_handle);
+    vkdevice::get().destroy_buffer(materials_buffer_handle);
 
-    positions_buffer = vkrenderer::create_buffer(positions.size() * sizeof(positions[0]));
-    positions_buffer->write(positions.data(), 0, positions.size() * sizeof(positions[0]));
-
-    normals_buffer = vkrenderer::create_buffer(normals.size() * sizeof(normals[0]));
-    normals_buffer->write(normals.data(), 0, normals.size() * sizeof(normals[0]));
-
-    uvs_buffer = vkrenderer::create_buffer(uvs.size() * sizeof(uvs[0]));
-    uvs_buffer->write(uvs.data(), 0, uvs.size() * sizeof(uvs[0]));
-
-    bvh_buffer = vkrenderer::create_buffer(packed_nodes.size() * sizeof(packed_nodes[0]));
-    bvh_buffer->write(packed_nodes.data(), 0, packed_nodes.size() * sizeof(packed_nodes[0]));
-
-    materials_buffer = vkrenderer::create_buffer(materials.size() * sizeof(materials[0]));
-    materials_buffer->write(materials.data(), 0, materials.size() * sizeof(materials[0]));
-#endif // API_TEST
+    model.deinit();
 }

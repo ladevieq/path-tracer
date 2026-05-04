@@ -1,7 +1,6 @@
 #ifndef __VEC3_HPP_
 #define __VEC3_HPP_
 
-#include <xmmintrin.h>
 #include <cstdint>
 
 struct vec3u {
@@ -60,6 +59,7 @@ class vec3 {
     vec3& normalize();
 
     [[nodiscard]] bool near_zero() const;
+    [[nodiscard]] bool is_zero() const;
 
     void print() const;
 

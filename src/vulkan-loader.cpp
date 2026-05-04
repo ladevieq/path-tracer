@@ -1,8 +1,6 @@
 #include "vulkan-loader.hpp"
 
-#include <cassert>
-
-#if defined(WINDOWS)
+#if defined(_WIN32)
 // extern "C" void* GetProcAddress(HMODULE, const char*);
 // extern "C" HMODULE LoadLibraryA(const char*);
 HMODULE vulkanLibrary = LoadLibraryA("vulkan-1.dll");

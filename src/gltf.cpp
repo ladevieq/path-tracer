@@ -1,145 +1,177 @@
 #include "gltf.hpp"
 
-#include <execution>
-#include <fstream>
+using namespace simdjson;
 
-#ifndef API_TEST
-#define STB_IMAGE_IMPLEMENTATION
-#endif
-#include <stb_image.h>
+ondemand::object root;
 
-#include "utils.hpp"
-#ifdef API_TEST
-#include "vk-device-types.hpp"
-#include "vk-device.hpp"
-#include "vk-command-buffer.hpp"
-#include <vk_mem_alloc.h>
-#else
-#include "vk-renderer.hpp"
-#endif
+struct accessor {
+    u32 view_index  = 0U;
+    u32 count       = 0U;
+    u32 component_type = 0U;
+    std::string_view type;
+};
 
-gltf::gltf(const std::filesystem::path& filepath) {
-    auto parent_path = filepath.parent_path();
-    std::fstream f{ filepath };
+struct buffer_view {
+    u32 buffer_index    = 0U;
+    u32 length          = 0U;
+    u32 offset          = 0U;
+};
 
-    if (!f.is_open()) {
-        OutputDebugStringA("failed to open!");
+// component types
+#define GL_BYTE                           0x1400
+#define GL_UNSIGNED_BYTE                  0x1401
+#define GL_SHORT                          0x1402
+#define GL_UNSIGNED_SHORT                 0x1403
+#define GL_FLOAT                          0x1406
+#define GL_FIXED                          0x140C
+
+#define SCALAR  0x5343414C4152
+#define VEC2    0x56454332
+#define VEC3    0x56454333
+#define VEC4    0x56454334
+
+static u32 accessor_type_to_component_count(std::string_view& type) {
+    if (strncmp("SCALAR", type.data(), type.size()) == 0) {
+        return 1U;
+    } else if (strncmp("VEC2", type.data(), type.size()) == 0) {
+        return 2U;
+    } else if (strncmp("VEC3", type.data(), type.size()) == 0) {
+        return 3U;
+    } else if (strncmp("VEC4", type.data(), type.size()) == 0) {
+        return 4U;
     }
-
-    f >> gltf_json;
-
-    auto& scene = gltf_json["scenes"][0];
-
-    auto& gltf_buffers = gltf_json["buffers"];
-    auto buffer_count = gltf_buffers.size();
-    buffers.resize(gltf_buffers.size());
-    for (auto buffer_index{ 0U }; buffer_index < buffer_count; buffer_index++) {
-        auto buffer_path = parent_path / gltf_buffers[buffer_index]["uri"].get<std::string>();
-        buffers[buffer_index] = read_file(buffer_path.string().c_str());
-    }
-
-    load_textures(parent_path);
-    load_materials();
-
-    load_meshes();
-
-    auto& root_children = scene["nodes"];
-    size_t root_children_count = scene["nodes"].size();
-    root_node.children.resize(root_children_count);
-
-    for (size_t child_index = 0; child_index < root_children_count; child_index++) {
-        load_node(root_children[child_index].get<uint32_t>(), root_node.children[child_index]);
-    }
-
-    f.close();
+    assert(false);
+    return 0U;
 }
 
-void gltf::load_node(uint32_t index, node& parent) {
-    const auto& gltf_node = gltf_json["nodes"][index];
-
-    if (gltf_node.contains("children")) {
-        const auto& children = gltf_node["children"];
-        uint32_t children_count = gltf_node["children"];
-        parent.children.resize(children_count);
-
-        for (size_t child_index = 0; child_index < children_count; child_index++) {
-            load_node(children[child_index].get<uint32_t>(), parent.children[child_index]);
-        }
+static u32 component_type_size(u32 type) {
+    switch (type) {
+        case GL_BYTE:
+        case GL_UNSIGNED_BYTE:
+            return 1U;
+        case GL_SHORT:
+        case GL_UNSIGNED_SHORT:
+            return 2U;
+        case GL_FLOAT:
+        case GL_FIXED:
+            return 4U;
+        default: assert(false);
     }
-
-    if (gltf_node.contains("mesh")) {
-        parent.mesh = &meshes[gltf_node["mesh"].get<uint32_t>()];
-    }
+    return 0U;
 }
 
-void gltf::load_meshes() {
-    const auto& gltf_meshes = gltf_json["meshes"];
-    auto meshes_count = gltf_meshes.size();
-    meshes.resize(meshes_count);
-
-    for (size_t mesh_index = 0; mesh_index < meshes_count; mesh_index++) {
-        auto& mesh = meshes[mesh_index];
-        const auto& primitives = gltf_meshes[mesh_index]["primitives"];
-
-        for (const auto& primitive : primitives) {
-            auto& material = materials[primitive["material"].get<uint32_t>()];
-            mesh.add_submesh(load_primitive(primitive), material);
-        }
-
-        Mesh::register_mesh(mesh);
-    }
-}
-
-Mesh::submesh gltf::load_primitive(const json& primitive) {
+static Mesh::submesh load_primitive(ondemand::object& primitive, std::vector<struct buffer>& buffers, std::vector<struct accessor>& accessors, std::vector<struct buffer_view>& buffer_views) {
     Mesh::submesh submesh;
+    
+    // indices
+    {
+        u32 indices_id = primitive["indices"].get_uint32();
+        struct accessor& accessor = accessors[indices_id];
 
-    submesh.indices = load_attribute(primitive["indices"]);
-    submesh.attributes[ATTRIBUTE_TYPE::POSITION] = load_attribute(primitive["attributes"]["POSITION"]);
+        struct buffer_view& view = buffer_views[accessor.view_index];
+        struct buffer& buffer = buffers[view.buffer_index];
 
-    if (primitive["attributes"].contains("NORMAL")) {
-        submesh.attributes[ATTRIBUTE_TYPE::NORMAL] = load_attribute(primitive["attributes"]["NORMAL"]);
+        submesh.indices = {
+            .data = &buffer.bytes[view.offset],
+            .length = accessor.count * accessor_type_to_component_count(accessor.type) * component_type_size(accessor.component_type),
+        };
+
+        submesh.index_count = accessor.count;
     }
 
-    if (primitive["attributes"].contains("TEXCOORD_0")) {
-        submesh.attributes[ATTRIBUTE_TYPE::UV_0] = load_attribute(primitive["attributes"]["TEXCOORD_0"]);
+    // positions
+    {
+        u32 pos_id = primitive["attributes"]["POSITION"].get_uint32();
+        struct accessor& accessor = accessors[pos_id];
+
+        struct buffer_view& view = buffer_views[accessor.view_index];
+        struct buffer& buffer = buffers[view.buffer_index];
+
+        submesh.attributes[ATTRIBUTE_TYPE::POSITION]  = {
+            .data = &buffer.bytes[view.offset],
+            .length = accessor.count * accessor_type_to_component_count(accessor.type) * component_type_size(accessor.component_type),
+        };
+
+        submesh.vertex_count = accessor.count;
     }
 
-    submesh.index_count = gltf_json["accessors"][primitive["indices"].get<uint32_t>()]["count"].get<uint32_t>();
-    submesh.vertex_count = gltf_json["accessors"][primitive["attributes"]["POSITION"].get<uint32_t>()]["count"].get<uint32_t>();
+    u32 normal_index = 0U;
+    if (!primitive["attributes"]["NORMAL"].get(normal_index)) {
+        struct accessor& accessor = accessors[normal_index];
+        u32 view_index = accessor.view_index;
+
+        struct buffer_view& view = buffer_views[view_index];
+        struct buffer& buffer = buffers[view.buffer_index];
+
+        submesh.attributes[ATTRIBUTE_TYPE::NORMAL] = {
+            .data = &buffer.bytes[view.offset],
+            .length = accessor.count * accessor_type_to_component_count(accessor.type) * component_type_size(accessor.component_type),
+        };
+    }
+
+    u32 texcoord_index = 0U;
+    if (!primitive["attributes"]["TEXCOORD_0"].get(texcoord_index)) {
+        struct accessor& accessor = accessors[texcoord_index];
+        u32 view_index = accessor.view_index;
+
+        struct buffer_view& view = buffer_views[view_index];
+        struct buffer& buffer = buffers[view.buffer_index];
+
+        submesh.attributes[ATTRIBUTE_TYPE::UV_0] = {
+            .data = &buffer.bytes[view.offset],
+            .length = accessor.count * accessor_type_to_component_count(accessor.type) * component_type_size(accessor.component_type),
+        };
+    }
 
     return submesh;
 }
 
-Mesh::attribute gltf::load_attribute(uint32_t accessor_index) {
-    auto view_index = gltf_json["accessors"][accessor_index]["bufferView"].get<uint32_t>();
-    const auto& view = gltf_json["bufferViews"][view_index];
-    auto offset = view["byteOffset"].get<off_t>();
-    auto& buffer = buffers[view["buffer"].get<uint32_t>()];
+static void load_textures(char* path, std::vector<handle<device_texture>>& textures, std::vector<struct buffer>& buffers, std::vector<struct buffer_view>& buffer_views, bool is_glb) {
+    ondemand::array gltf_images = root["images"];
+    std::vector<raw_image> images(gltf_images.count_elements());
+    size_t path_len = strlen(path);
+    char path_buffer[2048] = { 0U };
+    strncpy(path_buffer, path, path_len);
+    BEGIN_MARKER(LOAD_TEXTURES);
+    u32 image_index = 0U;
+    for (ondemand::object gltf_image : gltf_images) {
+        if (is_glb) {
+            // TODO: consider mimeType
+            struct buffer_view& view = buffer_views[gltf_image["bufferView"]];
+            struct buffer& buffer = buffers[view.buffer_index];
 
-    return {
-        &buffer[offset],
-        view["byteLength"].get<size_t>()
-    };
-}
+            raw_image& image = images[image_index++];
 
-void gltf::load_textures(const std::filesystem::path& path) {
-    const auto& gltf_images = gltf_json["images"];
-    auto images_count = gltf_images.size();
-    std::vector<raw_image> images{ images_count };
+            image.data = stbi_load_from_memory(&buffer.bytes[view.offset], view.length, &image.width, &image.height, &image.channels, 4);
 
-    std::vector<size_t> v(images_count);
-    std::iota(v.begin(), v.end(), 0);
+        } else {
+            std::string_view uri_view = gltf_image["uri"];
+            strncpy(path_buffer + path_len, uri_view.data(), uri_view.length());
+            path_buffer[path_len + uri_view.length()] = '\0';
 
-    const auto& gltf_textures = gltf_json["textures"];
-    auto textures_count = gltf_textures.size();
-    textures.resize(textures_count);
+            raw_image& image = images[image_index++];
+            image.data = stbi_load(path_buffer, &image.width, &image.height, &image.channels, 4);
+        }
+    }
+    END_MARKER(LOAD_TEXTURES);
 
-#ifdef API_TEST
-    auto& device = vkdevice::get_render_device();
+    // ondemand::array gltf_samplers = root["samplers"];
+    // std::vector<handle<device_sampler>> samplers(gltf_samplers.count_elements());
+
+    // auto sampler = device.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    // for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
+    //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    // }
+
+    vkdevice& device = vkdevice::get();
 
     constexpr auto buffers_count = 2U;
-    auto total_size = images_count * 4096U * 4096 * sizeof(uint32_t);
-    auto buffer_size = total_size / 32U;
+    auto total_size = images.size() * 4096U * 4096 * sizeof(uint32_t);
+    // TODO: Fix nasty stuff going on
+    // Crash on buffer destruction
+    // Load wrong images
+    // auto buffer_size = total_size / 32U;
+    auto buffer_size = total_size / 2U;
 
     handle<device_buffer> staging_buffers_handle[buffers_count] = {
         device.create_buffer({
@@ -156,46 +188,28 @@ void gltf::load_textures(const std::filesystem::path& path) {
         }),
     };
 
+    // TODO: Create a proper upload heap
+    BEGIN_MARKER(UPLOAD_TEXTURES);
     graphics_command_buffer command_buffers[buffers_count];
     device.allocate_command_buffers(command_buffers, buffers_count, QueueType::GRAPHICS, "upload_buffer");
     auto buffer_index = 0U;
     auto command_buffer = command_buffers[buffer_index];
     auto buffer_handle = staging_buffers_handle[buffer_index];
-    auto buffer = device.get_buffer(buffer_handle);
+    device_buffer& buffer = device.get_buffer(buffer_handle);
 
     command_buffer.start();
-#endif // API_TEST
 
-    std::for_each(std::execution::par, v.begin(), v.end(), [&](const size_t image_index) {
-        const auto& gltf_image = gltf_images[image_index];
-        auto filepath = (path / gltf_image["uri"].get<std::string>()).string();
-        auto& image = images[image_index];
-        image.data = stbi_load(filepath.c_str(), &image.width, &image.height, &image.channels, 4);
-    });
-
-    // const auto &gltf_samplers = gltf_json["samplers"];
-    // auto samplers_count = gltf_samplers.size();
-    // std::vector<Sampler *> samplers{samplers_count};
-
-#ifdef API_TEST
-    const auto &gltf_samplers = gltf_json["samplers"];
-    auto samplers_count = gltf_samplers.size();
-    std::vector<handle<device_sampler>> samplers{samplers_count};
-
-    // auto sampler = device.create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    // for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
-    //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    // }
-
-    for (size_t texture_index = 0; texture_index < textures_count; texture_index++) {
-        auto gltf_texture = gltf_textures[texture_index];
-        auto& image = images[gltf_texture["source"].get<uint32_t>()];
+    ondemand::array gltf_textures = root["textures"];
+    textures.resize(gltf_textures.count_elements());
+    u32 texture_index = 0U;
+    for (ondemand::object gltf_texture: gltf_textures) {
+        raw_image& image = images[gltf_texture["source"]];
         // if (gltf_texture.contains("sampler")) {
-        //     auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
+        //     u32 sampler_index = gltf_texture["sampler"].get_uint32();
         //     sampler = samplers[sampler_index];
         // }
 
-        auto texture = device.create_texture({
+        handle<device_texture> texture = device.create_texture({
             .width  = static_cast<uint32_t>(image.width),
             .height = static_cast<uint32_t>(image.height),
             .usages = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -203,105 +217,247 @@ void gltf::load_textures(const std::filesystem::path& path) {
             .type   = VK_IMAGE_TYPE_2D,
         });
 
-        uint64_t size = image.width * image.height * sizeof(uint32_t);
-        auto offset = buffer.offset;
-        if (offset + size > buffer_size) {
+        u32 size = image.width * image.height * sizeof(uint32_t);
+        if (buffer.allocated_size + size > buffer.size) {
             command_buffer.stop();
 
-            device.submit(&command_buffer, 1 );
+            device.submit(&command_buffer, 1);
 
-            buffer_index = (++buffer_index) % buffers_count;
+            buffer_index = (buffer_index + 1U) % buffers_count;
             command_buffer = command_buffers[buffer_index];
             buffer_handle = staging_buffers_handle[buffer_index];
             buffer = device.get_buffer(buffer_handle);
             buffer.reset();
-            device.wait();
+            // TODO: Remove the wait
+            // device.wait();
             command_buffer.start();
-            offset = 0U;
         }
 
-        void* ptr = buffer.allocate(size);
-        memcpy(ptr, image.data, size);
+        memcpy(buffer.allocate(size), image.data, size);
 
         command_buffer.barrier(texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        command_buffer.copy(buffer_handle, texture, static_cast<VkDeviceSize>(offset));
+        command_buffer.copy(buffer_handle, texture, static_cast<VkDeviceSize>(buffer.offset));
         command_buffer.barrier(texture, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
-        textures[texture_index] = texture;
+        textures[texture_index++] = texture;
     }
 
-    command_buffer.stop();
-    device.submit(&command_buffer, 1);
+    if (buffer.allocated_size > 0U) {
+        command_buffer.stop();
+        device.submit(&command_buffer, 1);
+    }
     device.wait();
     device.destroy_buffer(staging_buffers_handle[0]);
     device.destroy_buffer(staging_buffers_handle[1]);
-#else
-    Sampler* sampler = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    // for (size_t sampler_index = 0; sampler_index < samplers_count; sampler_index++) {
-    //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    // }
-
-    for (size_t texture_index = 0; texture_index < textures_count; texture_index++) {
-        auto gltf_texture = gltf_textures[texture_index];
-
-        auto& image = images[gltf_texture["source"].get<uint32_t>()];
-        // if (gltf_texture.contains("sampler")) {
-        //     auto sampler_index = gltf_texture["sampler"].get<uint32_t>();
-        //     sampler = samplers[sampler_index];
-        // }
-
-        auto* texture = vkrenderer::create_2d_texture(static_cast<uint32_t>(image.width), static_cast<uint32_t>(image.height), VK_FORMAT_R8G8B8A8_UNORM, sampler);
-
-        texture->update(image.data);
-
-        textures[texture_index] = texture;
-    }
-#endif
+    END_MARKER(UPLOAD_TEXTURES);
 }
 
-void gltf::load_materials() {
-    const auto& gltf_materials = gltf_json["materials"];
-    auto materials_count = gltf_materials.size();
-    materials.resize(materials_count);
+static void load_materials(std::vector<material>& materials, std::vector<handle<device_texture>>& textures) {
+    ondemand::array gltf_materials = root["materials"];
+    materials.resize(gltf_materials.count_elements());
 
-    for (size_t material_index = 0; material_index < materials_count; material_index++) {
-        const auto& gltf_material = gltf_materials[material_index];
-        auto& material = materials[material_index];
+    u32 material_index = 0U;
+    for (ondemand::object object: gltf_materials) {
+        material& material = materials[material_index++];
+        material.base_color = vec3(1.f);
+        material.metalness = 1.f;
+        material.roughness = 1.f;
 
-        if (gltf_material.contains("pbrMetallicRoughness")) {
-            const auto& pbr_params = gltf_material["pbrMetallicRoughness"];
-
-            if (pbr_params.contains("baseColorFactor")) {
-                const auto& base_color = pbr_params["baseColorFactor"];
-                material.base_color.set<0>(base_color[0].get<float>());
-                material.base_color.set<1>(base_color[1].get<float>());
-                material.base_color.set<2>(base_color[2].get<float>());
-                material.base_color.arr[3] = base_color[3].get<float>(); // Since we use a vec3 for colors we are not allowed toset fourth value with set<3>
-            } else {
-                material.base_color = vec3(1.f);
+        ondemand::object pbr_params;
+        if (!object["pbrMetallicRoughness"].get(pbr_params)) {
+            ondemand::array base_color;
+            if (!pbr_params["baseColorFactor"].get(base_color)) {
+                u32 id = 0U;
+                for (double val : base_color) {
+                    material.base_color.arr[id++] = static_cast<float>(val);
+                }
             }
 
-            if (pbr_params.contains("baseColorTexture")) {
-                auto base_color_index = pbr_params["baseColorTexture"]["index"].get<uint32_t>();
-                material.base_color_texture = textures[base_color_index];
+            ondemand::object base_color_texture;
+            if (!pbr_params["baseColorTexture"].get(base_color_texture)) {
+                material.base_color_texture = textures[base_color_texture["index"]];
             }
 
-            if (pbr_params.contains("metallicFactor")) {
-                material.metalness = pbr_params["metallicFactor"].get<float>();
-            } else {
-                material.metalness = 1.0;
-            }
+            pbr_params["metallicFactor"].get(material.metalness);
+            pbr_params["roughnessFactor"].get(material.roughness);
 
-            if (pbr_params.contains("roughnessFactor")) {
-                material.roughness = pbr_params["roughnessFactor"].get<float>();
-            } else {
-                material.roughness = 1.0;
-            }
-
-            if (pbr_params.contains("metallicRoughnessTexture")) {
-                auto metallic_roughness_index = pbr_params["metallicRoughnessTexture"]["index"].get<uint32_t>();
-                material.metallic_roughness_texture = textures[metallic_roughness_index];
+            ondemand::object metallic_roughness_texture;
+            if (!pbr_params["metallicRoughnessTexture"].get(metallic_roughness_texture)) {
+                material.metallic_roughness_texture = textures[metallic_roughness_texture["index"]];
             }
         }
     }
+}
+
+gltf::gltf(const char* filepath) {
+    BEGIN_MARKER(LOAD_GLTF);
+
+    ondemand::parser parser;
+    padded_string json;
+    ondemand::document doc;
+
+    const char* ext = PathFindExtensionA(filepath);
+
+    char buffer_path[2048U] = { 0U };
+    char* filename = nullptr;
+    GetFullPathNameA( filepath, 2048U, buffer_path, &filename);
+    size_t parent_dir_len = filename - buffer_path;
+
+    // TODO: Remove
+    is_glb = strcmp(ext, ".glb") == 0;
+
+    if (is_glb) {
+        size_t filesize = 0U;
+        size_t read = 0U;
+        u8* glb_buffer = read_file(filepath, &filesize);
+        header =  (struct glb_header*)glb_buffer;
+        assert(filesize == header->length);
+        // assert(header->magic == (u32)"glTF");
+
+        read += sizeof(*header);
+        chunks.push_back((struct glb_chunk*)(header + 1));
+        read += offsetof(struct glb_chunk, data) + chunks.back()->length;
+        while (read != header->length) {
+            chunks.push_back((struct glb_chunk*)(glb_buffer + read));
+            read += offsetof(struct glb_chunk, data) + chunks.back()->length;
+        }
+
+        doc = parser.iterate((const char*)&chunks[0]->data[0U], chunks[0]->length, filesize);
+        root = doc;
+
+        ondemand::array gltf_buffers = root["buffers"];
+        assert(gltf_buffers.count_elements() == chunks.size() - 1U);
+        buffers.resize(gltf_buffers.count_elements());
+        u32 buffer_index = 0U;
+        for (u32 chunk_index = 1U; chunk_index < chunks.size(); chunk_index++) {
+            buffers[buffer_index++] = buffer {
+                .bytes = chunks[chunk_index]->data,
+                .size = chunks[chunk_index]->length,
+            };
+        }
+    } else {
+        json = padded_string::load(filepath);
+        doc = parser.iterate(json);
+        root = doc;
+
+        {
+            ondemand::array gltf_buffers = root["buffers"];
+            buffers.resize(gltf_buffers.count_elements());
+            u32 buffer_index = 0U;
+            for (ondemand::object value: gltf_buffers) {
+                std::string_view uri_view = value["uri"];
+                strncpy(buffer_path + parent_dir_len, uri_view.data(), uri_view.length());
+                buffer_path[parent_dir_len + uri_view.length()] = '\0';
+
+                size_t file_size = 0U;
+                uint8_t* bytes = read_file(buffer_path, &file_size);
+                buffers[buffer_index++] = {
+                    .bytes = bytes,
+                    .size = file_size,
+                };
+            }
+        }
+    }
+
+
+    std::vector<struct accessor> accessors;
+    {
+        ondemand::array gltf_accessors = root["accessors"];
+        accessors.resize(gltf_accessors.count_elements());
+        u32 accessor_index = 0U;
+        for (ondemand::object value: gltf_accessors) {
+            struct accessor& accessor = accessors[accessor_index++];
+            value["bufferView"].get(accessor.view_index);
+            value["count"].get(accessor.count);
+            value["type"].get(accessor.type);
+            value["componentType"].get(accessor.component_type);
+        }
+    }
+
+    std::vector<struct buffer_view> buffer_views;
+    {
+        ondemand::array gltf_views = root["bufferViews"];
+        buffer_views.resize(gltf_views.count_elements());
+        u32 view_index = 0U;
+        for (ondemand::object value: gltf_views) {
+            struct buffer_view& view = buffer_views[view_index++];
+            value["buffer"].get(view.buffer_index);
+            value["byteLength"].get(view.length);
+            value["byteOffset"].get(view.offset);
+        }
+    }
+
+
+    {
+        ondemand::array gltf_nodes = root["nodes"];
+        nodes.resize(gltf_nodes.count_elements());
+
+        u32 node_index = 0U;
+        for (ondemand::object gltf_node: gltf_nodes) {
+            struct node& node = nodes[node_index++];
+
+            ondemand::array gltf_children;
+            if (!gltf_node["children"].get(gltf_children)) {
+                node.children.resize(gltf_children.count_elements());
+
+                u32 child_index = 0U;
+                for (auto child : gltf_children) {
+                    node.children[child_index++] = child.get_uint32();
+                }
+            }
+
+            node.mesh = UINT32_MAX;
+            gltf_node["mesh"].get(node.mesh);
+        }
+    }
+
+
+    // root nodes
+    {
+        u32 scene_index = root["scene"].get_uint32();
+        ondemand::array gltf_scene_nodes = root["scenes"].at(scene_index)["nodes"];
+        root_nodes.resize(gltf_scene_nodes.count_elements());
+
+        u32 index = 0U;
+        for (auto node_index: gltf_scene_nodes) {
+            root_nodes[index++] = node_index.get_uint32();
+        }
+    }
+
+    buffer_path[parent_dir_len] = '\0';
+    load_textures(buffer_path, textures, buffers, buffer_views, is_glb);
+    load_materials(materials, textures);
+
+    // meshes
+    {
+        ondemand::array gltf_meshes = root["meshes"];
+        meshes.resize(gltf_meshes.count_elements());
+
+        u32 mesh_index = 0U;
+        for (ondemand::object gltf_mesh: gltf_meshes) {
+            Mesh& mesh = meshes[mesh_index++];
+            ondemand::array gltf_primitives = gltf_mesh["primitives"];
+
+            for (ondemand::object primitive : gltf_primitives) {
+                material& material = materials[primitive["material"]];
+                mesh.add_submesh(load_primitive(primitive, buffers, accessors, buffer_views), material);
+            }
+
+            Mesh::register_mesh(mesh);
+        }
+    }
+
+    END_MARKER(LOAD_GLTF);
+}
+
+void gltf::deinit() {
+    for (handle<device_texture> handle: textures) {
+        vkdevice::get().destroy_texture(handle);
+    }
+
+    for (struct buffer& buffer: buffers) {
+        free(buffer.bytes);
+    }
+
+    free(header);
 }

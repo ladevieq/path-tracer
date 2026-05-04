@@ -1,10 +1,9 @@
 #pragma once
 
-#include <vector>
+#include <cstdint>
 
-#include "aabb.hpp"
-// #include "sphere.hpp"
 #include "triangle.hpp"
+#include "aabb.hpp"
 
 struct bvh_node {
     aabb bounding_box;

@@ -1,9 +1,7 @@
-#include <cmath>
-#include <cassert.>
-#include <smmintrin.h>
-
-#include "utils.hpp"
 #include "vec3.hpp"
+
+// #include <smmintrin.h>
+// #include <xmmintrin.h>
 
 vec3::vec3() : v(_mm_setzero_ps()) {}
 
@@ -122,7 +120,16 @@ bool vec3::near_zero() const {
     float v0 = fabs(static_cast<float>(_mm_extract_ps(v, 0)));
     float v1 = fabs(static_cast<float>(_mm_extract_ps(v, 1)));
     float v2 = fabs(static_cast<float>(_mm_extract_ps(v, 2)));
-    return (v0 < EPSILON) && (v1 < EPSILON) && (v2 < EPSILON);
+    return (v0 < FLT_EPSILON) && (v1 < FLT_EPSILON) && (v2 < FLT_EPSILON);
+}
+
+bool vec3::is_zero() const {
+    // __m128 e = _mm_set1_ps(EPSILON);
+    // _mm_cmplt_ps(_mm_andnot_ps(_mm_set1_ps(-0.0f), v), e);
+    float v0 = fabs(static_cast<float>(_mm_extract_ps(v, 0)));
+    float v1 = fabs(static_cast<float>(_mm_extract_ps(v, 1)));
+    float v2 = fabs(static_cast<float>(_mm_extract_ps(v, 2)));
+    return (v0 == 0.f) && (v1 == 0.f) && (v2 == 0.f);
 }
 
 void vec3::print() const {
