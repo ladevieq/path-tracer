@@ -1,5 +1,7 @@
-/build
+/build*
 /out
 /.vs
 /.cache
+/vcpkg
+/tracy
 compile_commands.json
