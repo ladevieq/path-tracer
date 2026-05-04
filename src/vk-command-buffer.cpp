@@ -1,11 +1,6 @@
 #include "vk-command-buffer.hpp"
 
-#include <vulkan/vulkan_core.h>
-
-#include "vulkan-loader.hpp"
-
-#include "vk-device.hpp"
-#include "vk-utils.hpp"
+uintptr_t constants[3U] = { 0U };
 
 void command_buffer::start() const {
     VkCommandBufferBeginInfo begin_info{
@@ -17,20 +12,15 @@ void command_buffer::start() const {
 
     VKCHECK(vkBeginCommandBuffer(vk_command_buffer, &begin_info));
 
-    const auto& bindless   = vkdevice::get_render_device().get_bindingmodel();
-    const auto* global_set = &bindless.sets[BindlessSetType::GLOBAL];
-    // const auto global_uniforms = bindless.get_globals_uniform_buffer();
-    // if (queue_type == QueueType::GRAPHICS) {
-    //     vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.graphics_layout, 0, 1U, global_set, 1U, &global_uniforms.offset);
-    //     vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.compute_layout, 0, 1U, global_set, 1U, &global_uniforms.offset);
-    // } else if (queue_type == QueueType::ASYNC_COMPUTE) {
-    //     vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.compute_layout, 0, 1U, global_set, 1U, &global_uniforms.offset);
-    // }
+    const bindless_model& bindless   = vkdevice::get().get_bindingmodel();
+    const device_buffer& global_uniforms = bindless.get_uniform_buffer(UniformTypes::GLOBAL);
+    constants[UniformTypes::GLOBAL] = global_uniforms.device_address + global_uniforms.offset;
+
     if (queue_type == QueueType::GRAPHICS) {
-        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.graphics_layout, 0, 1U, global_set, 0U, nullptr);
-        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.compute_layout, 0, 1U, global_set, 0U, nullptr);
+        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.global_layout, 0, 1U, &bindless.global_set, 0U, nullptr);
+        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.global_layout, 0, 1U, &bindless.global_set, 0U, nullptr);
     } else if (queue_type == QueueType::ASYNC_COMPUTE) {
-        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.compute_layout, 0, 1U, global_set, 0U, nullptr);
+        vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.global_layout, 0, 1U, &bindless.global_set, 0U, nullptr);
     }
 }
 
@@ -39,7 +29,7 @@ void command_buffer::stop() const {
 }
 
 void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineStageFlags2 stage, VkAccessFlags2 access, VkImageLayout layout) const {
-    auto&                   texture     = vkdevice::get_render_device().get_texture(texture_handle);
+    auto&                   texture     = vkdevice::get().get_texture(texture_handle);
 
     VkImageSubresourceRange subresource_range{
         .aspectMask     = texture.aspects,
@@ -83,7 +73,7 @@ void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineSt
 }
 
 void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle, uint64_t offset) const {
-    auto&                    device      = vkdevice::get_render_device();
+    auto&                    device      = vkdevice::get();
     const auto&              buffer      = device.get_buffer(buffer_handle);
     const auto&              texture     = device.get_texture(texture_handle);
 
@@ -111,16 +101,14 @@ void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_t
 }
 
 void graphics_command_buffer::dispatch(const dispatch_params& params) const {
-    const auto& pipeline = vkdevice::get_render_device().get_pipeline(params.pipeline);
-    const auto& bindless = vkdevice::get_render_device().get_bindingmodel();
-    // vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.compute_layout, static_cast<uint32_t>(BindlessSetType::INSTANCES_UNIFORMS), 1U, &bindless.sets[BindlessSetType::INSTANCES_UNIFORMS], 1U, &params.uniforms_offset);
-    // vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.compute_layout, static_cast<uint32_t>(BindlessSetType::DRAWS_UNIFORMS), 1U, &bindless.sets[BindlessSetType::DRAWS_UNIFORMS], 1U, &params.uniforms_offset);
-
-    for (uint32_t push_index = 0U; push_index < bindless_model::max_push_constants_slots; push_index++) {
-        vkCmdPushConstants(vk_command_buffer, bindless.compute_layout, VK_SHADER_STAGE_COMPUTE_BIT, push_index * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.params[push_index]);
-    }
+    const device_pipeline& pipeline = vkdevice::get().get_pipeline(params.pipeline);
+    const bindless_model& bindless = vkdevice::get().get_bindingmodel();
 
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
+
+    const device_buffer& draw_uniforms = bindless.get_uniform_buffer(UniformTypes::DRAW);
+    constants[UniformTypes::DRAW] = draw_uniforms.device_address + draw_uniforms.offset;
+    vkCmdPushConstants(vk_command_buffer, bindless.global_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(constants), &constants);
 
     auto x = params.group_size.vec.x / params.local_group_size.vec.x;
     auto y = params.group_size.vec.y / params.local_group_size.vec.y;
@@ -133,7 +121,7 @@ void graphics_command_buffer::begin_renderpass(const renderpass_params& params) 
 
     for (auto index{ 0U }; index < params.color_attachments.size(); index++) {
         auto& attachment_info              = attachments_info[index];
-        auto& attachment                   = vkdevice::get_render_device().get_texture(params.color_attachments[index]);
+        auto& attachment                   = vkdevice::get().get_texture(params.color_attachments[index]);
 
         attachment_info.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachment_info.pNext              = nullptr;
@@ -183,45 +171,40 @@ void graphics_command_buffer::begin_renderpass(const renderpass_params& params) 
     };
     vkCmdBeginRendering(vk_command_buffer, &rendering_info);
 
+    const bindless_model& bindless   = vkdevice::get().get_bindingmodel();
+    const device_buffer& pass_uniforms = bindless.get_uniform_buffer(UniformTypes::PASS);
+    constants[UniformTypes::PASS] = pass_uniforms.device_address + pass_uniforms.offset;
+
     vkCmdSetScissor(vk_command_buffer, 0U, 1U, &scissor);
     vkCmdSetViewport(vk_command_buffer, 0U, 1U, &viewport);
-
-    // auto&       device   = vkdevice::get_render_device();
-    // const auto& bindless = device.get_bindingmodel();
-    // vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless.layout, static_cast<uint32_t>(BindlessSetType::GLOBAL), 1U, &bindless.sets[BindlessSetType::GLOBAL], 1U, &params.uniforms_offset);
-    // vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless.layout, static_cast<uint32_t>(BindlessSetType::GLOBAL), 1U, &bindless.sets[BindlessSetType::GLOBAL], 1U, &params.uniforms_offset);
 }
 
 void graphics_command_buffer::draw(const draw_params& params) const {
-    auto&       device   = vkdevice::get_render_device();
+    auto&       device   = vkdevice::get();
     const auto& pipeline = device.get_pipeline(params.pipeline);
 
     const auto& bindless = device.get_bindingmodel();
-    // vkCmdBindDescriptorSets(vk_command_buffer, pipeline.bind_point, bindless.layout, static_cast<uint32_t>(BindlessSetType::DRAWS_UNIFORMS), 1U, &bindless.sets[BindlessSetType::DRAWS_UNIFORMS], 1U, &params.uniforms_offset);
 
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
 
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::GLOBALS * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.globals_address);
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::INSTANCES * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.instances_address);
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::DRAWS * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.uniforms_address);
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::VERTEX_BUFFER * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.vertex_address);
+    const device_buffer& draw_uniforms = bindless.get_uniform_buffer(UniformTypes::DRAW);
+    constants[UniformTypes::DRAW] = draw_uniforms.device_address + draw_uniforms.offset;
+    vkCmdPushConstants(vk_command_buffer, bindless.global_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(constants), &constants);
 
     vkCmdDraw(vk_command_buffer, params.vertex_count, params.instance_count, params.vertex_offset, 0U);
 }
 
 void graphics_command_buffer::draw_indexed(const draw_indexed_params& params) const {
-    auto&       device   = vkdevice::get_render_device();
+    auto&       device   = vkdevice::get();
     const auto& pipeline = device.get_pipeline(params.pipeline);
 
     const auto& bindless = device.get_bindingmodel();
-    // vkCmdBindDescriptorSets(vk_command_buffer, pipeline.bind_point, bindless.layout, static_cast<uint32_t>(BindlessSetType::DRAWS_UNIFORMS), 1U, &bindless.sets[BindlessSetType::DRAWS_UNIFORMS], 1U, &params.uniforms_offset);
 
     vkCmdBindPipeline(vk_command_buffer, pipeline.bind_point, pipeline.vk_pipeline);
 
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::GLOBALS * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.globals_address);
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::INSTANCES * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.instances_address);
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::DRAWS * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.uniforms_address);
-    vkCmdPushConstants(vk_command_buffer, bindless.graphics_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, ConstantType::VERTEX_BUFFER * bindless_model::max_push_constants_slots_size, bindless_model::max_push_constants_slots_size, &params.vertex_address);
+    const device_buffer& draw_uniforms = bindless.get_uniform_buffer(UniformTypes::DRAW);
+    constants[UniformTypes::DRAW] = draw_uniforms.device_address + draw_uniforms.offset;
+    vkCmdPushConstants(vk_command_buffer, bindless.global_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(constants), &constants);
 
     const auto& index_buffer = device.get_buffer(params.index_buffer);
     vkCmdBindIndexBuffer(vk_command_buffer, index_buffer.vk_buffer, 0U, VK_INDEX_TYPE_UINT16);

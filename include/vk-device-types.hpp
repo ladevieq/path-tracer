@@ -1,8 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan_core.h>
-
-#include <span>
+#include <cstdint>
 
 #include "freelist.hpp"
 
@@ -60,6 +58,8 @@ struct device_texture {
     uint32_t              depth         = 1U;
     uint32_t              mips          = 1U;
 
+    const char*           name = nullptr;
+
     private:
     handle<void>          storage_index;
     handle<void>          sampled_index;
@@ -110,52 +110,56 @@ struct buffer_desc {
     VkBufferUsageFlags    usages;
     VkMemoryPropertyFlags memory_properties;
     uint32_t              memory_usage;
+    const char*           name;
 };
-
-#define ALIGN(value, alignment) \
-    (((value) + ((alignment) - 1)) & ~((alignment) - 1))
 
 struct device_buffer {
     template<typename T>
     T* allocate() {
-        // size_t alloc_size = (sizeof(T) + 0x100) & 0xffffff00;
-        size_t alloc_size = ALIGN(sizeof(T), 16);
-        if (offset + alloc_size > size) {
+        u32 alloc_size = sizeof(T);
+        if (allocated_size + alloc_size > size) {
             reset();
         }
 
-        auto* addr = (T*)(static_cast<uint8_t*>(mapped_ptr) + offset);
-        offset += alloc_size;
+        offset = allocated_size;
+        T* addr = (T*)(static_cast<uint8_t*>(mapped_ptr) + offset);
+        allocated_size += alloc_size;
         return addr;
     }
 
-    void* allocate(uint64_t alloc_size) {
-        // size_t alloc_size = (sizeof(T) + 0x100) & 0xffffff00;
-        alloc_size = ALIGN(alloc_size, 16);
-        if (offset + alloc_size > size) {
+    void* allocate(u32 alloc_size) {
+        if (allocated_size + alloc_size > size) {
             reset();
         }
 
-        auto* addr = (void*)(static_cast<uint8_t*>(mapped_ptr) + offset);
-        offset += alloc_size;
+        offset = allocated_size;
+        void* addr = (void*)(static_cast<uint8_t*>(mapped_ptr) + offset);
+        allocated_size += alloc_size;
         return addr;
     }
 
     void reset() {
+        allocated_size = 0U;
         offset = 0U;
     }
 
-    uint64_t        offset = 0U;
-    VkBuffer        vk_buffer;
-    VmaAllocation   alloc;
-    VkDeviceAddress device_address = 0U;
-    void*           mapped_ptr;
-    size_t          size;
+    u32                    offset = 0U;
+    u32                    allocated_size = 0U;
+    VkBuffer               vk_buffer;
+    VmaAllocation          alloc;
+    VkDeviceAddress        device_address = 0U;
+    void*                  mapped_ptr;
+    size_t                 size;
+    VkBufferUsageFlagBits2 usages;
+
+    const char*            name;
 };
 
 struct graphics_pipeline_desc {
-    std::span<uint8_t>  vs_code;
-    std::span<uint8_t>  fs_code;
+    uint8_t*            vs_code;
+    size_t              vs_code_size;
+    uint8_t*            fs_code;
+    size_t              fs_code_size;
     std::span<VkFormat> color_attachments_format;
     VkFormat            depth_attachment_format;
     VkFormat            stencil_attachment_format;
@@ -163,7 +167,8 @@ struct graphics_pipeline_desc {
 };
 
 struct compute_pipeline_desc {
-    std::span<uint8_t>  cs_code;
+    uint8_t*            cs_code;
+    size_t              cs_code_size;
     const char*         name;
 };
 

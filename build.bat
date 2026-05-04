@@ -41,13 +41,13 @@ set DEBUG_L_FLAGS=
 set RELEASE_C_FLAGS=
 
 if %MSVC% EQU 1 (
-    set C_FLAGS=/nologo /W4 /WX /Zi /Fo:%BUILD_DIR%\ /Iinclude /Iinclude\api-test /I%VULKAN_SDK%\Include /external:W0 /external:Ithirdparty /external:Ithirdparty\imgui /std:c++20 /DNOMINMAX /EHsc /c /Tp
+    set C_FLAGS=/nologo /W4 /WX /Zi /Fo:%BUILD_DIR%\ /Iinclude /I%VULKAN_SDK%\Include /external:W0 /external:Ithirdparty /external:Ithirdparty\imgui /std:c++20 /DNOMINMAX /EHsc /c /Tp
 
     set DEBUG_C_FLAGS=/DDEBUG /Od
     set RELEASE_C_FLAGS=/DNDEBUG /O2
     set DEBUG_L_FLAGS=/DEBUG
 ) else (
-    set C_FLAGS=--target=x86_64-pc-windows-msvc -pedantic -I include -I include\api-test -I %VULKAN_SDK%\Include -isystem thirdparty -isystem thirdparty\imgui -std=c++20 -DNOMINMAX -c -msse4.1 -Wno-missing-designated-field-initializers 
+    set C_FLAGS=--target=x86_64-pc-windows-msvc -pedantic -I include -I %VULKAN_SDK%\Include -isystem thirdparty -isystem thirdparty\imgui -std=c++20 -DNOMINMAX -c -msse4.1 -Wno-missing-designated-field-initializers 
 
     set DEBUG_C_FLAGS=-DDEBUG -g -O0
     set RELEASE_C_FLAGS=-DNDEBUG -O2
@@ -76,19 +76,19 @@ if 0 EQU 1 (
 :: set src=main dx12-device dx12-command-buffer
 :: (for %%s in (%api%) do (
 ::     call set OBJS=%%OBJS%% %BUILD_DIR%\%%s.obj
-::     echo %C_COMPILER% /Fd:%BUILD_DIR%\%%s.pdb %C_FLAGS% api-test\%%s.cpp
-::     %C_COMPILER% /Fd:%BUILD_DIR%\%%s.pdb %C_FLAGS% api-test\%%s.cpp
+::     echo %C_COMPILER% /Fd:%BUILD_DIR%\%%s.pdb %C_FLAGS% src\%%s.cpp
+::     %C_COMPILER% /Fd:%BUILD_DIR%\%%s.pdb %C_FLAGS% src\%%s.cpp
 :: ))
 :: link multiple objs
 :: link %L_FLAGS% /OUT:%BUILD_DIR%\main.exe %OBJS% kernel32.lib user32.lib
 
 :: compiles the project as a single compilation unit
 if %MSVC% EQU 1 (
-    echo %C_COMPILER% /Fd:%BUILD_DIR%\main.pdb %C_FLAGS% api-test\main.cpp
-    %C_COMPILER% /Fd:%BUILD_DIR%\main.pdb %C_FLAGS% api-test\main.cpp
+    echo %C_COMPILER% /Fd:%BUILD_DIR%\main.pdb %C_FLAGS% src\main.cpp
+    %C_COMPILER% /Fd:%BUILD_DIR%\main.pdb %C_FLAGS% src\main.cpp
 ) else (
-    echo %C_COMPILER% -o %BUILD_DIR%\main.obj %C_FLAGS% api-test\main.cpp
-    %C_COMPILER% -o %BUILD_DIR%\main.obj %C_FLAGS% api-test\main.cpp
+    echo %C_COMPILER% -o %BUILD_DIR%\main.obj %C_FLAGS% src\main.cpp
+    %C_COMPILER% -o %BUILD_DIR%\main.obj %C_FLAGS% src\main.cpp
 )
 
 link %L_FLAGS% /OUT:%BUILD_DIR%\main.exe %BUILD_DIR%\main.obj kernel32.lib user32.lib shlwapi.lib

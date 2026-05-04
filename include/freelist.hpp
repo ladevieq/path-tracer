@@ -1,10 +1,9 @@
 #pragma once
-#include <vector>
-#include <cassert>
 
+#include "utils.hpp"
 #include "handle.hpp"
 
-static constexpr uint32_t default_element_count = 1024U;
+static constexpr u32 default_element_count = 1024U;
 
 template<typename T, const size_t initial_size = default_element_count>
 class freelist {
@@ -31,6 +30,8 @@ class freelist {
         // elements[0U].next_free = element.next_free;
         element.item = std::move(item);
 
+        assert(element.generation + 1 != UINT32_MAX);
+
         return { id, ++element.generation };
     }
 
@@ -54,9 +55,21 @@ class freelist {
 
     static constexpr uint32_t invalid_id = UINT32_MAX;
 
+    struct element {
+        union {
+            T item;
+            uint32_t next_free = freelist<T>::invalid_id;
+        };
+        uint32_t generation = 0U;
+    };
+
+    const std::vector<freelist::element>& get_list() const {
+        return elements;
+    }
+
 private:
     void grow(size_t grow_size) {
-        auto size = elements.size();
+        size_t size = elements.size();
         uint32_t next_free = static_cast<uint32_t>(size);
         next_free_id = next_free;
 
@@ -70,16 +83,10 @@ private:
             );
         }
 
+        // this makes it impossible to know
+        elements.back().next_free = freelist<T>::invalid_id;
         elements.back().next_free = freelist<T>::invalid_id;
     }
-
-    struct element {
-        union {
-            T item;
-            uint32_t next_free = freelist<T>::invalid_id;
-        };
-        uint32_t generation = 0U;
-    };
 
     std::vector<element>        elements;
     uint32_t next_free_id;
@@ -97,7 +104,7 @@ class idlist {
         // auto id = elements[0U].next_free;
         auto id = next_free_id;
 
-        if (id == idlist<T>::invalid_id) {
+        if (id == idlist::invalid_id) {
             grow(elements.size());
 
             // id = elements[0U].next_free;
@@ -107,7 +114,7 @@ class idlist {
         auto& element = elements[id];
         next_free_id = element.next_free;
         elements[0U].next_free = element.next_free;
-        element.next_free = idlist<T>::invalid_id;
+        element.next_free = idlist::invalid_id;
 
         return { id, ++element.generation };
     }
@@ -138,11 +145,11 @@ private:
             );
         }
 
-        elements.back().next_free = idlist<T>::invalid_id;
+        elements.back().next_free = idlist::invalid_id;
     }
 
     struct element {
-        uint32_t next_free = idlist<T>::invalid_id;
+        uint32_t next_free = idlist::invalid_id;
         uint32_t generation = 0U;
     };
 

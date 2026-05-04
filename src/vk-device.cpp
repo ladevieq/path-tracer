@@ -1,16 +1,22 @@
 #include "vk-device.hpp"
 
-#include <cassert>
-#include <vector>
-
-#include <vulkan/vulkan_core.h>
-
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
-#include "vk-utils.hpp"
-#include "vulkan-loader.hpp"
-#include "vk-command-buffer.hpp"
+static VkShaderModule create_shader_module(VkDevice device, uint8_t* code, size_t code_size) {
+    VkShaderModule shader_module;
+    VkShaderModuleCreateInfo create_info{
+        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .pNext    = nullptr,
+        .flags    = 0U,
+        .codeSize = code_size,
+        .pCode    = reinterpret_cast<uint32_t*>(code),
+    };
+
+    VKCHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+    return shader_module;
+}
+
 
 vkdevice vkdevice::render_device = vkdevice();
 
@@ -39,7 +45,7 @@ void vkdevice::init() {
 
     create_memory_allocator();
 
-    bindless = bindless_model::create_bindless_model();
+    bindless.init();
 
     auto semaphore = create_semaphore({
         .type = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -50,7 +56,7 @@ void vkdevice::init() {
 void vkdevice::deinit() {
     vkDeviceWaitIdle(device);
 
-    bindless_model::destroy_bindless_model(bindless);
+    bindless.deinit();
 
     vmaDestroyAllocator(gpu_allocator);
 
@@ -74,6 +80,8 @@ void vkdevice::wait() { vkDeviceWaitIdle(device); };
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
     device_texture device_texture;
+    // TODO: This must always be present since we want to display images in ImGui
+    const_cast<texture_desc&>(desc).usages |= VK_IMAGE_USAGE_SAMPLED_BIT;
     device_texture.init(desc);
 
     return textures.add(device_texture);
@@ -88,7 +96,9 @@ handle<device_sampler>   vkdevice::create_sampler(const sampler_desc& desc) {
 
 handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     device_buffer device_buffer{
-        .size = desc.size,
+        .size   = desc.size,
+        .usages = desc.usages,
+        .name   = desc.name,
     };
 
     VkBufferCreateInfo create_info{
@@ -118,6 +128,7 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     VmaAllocationInfo alloc_info{};
 
     VKCHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.vk_buffer, &device_buffer.alloc, &alloc_info));
+    vmaSetAllocationName(render_device.get_allocator(), device_buffer.alloc, desc.name);
 
     if ((desc.usages & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0U) {
         VkBufferDeviceAddressInfo address_info {
@@ -142,7 +153,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
             .pNext               = nullptr,
             .flags               = 0U,
             .stage               = VK_SHADER_STAGE_VERTEX_BIT,
-            .module              = create_shader_module(desc.vs_code),
+            .module              = create_shader_module(device, desc.vs_code, desc.vs_code_size),
             .pName               = "main",
             .pSpecializationInfo = nullptr,
         },
@@ -151,7 +162,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
             .pNext               = nullptr,
             .flags               = 0U,
             .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module              = create_shader_module(desc.fs_code),
+            .module              = create_shader_module(device, desc.fs_code, desc.fs_code_size),
             .pName               = "main",
             .pSpecializationInfo = nullptr,
         },
@@ -259,7 +270,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
         .pDepthStencilState  = nullptr,
         .pColorBlendState    = &color_blend_state_create_info,
         .pDynamicState       = &dynamic_state_create_info,
-        .layout              = bindless.graphics_layout,
+        .layout              = bindless.global_layout,
         .renderPass          = nullptr,
         .subpass             = 0U,
         .basePipelineHandle  = nullptr,
@@ -296,7 +307,7 @@ handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline
         .pNext               = nullptr,
         .flags               = 0U,
         .stage               = VK_SHADER_STAGE_COMPUTE_BIT,
-        .module              = create_shader_module(desc.cs_code),
+        .module              = create_shader_module(device, desc.cs_code, desc.cs_code_size),
         .pName               = "main",
         .pSpecializationInfo = nullptr,
     };
@@ -306,7 +317,7 @@ handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline
         .pNext              = nullptr,
         .flags              = 0U,
         .stage              = stage_create_info,
-        .layout             = bindless.compute_layout,
+        .layout             = bindless.global_layout,
         .basePipelineHandle = nullptr,
         .basePipelineIndex  = 0,
     };
@@ -517,20 +528,20 @@ void vkdevice::destroy_surface(handle<device_surface> handle) {
 //     return ret;
 // }
 
-uint64_t vkdevice::submit(command_buffer* buffers, uint32_t count) {
+uint64_t vkdevice::submit(command_buffer* cmd_buffers, uint32_t count) {
     assert((max_submitable_command_buffers - count) >= 0);
-    const auto queue_type = buffers[0].queue_type;
+    const auto queue_type = cmd_buffers[0].queue_type;
 
     // VkCommandBufferSubmitInfo command_buffers_info[count];
     VkCommandBufferSubmitInfo command_buffers_info[max_submitable_command_buffers];
 
     for (auto index{ 0U }; index < count; index++) {
-        assert(queue_type == buffers[index].queue_type);
+        assert(queue_type == cmd_buffers[index].queue_type);
 
         auto& command_buffer_info         = command_buffers_info[index];
         command_buffer_info.sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
         command_buffer_info.pNext         = nullptr;
-        command_buffer_info.commandBuffer = buffers[index].vk_command_buffer;
+        command_buffer_info.commandBuffer = cmd_buffers[index].vk_command_buffer;
         command_buffer_info.deviceMask    = 0U;
     }
 
@@ -563,25 +574,25 @@ uint64_t vkdevice::submit(command_buffer* buffers, uint32_t count) {
     return fence.value;
 }
 
-uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count) {
+uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, command_buffer* cmd_buffers, uint32_t count) {
     assert((max_submitable_command_buffers - count) >= 0);
-    const auto queue_type = buffers[0].queue_type;
+    const QueueType queue_type = cmd_buffers[0].queue_type;
 
     // VkCommandBufferSubmitInfo command_buffers_info[count];
     VkCommandBufferSubmitInfo command_buffers_info[max_submitable_command_buffers];
 
-    for (auto index{ 0U }; index < count; index++) {
-        assert(queue_type == buffers[index].queue_type);
+    for (uint32_t index{ 0U }; index < count; index++) {
+        assert(queue_type == cmd_buffers[index].queue_type);
 
         auto& command_buffer_info         = command_buffers_info[index];
         command_buffer_info.sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
         command_buffer_info.pNext         = nullptr;
-        command_buffer_info.commandBuffer = buffers[index].vk_command_buffer;
+        command_buffer_info.commandBuffer = cmd_buffers[index].vk_command_buffer;
         command_buffer_info.deviceMask    = 0U;
     }
 
-    const auto& surface = get_surface(surface_handle);
-    auto& wait = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
+    const device_surface& surface = get_surface(surface_handle);
+    device_semaphore& wait = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
     VkSemaphoreSubmitInfo wait_semaphore_info = {
             .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .pNext       = nullptr,
@@ -630,7 +641,7 @@ uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, 
 }
 
 void vkdevice::present(handle<device_surface> surface_handle) {
-    auto& surface = vkdevice::get_render_device().get_surface(surface_handle);
+    auto& surface = render_device.get_surface(surface_handle);
     VkResult result;
     VkPresentInfoKHR present_info{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -652,7 +663,7 @@ void vkdevice::present(handle<device_surface> surface_handle) {
 }
 
 // private
-void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type, const char* name) {
+void vkdevice::allocate_command_buffers(command_buffer* cmd_buffers, size_t count, QueueType type, const char* name) {
     assert((max_allocable_command_buffers - count) >= 0);
     const auto&                 queue = queues[static_cast<uint32_t>(type)];
     VkCommandBuffer             command_buffers[max_allocable_command_buffers];
@@ -667,9 +678,9 @@ void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, Q
 
     VKCHECK(vkAllocateCommandBuffers(device, &allocate_info, command_buffers));
 
-    for (auto index{ 0U }; index < count; index++) {
-        buffers[index].vk_command_buffer = command_buffers[index];
-        buffers[index].queue_type        = type;
+    for (uint32_t index{ 0U }; index < count; index++) {
+        cmd_buffers[index].vk_command_buffer = command_buffers[index];
+        cmd_buffers[index].queue_type        = type;
 
         if (name) {
             VkDebugUtilsObjectNameInfoEXT object_name{
@@ -682,21 +693,6 @@ void vkdevice::allocate_command_buffers(command_buffer* buffers, size_t count, Q
             vkSetDebugUtilsObjectNameEXT(device, &object_name);
         }
     }
-}
-
-VkShaderModule vkdevice::create_shader_module(const std::span<uint8_t>& shader_code) {
-    VkShaderModule shader_module;
-    const auto&              code = shader_code;
-    VkShaderModuleCreateInfo create_info{
-        .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .pNext    = nullptr,
-        .flags    = 0U,
-        .codeSize = code.size(),
-        .pCode    = reinterpret_cast<uint32_t*>(code.data()),
-    };
-
-    VKCHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
-    return shader_module;
 }
 
 void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surface) {
@@ -808,6 +804,7 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
             .format = desc.surface_format.format,
             .type = VK_IMAGE_TYPE_2D,
             .vk_image = images[index],
+            .name = "swapchain image"
         });
     }
 }
@@ -932,10 +929,15 @@ void vkdevice::create_device() {
 }
 
 void vkdevice::create_memory_allocator() {
+    VmaVulkanFunctions functions = {
+        .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+        .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+    };
     VmaAllocatorCreateInfo create_info{
         .flags            = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
         .physicalDevice   = physical_device,
         .device           = device,
+        .pVulkanFunctions = &functions,
         .instance         = instance,
         .vulkanApiVersion = VK_API_VERSION_1_2,
     };
@@ -966,9 +968,15 @@ void vkdevice::pick_physical_device() {
     std::vector<VkPhysicalDevice> physical_devices{ physical_devices_count };
     vkEnumeratePhysicalDevices(instance, &physical_devices_count, physical_devices.data());
 
+    physical_device_props = VkPhysicalDeviceProperties2 {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = nullptr,
+    };
+
     for (auto& physical_dev : physical_devices) {
         if (device_support_features(physical_dev)) {
             physical_device = physical_dev;
+
             return;
         }
     }
@@ -979,13 +987,9 @@ void vkdevice::pick_physical_device() {
 bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
     // limits
     {
-        VkPhysicalDeviceProperties2 props{
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-            .pNext = nullptr,
-        };
-        vkGetPhysicalDeviceProperties2(physical_dev, &props);
+        vkGetPhysicalDeviceProperties2(physical_dev, &physical_device_props);
 
-        VkPhysicalDeviceLimits* limits = &props.properties.limits;
+        VkPhysicalDeviceLimits* limits = &physical_device_props.properties.limits;
         if (limits->maxPerStageDescriptorSampledImages < 0x10000 ||
             limits->maxPerStageDescriptorStorageImages < 0x10000 ||
             limits->maxDescriptorSetSampledImages      < 0x10000 ||
@@ -1024,6 +1028,7 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
     {
         VkPhysicalDeviceVulkan13Features vulkan_13_features{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+            .pNext = nullptr,
         };
 
         VkPhysicalDeviceFeatures2 physical_device_features{
@@ -1067,7 +1072,7 @@ idlist<> device_texture::storage_indices = {};
 idlist<> device_sampler::sampler_indices = {};
 
 void device_texture::init(const texture_desc& desc) {
-    auto& render_device = vkdevice::get_render_device();
+    auto& render_device = vkdevice::get();
     const auto& bindless = render_device.get_bindingmodel();
     auto* device = render_device.get_device();
 
@@ -1076,6 +1081,7 @@ void device_texture::init(const texture_desc& desc) {
     width = desc.width;
     height = desc.height;
     mips = desc.mips;
+    name = desc.name;
     aspects = ((desc.usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0U)
         ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
         : VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1116,6 +1122,7 @@ void device_texture::init(const texture_desc& desc) {
         };
 
         VKCHECK(vmaCreateImage(render_device.get_allocator(), &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
+        vmaSetAllocationName(render_device.get_allocator(), alloc, desc.name);
     }
 
     if (desc.name) {
@@ -1147,7 +1154,8 @@ void device_texture::init(const texture_desc& desc) {
         write_descriptor_sets.push_back({
             .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext            = nullptr,
-            .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+            // .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+            .dstSet           = bindless.global_set,
             .dstBinding       = 2U,
             .dstArrayElement  = storage_index.id,
             .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
@@ -1163,7 +1171,8 @@ void device_texture::init(const texture_desc& desc) {
         write_descriptor_sets.push_back({
             .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext            = nullptr,
-            .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+            // .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
+            .dstSet           = bindless.global_set,
             .dstBinding       = 1U,
             .dstArrayElement  = sampled_index.id,
             .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
@@ -1178,7 +1187,7 @@ void device_texture::init(const texture_desc& desc) {
 }
 
 void device_texture::release() {
-    auto& render_device = vkdevice::get_render_device();
+    auto& render_device = vkdevice::get();
     auto* device = render_device.get_device();
     auto* gpu_allocator = render_device.get_allocator();
 
@@ -1203,7 +1212,7 @@ void device_texture::release() {
 }
 
 void device_texture::create_views() {
-    auto* device = vkdevice::get_render_device().get_device();
+    auto* device = vkdevice::get().get_device();
 
     VkImageViewCreateInfo create_info{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1239,7 +1248,7 @@ void device_texture::create_views() {
 
 
 void device_sampler::init(const sampler_desc& desc) {
-    auto& render_device = vkdevice::get_render_device();
+    auto& render_device = vkdevice::get();
     // const auto& bindless = render_device.get_bindingmodel();
     auto* device = render_device.get_device();
 

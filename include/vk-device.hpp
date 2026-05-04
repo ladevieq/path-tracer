@@ -1,13 +1,8 @@
 #pragma once
 
-#include <cstdint>
-#include <span>
-
-#include <vulkan/vulkan_core.h>
-
 #include "freelist.hpp"
-#include "vk-device-types.hpp"
 #include "vk-bindless.hpp"
+#include "vk-command-buffer.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
 
@@ -16,17 +11,17 @@ class window;
 
 class vkdevice {
     struct queue {
-        VkQueue       vk_queue;
-        uint32_t      index;
+        VkQueue       vk_queue      = VK_NULL_HANDLE;
+        uint32_t      index         = UINT32_MAX;
         VkQueueFlags  usages;
-        VkCommandPool command_pool;
+        VkCommandPool command_pool  = VK_NULL_HANDLE;
     };
 
     public:
     void init();
     void deinit();
 
-    static inline vkdevice& get_render_device() {
+    static inline vkdevice& get() {
         return render_device;
     }
 
@@ -89,12 +84,20 @@ class vkdevice {
         return bindless;
     }
 
-    inline VkDevice get_device() {
+    const freelist<device_texture>& get_textures() const {
+        return textures;
+    }
+
+    inline VkDevice get_device() const {
         return device;
     }
 
     inline VmaAllocator get_allocator() {
         return gpu_allocator;
+    }
+
+    inline const VkPhysicalDeviceLimits& get_device_limits() const {
+        return physical_device_props.properties.limits;
     }
 
     // uint64_t submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle);
@@ -112,8 +115,6 @@ class vkdevice {
 
     void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type, const char* name);
 
-    VkShaderModule create_shader_module(const std::span<uint8_t>& shader_code);
-
     void create_swapchain(const surface_desc& desc, device_surface& surface);
 
     // TODO: Wrap in a struct called adapter ?
@@ -127,7 +128,7 @@ class vkdevice {
 
     void                        pick_physical_device();
 
-    static bool                 device_support_features(VkPhysicalDevice physical_dev);
+    bool                        device_support_features(VkPhysicalDevice physical_dev);
 
     void                        create_debug_layer_callback();
 
@@ -135,6 +136,7 @@ class vkdevice {
 
     VkInstance                  instance;
     VkPhysicalDevice            physical_device;
+    VkPhysicalDeviceProperties2 physical_device_props;
     VkDevice                    device;
 
     VmaAllocator                gpu_allocator;

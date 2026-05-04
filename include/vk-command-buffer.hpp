@@ -1,37 +1,17 @@
 #pragma once
 
-#include <cstdint>
-#include <span>
-
-#include <vulkan/vulkan_core.h>
-
 #include "handle.hpp"
-
-#include "vec3.hpp"
-
 #include "vk-device-types.hpp"
+#include "vec3.hpp"
 
 struct device_texture;
 struct device_buffer;
 struct device_pipeline;
 
 struct dispatch_params {
-    enum class PARAM_BINDING : uint32_t {
-        PARAM1,
-        PARAM2,
-        PARAM3,
-        PARAM4,
-        PARAM5,
-        PARAM6,
-        PARAM7,
-        PARAM8,
-        MAX
-    };
-
     handle<device_pipeline> pipeline;
     vec3u                   group_size;
     vec3u                   local_group_size;
-    uint64_t                params[static_cast<uint32_t>(PARAM_BINDING::MAX)];
 };
 
 struct renderpass_params {
@@ -54,10 +34,6 @@ struct draw_params {
     uint32_t vertex_count;
     uint32_t vertex_offset;
     uint32_t instance_count;
-    uint64_t globals_address = 0U; // TODO: This is probably stupid and should be set elsewhere once ???
-    uint64_t instances_address = 0U;
-    uint64_t uniforms_address = 0U;
-    uint64_t vertex_address = 0U;
 };
 
 struct draw_indexed_params {
@@ -67,10 +43,6 @@ struct draw_indexed_params {
     uint32_t vertex_offset;
     uint32_t index_offset;
     uint32_t instance_count;
-    uint64_t globals_address = 0U; // TODO: This is probably stupid and should be set elsewhere once ???
-    uint64_t instances_address = 0U;
-    uint64_t uniforms_address = 0U;
-    uint64_t vertex_address = 0U;
 };
 
 struct command_buffer {
