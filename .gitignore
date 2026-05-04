@@ -1,4 +1,5 @@
-/build*
+/build_deb
+/build_rel
 /out
 /.vs
 /.cache
