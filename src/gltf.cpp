@@ -166,12 +166,11 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
     vkdevice& device = vkdevice::get();
 
     constexpr auto buffers_count = 2U;
-    auto total_size = images.size() * 4096U * 4096 * sizeof(uint32_t);
+    size_t total_size = images.size() * 4096U * 4096 * sizeof(uint32_t);
     // TODO: Fix nasty stuff going on
-    // Crash on buffer destruction
-    // Load wrong images
-    // auto buffer_size = total_size / 32U;
-    auto buffer_size = total_size / 2U;
+    // Crash on buffer destruction and load wrong images
+    // size_t buffer_size = total_size / 32U;
+    size_t buffer_size = total_size / 4U;
 
     handle<device_buffer> staging_buffers_handle[buffers_count] = {
         device.create_buffer({
@@ -289,22 +288,17 @@ static void load_materials(std::vector<material>& materials, std::vector<handle<
     }
 }
 
-gltf::gltf(const char* filepath) {
+gltf::gltf(const char* filepath, bool is_glb) {
     BEGIN_MARKER(LOAD_GLTF);
 
     ondemand::parser parser;
     padded_string json;
     ondemand::document doc;
 
-    const char* ext = PathFindExtensionA(filepath);
-
     char buffer_path[2048U] = { 0U };
     char* filename = nullptr;
     GetFullPathNameA( filepath, 2048U, buffer_path, &filename);
     size_t parent_dir_len = filename - buffer_path;
-
-    // TODO: Remove
-    is_glb = strcmp(ext, ".glb") == 0;
 
     if (is_glb) {
         size_t filesize = 0U;

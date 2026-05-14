@@ -12,7 +12,6 @@
     #include <winuser.h>
     #include <winnls.h>
     #include <fileapi.h>
-    #include <shlwapi.h>
     #include <handleapi.h>
     #include <errhandlingapi.h>
 #endif // _WIN32

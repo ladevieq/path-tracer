@@ -425,8 +425,6 @@ LRESULT window::message_handler(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpar
         }
     }
 
-    SwitchToFiber(main_fiber);
-
     return 0;
 }
 

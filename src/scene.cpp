@@ -55,13 +55,13 @@ metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
     : cam(cam), width(width), height(height) {}
 
 scene::scene(const camera& cam, uint32_t width, uint32_t height)
-    // :model("../models/sponza/Sponza.gltf"), meta(cam, width, height) {
+    :model("../models/sponza/Sponza.gltf"), meta(cam, width, height) {
     // :model("../models/BistroInterior/BistroInterior.gltf"), meta(cam, width, height) {
     // :model("../models/BistroExterior/BistroExterior.gltf"), meta(cam, width, height) {
     // :model("../models/sponza-avif-hi.glb"), meta(cam, width, height) {
     // :model("../models/main_sponza/NewSponza_Main_glTF_003.gltf"), meta(cam, width, height) {
     // :model("../models/pkg_a_curtains/NewSponza_Curtains_glTF.gltf"), meta(cam, width, height) {
-    :model("../models/sponza.glb"), meta(cam, width, height) {
+    // :model("../models/sponza.glb", true), meta(cam, width, height) {
 
     auto& device = vkdevice::get();
 

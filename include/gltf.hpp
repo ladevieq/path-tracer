@@ -27,7 +27,7 @@ struct buffer {
 
 class gltf {
     public:
-    gltf(const char* filepath);
+    gltf(const char* filepath, bool is_glb = false);
     void deinit();
 
     std::vector<u32> root_nodes;
@@ -53,7 +53,7 @@ class gltf {
         u32 length;
     };
     std::vector<struct glb_chunk*> chunks;
-    glb_header* header;
+    glb_header* header = nullptr;
 
     // TODO: remove
     bool is_glb;
