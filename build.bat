@@ -47,7 +47,7 @@ if %MSVC% EQU 1 (
     set RELEASE_C_FLAGS=/DNDEBUG /O2
     set DEBUG_L_FLAGS=/DEBUG
 ) else (
-    set C_FLAGS=--target=x86_64-pc-windows-msvc -pedantic -I include -I %VULKAN_SDK%\Include -isystem thirdparty -isystem thirdparty\imgui -std=c++20 -DNOMINMAX -c -msse4.1 -Wno-missing-designated-field-initializers 
+    set C_FLAGS=--target=x86_64-pc-windows-msvc -Wall -Werror -pedantic -I include -I %VULKAN_SDK%\Include -isystem thirdparty -isystem thirdparty\imgui -std=c++20 -DNOMINMAX -c -msse4.1 -Wno-missing-designated-field-initializers 
 
     set DEBUG_C_FLAGS=-DDEBUG -g -O0
     set RELEASE_C_FLAGS=-DNDEBUG -O2
@@ -91,7 +91,7 @@ if %MSVC% EQU 1 (
     %C_COMPILER% -o %BUILD_DIR%\main.obj %C_FLAGS% src\main.cpp
 )
 
-link %L_FLAGS% /OUT:%BUILD_DIR%\main.exe %BUILD_DIR%\main.obj kernel32.lib user32.lib shlwapi.lib
+link %L_FLAGS% /DEBUG /OUT:%BUILD_DIR%\main.exe %BUILD_DIR%\main.obj kernel32.lib user32.lib
 
 set shaders=ui.vert ui.frag test.comp compute.comp api-test-ui.vert api-test-ui.frag tonemapping.comp transmittance_lut.comp
 (for %%s in (%shaders%) do (

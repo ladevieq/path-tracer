@@ -143,8 +143,8 @@ struct device_buffer {
         offset = 0U;
     }
 
-    u32                    offset = 0U;
-    u32                    allocated_size = 0U;
+    u64                    offset = 0U;
+    u64                    allocated_size = 0U;
     VkBuffer               vk_buffer;
     VmaAllocation          alloc;
     VkDeviceAddress        device_address = 0U;

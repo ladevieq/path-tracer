@@ -76,7 +76,19 @@ void vkdevice::deinit() {
 }
 
 
-void vkdevice::wait() { vkDeviceWaitIdle(device); };
+void vkdevice::wait() {
+    vkDeviceWaitIdle(device);
+};
+
+void vkdevice::wait_for_fence(u64 value) {
+    VkSemaphoreWaitInfoKHR semaphore_wait_info {
+        .type = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO_KHR,
+    };
+    semaphore_wait_info.pSemaphores    = &semaphore;
+    semaphore_wait_info.semaphoreCount = 1;
+    semaphore_wait_info.pValues        = &value;
+    VK_CHECK(vkWaitSemaphoresKHR(device->get_handle(), &semaphore_wait_info, UINT64_MAX));
+}
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
     device_texture device_texture;
@@ -125,7 +137,9 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
         .pUserData      = nullptr,
     };
 
-    VmaAllocationInfo alloc_info{};
+    VmaAllocationInfo alloc_info{
+        .pName = desc.name,
+    };
 
     VKCHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.vk_buffer, &device_buffer.alloc, &alloc_info));
     vmaSetAllocationName(render_device.get_allocator(), device_buffer.alloc, desc.name);

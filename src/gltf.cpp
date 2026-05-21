@@ -25,11 +25,6 @@ struct buffer_view {
 #define GL_FLOAT                          0x1406
 #define GL_FIXED                          0x140C
 
-#define SCALAR  0x5343414C4152
-#define VEC2    0x56454332
-#define VEC3    0x56454333
-#define VEC4    0x56454334
-
 static u32 accessor_type_to_component_count(std::string_view& type) {
     if (strncmp("SCALAR", type.data(), type.size()) == 0) {
         return 1U;
@@ -166,11 +161,7 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
     vkdevice& device = vkdevice::get();
 
     constexpr auto buffers_count = 2U;
-    size_t total_size = images.size() * 4096U * 4096 * sizeof(uint32_t);
-    // TODO: Fix nasty stuff going on
-    // Crash on buffer destruction and load wrong images
-    // size_t buffer_size = total_size / 32U;
-    size_t buffer_size = total_size / 4U;
+    size_t buffer_size = 256U * MB;
 
     handle<device_buffer> staging_buffers_handle[buffers_count] = {
         device.create_buffer({
@@ -178,12 +169,14 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
             .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "image upload staging buffer 0",
         }),
         device.create_buffer({
             .size = buffer_size,
             .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            .name = "image upload staging buffer 1",
         }),
     };
 
@@ -194,6 +187,7 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
     auto buffer_index = 0U;
     auto command_buffer = command_buffers[buffer_index];
     auto buffer_handle = staging_buffers_handle[buffer_index];
+    // FIX: when taking a reference to the buffer and we latter swap the buffers we override the referenced buffer
     device_buffer& buffer = device.get_buffer(buffer_handle);
 
     command_buffer.start();
@@ -219,7 +213,6 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
         u32 size = image.width * image.height * sizeof(uint32_t);
         if (buffer.allocated_size + size > buffer.size) {
             command_buffer.stop();
-
             device.submit(&command_buffer, 1);
 
             buffer_index = (buffer_index + 1U) % buffers_count;
@@ -227,8 +220,8 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
             buffer_handle = staging_buffers_handle[buffer_index];
             buffer = device.get_buffer(buffer_handle);
             buffer.reset();
-            // TODO: Remove the wait
-            // device.wait();
+            // TODO: Remove wait on device idle, wait on command buffer completion instead
+            device.wait();
             command_buffer.start();
         }
 
@@ -245,6 +238,7 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
         command_buffer.stop();
         device.submit(&command_buffer, 1);
     }
+    // TODO: Remove wait on device idle, wait on command buffer completion instead
     device.wait();
     device.destroy_buffer(staging_buffers_handle[0]);
     device.destroy_buffer(staging_buffers_handle[1]);

@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef _DEBUG
+#ifdef DEBUG
 #define VKCHECK(result) assert((result) == VK_SUCCESS)
 #else
 #define VKCHECK(result) (void)result
