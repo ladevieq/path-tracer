@@ -11,10 +11,12 @@ if "%release%"=="0" (
 )
 
 :: clean directory
-IF EXIST %BUILD_DIR% rmdir %BUILD_DIR%\ /S /Q
+if "%clean%"=="1" (
+    IF EXIST %BUILD_DIR% rmdir %BUILD_DIR%\ /S /Q
 
-IF NOT EXIST %BUILD_DIR% mkdir %BUILD_DIR%
-IF NOT EXIST %BUILD_DIR%\shaders mkdir %BUILD_DIR%\shaders
+    IF NOT EXIST %BUILD_DIR% mkdir %BUILD_DIR%
+    IF NOT EXIST %BUILD_DIR%\shaders mkdir %BUILD_DIR%\shaders
+)
 
 
 set MSVC=1
@@ -82,6 +84,12 @@ if 0 EQU 1 (
 :: link multiple objs
 :: link %L_FLAGS% /OUT:%BUILD_DIR%\main.exe %OBJS% kernel32.lib user32.lib
 
+:: compiles external libs
+IF NOT EXIST %BUILD_DIR%\libs.obj (
+    echo %C_COMPILER% /Fd:%BUILD_DIR%\libs.pdb %C_FLAGS% src\libs.cpp
+    %C_COMPILER% /Fd:%BUILD_DIR%\libs.pdb %C_FLAGS% src\libs.cpp
+)
+
 :: compiles the project as a single compilation unit
 if %MSVC% EQU 1 (
     echo %C_COMPILER% /Fd:%BUILD_DIR%\main.pdb %C_FLAGS% src\main.cpp
@@ -91,7 +99,7 @@ if %MSVC% EQU 1 (
     %C_COMPILER% -o %BUILD_DIR%\main.obj %C_FLAGS% src\main.cpp
 )
 
-link %L_FLAGS% /DEBUG /OUT:%BUILD_DIR%\main.exe %BUILD_DIR%\main.obj kernel32.lib user32.lib
+link %L_FLAGS% /DEBUG /OUT:%BUILD_DIR%\main.exe %BUILD_DIR%\main.obj %BUILD_DIR%\libs.obj kernel32.lib user32.lib
 
 set shaders=ui.vert ui.frag test.comp compute.comp api-test-ui.vert api-test-ui.frag tonemapping.comp transmittance_lut.comp
 (for %%s in (%shaders%) do (
