@@ -8,15 +8,11 @@ layout(descriptor_heap) uniform texture2D textures[];
 layout(descriptor_heap, rgba32f) uniform image2D images[];
 layout(descriptor_heap) uniform sampler samplers[];
 
-layout(buffer_reference) readonly buffer draw_params {
+layout(push_constant) uniform buffers {
     uint output_image_index;
     uint width;
     uint height;
     uint pad;
-};
-
-layout(push_constant) uniform buffers {
-    layout(offset = 16) draw_params draw;
 } regs;
 
 vec2 sphere_intersection ( in vec3 orig, in vec3 dir, float radius ) {
@@ -43,7 +39,7 @@ void main() {
     const float top_radius = 6420.f;
     const float atmosphere_radius = top_radius - ground_radius;
 
-    vec2 uvs = vec2(coords) / vec2(regs.draw.width, regs.draw.height);
+    vec2 uvs = vec2(coords) / vec2(regs.width, regs.height);
 
     float cos_mu = uvs.y * 2.f - 1.f;
     float mu = acos(cos_mu);
@@ -73,9 +69,9 @@ void main() {
     }
 
     // val.x = t;
-    // imageStore(images[nonuniformEXT(regs.draw.output_image_index)], coords, val);
+    // imageStore(images[nonuniformEXT(regs.output_image_index)], coords, val);
     // return;
-    imageStore(images[nonuniformEXT(regs.draw.output_image_index)], coords, vec4(t, 0.f, 0.f, 1.f));
+    imageStore(images[nonuniformEXT(regs.output_image_index)], coords, vec4(t, 0.f, 0.f, 1.f));
     return;
 
     vec3 transmittance = vec3(0.f);
@@ -95,5 +91,5 @@ void main() {
     color.xyz = vec3(0.f);
     color.x = t;
 
-    imageStore(images[nonuniformEXT(regs.draw.output_image_index)], coords, color);
+    imageStore(images[nonuniformEXT(regs.output_image_index)], coords, color);
 }

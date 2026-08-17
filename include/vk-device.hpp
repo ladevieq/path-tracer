@@ -95,8 +95,6 @@ class vkdevice {
 
     void                        create_device();
 
-    bool                        device_support_features(VkPhysicalDevice physical_dev);
-
     queue                       queues[static_cast<uint32_t>(QueueType::MAX)];
 
     static constexpr size_t     max_allocable_command_buffers  = 16;

@@ -25,7 +25,16 @@ VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptor_heap_props {
     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,
 };
 
-void create_heaps(size_t max_images, size_t max_samplers) {
+struct physical_device_features {
+    VkPhysicalDeviceFeatures2                           physical_device_features2;
+    VkPhysicalDeviceVulkan12Features                    physical_device_12_features;
+    VkPhysicalDeviceVulkan13Features                    physical_device_13_features;
+    VkPhysicalDeviceVulkan14Features                    physical_device_14_features;
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT           descriptor_heap_features;
+    VkPhysicalDeviceShaderUntypedPointersFeaturesKHR    shader_untyped_pointers_features;
+};
+
+static void create_heaps(size_t max_images, size_t max_samplers) {
     // create image heap
     {
         image_heap = vkdevice::get().create_buffer({
@@ -55,7 +64,7 @@ void create_heaps(size_t max_images, size_t max_samplers) {
     }
 }
 
-device_semaphore create_semaphore(const semaphore_desc& desc, const char* name) {
+static device_semaphore create_semaphore(const semaphore_desc& desc, const char* name) {
     device_semaphore semaphore {
         .value = desc.initial_value,
     };
@@ -861,7 +870,33 @@ void vkdevice::create_instance() {
 
 void vkdevice::create_device() {
     // pick physical device
-    // TODO: change put this in another scope
+    struct physical_device_features features = {
+        .physical_device_features2 = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext = &features.physical_device_12_features,
+        },
+        .physical_device_12_features = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+            .pNext = &features.physical_device_13_features,
+        },
+        .physical_device_13_features = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+            .pNext = &features.physical_device_14_features,
+        },
+        .physical_device_14_features = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+            .pNext = &features.descriptor_heap_features,
+        },
+        .descriptor_heap_features = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+            .pNext = &features.shader_untyped_pointers_features,
+        },
+        .shader_untyped_pointers_features = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
+            .pNext = nullptr,
+        },
+    };
+
     {
         u32 physical_devices_count = 0U;
         vkEnumeratePhysicalDevices(instance, &physical_devices_count, nullptr);
@@ -877,9 +912,24 @@ void vkdevice::create_device() {
 
         for (u32 physical_device_index = 0U; physical_device_index < physical_devices_count; physical_device_index++) {
             VkPhysicalDevice physical_dev = physical_devices[physical_device_index];
-            if (device_support_features(physical_dev)) {
-                physical_device = physical_dev;
+            vkGetPhysicalDeviceProperties2(physical_dev, &physical_device_props);
+            vkGetPhysicalDeviceFeatures2(physical_dev, &features.physical_device_features2);
 
+            if (features.physical_device_12_features.timelineSemaphore                            == VK_TRUE &&
+                features.physical_device_12_features.bufferDeviceAddress                          == VK_TRUE &&
+                features.physical_device_12_features.runtimeDescriptorArray                       == VK_TRUE &&
+                features.physical_device_12_features.shaderStorageImageArrayNonUniformIndexing    == VK_TRUE &&
+                features.physical_device_12_features.shaderSampledImageArrayNonUniformIndexing    == VK_TRUE &&
+                features.physical_device_12_features.descriptorBindingPartiallyBound              == VK_TRUE &&
+                features.physical_device_12_features.descriptorBindingUpdateUnusedWhilePending    == VK_TRUE &&
+                features.physical_device_12_features.imagelessFramebuffer                         == VK_TRUE &&
+                features.physical_device_13_features.synchronization2                             == VK_TRUE &&
+                features.physical_device_13_features.dynamicRendering                             == VK_TRUE &&
+                features.physical_device_14_features.maintenance5                                 == VK_TRUE &&
+                features.descriptor_heap_features.descriptorHeap                                  == VK_TRUE &&
+                features.shader_untyped_pointers_features.shaderUntypedPointers                   == VK_TRUE) {
+
+                physical_device = physical_dev;
                 break;
             }
         }
@@ -924,41 +974,9 @@ void vkdevice::create_device() {
         VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME,
     };
 
-    VkPhysicalDeviceVulkan12Features physical_device_12_features{
-        .sType                                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext                                     = nullptr,
-        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
-        .shaderStorageImageArrayNonUniformIndexing = VK_TRUE,
-        .descriptorBindingUpdateUnusedWhilePending = VK_TRUE,
-        .descriptorBindingPartiallyBound           = VK_TRUE,
-        .runtimeDescriptorArray                    = VK_TRUE,
-        .timelineSemaphore                         = VK_TRUE,
-        .bufferDeviceAddress                       = VK_TRUE,
-    };
-
-    VkPhysicalDeviceVulkan13Features physical_device_13_features{
-        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext            = &physical_device_12_features,
-        .synchronization2 = VK_TRUE,
-        .dynamicRendering = VK_TRUE,
-    };
-
-    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features {
-        .sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
-        .pNext                       = &physical_device_13_features,
-        .descriptorHeap              = VK_TRUE,
-        .descriptorHeapCaptureReplay = VK_TRUE,
-    };
-
-    VkPhysicalDeviceShaderUntypedPointersFeaturesKHR shader_untyped_pointers_features {
-        .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
-        .pNext                 = &descriptor_heap_features,
-        .shaderUntypedPointers = VK_TRUE,
-    };
-
     VkDeviceCreateInfo create_info{
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext                   = &shader_untyped_pointers_features,
+        .pNext                   = &features.physical_device_features2,
         .flags                   = 0U,
         .queueCreateInfoCount    = static_cast<uint32_t>(QueueType::MAX),
         .pQueueCreateInfos       = queue_create_infos,
@@ -1011,58 +1029,6 @@ void vkdevice::create_device() {
     }
 
     create_heaps(max_images_count, max_samplers_count);
-}
-
-
-bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
-    // limits
-    vkGetPhysicalDeviceProperties2(physical_dev, &physical_device_props);
-
-    // Vulkan 1.2 physical device features support
-    {
-        VkPhysicalDeviceVulkan12Features vulkan_12_features{
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        };
-
-        VkPhysicalDeviceFeatures2 physical_device_features{
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-            .pNext = &vulkan_12_features,
-        };
-
-        vkGetPhysicalDeviceFeatures2(physical_dev, &physical_device_features);
-
-        if (vulkan_12_features.bufferDeviceAddress                          == VK_FALSE ||
-            vulkan_12_features.runtimeDescriptorArray                       == VK_FALSE ||
-            vulkan_12_features.shaderStorageImageArrayNonUniformIndexing    == VK_FALSE ||
-            vulkan_12_features.shaderSampledImageArrayNonUniformIndexing    == VK_FALSE ||
-            vulkan_12_features.descriptorBindingPartiallyBound              == VK_FALSE ||
-            vulkan_12_features.descriptorBindingUpdateUnusedWhilePending    == VK_FALSE ||
-            vulkan_12_features.imagelessFramebuffer                         == VK_FALSE) {
-            return false;
-        }
-    }
-
-    // Vulkan 1.3 physical device features support
-    {
-        VkPhysicalDeviceVulkan13Features vulkan_13_features{
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-            .pNext = nullptr,
-        };
-
-        VkPhysicalDeviceFeatures2 physical_device_features{
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-            .pNext = &vulkan_13_features,
-        };
-
-        vkGetPhysicalDeviceFeatures2(physical_dev, &physical_device_features);
-
-        if (vulkan_13_features.synchronization2 == VK_FALSE ||
-            vulkan_13_features.dynamicRendering == VK_FALSE) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 
