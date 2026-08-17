@@ -5,6 +5,7 @@
 
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_descriptor_heap : require
 
 #include "math.h"
 #include "color_utils.h"
@@ -90,7 +91,11 @@ layout(buffer_reference) readonly buffer nodes_array {
     bvh_node[] nodes;
 };
 
-layout(buffer_reference) readonly buffer global_params {
+layout(descriptor_heap) uniform texture2D textures[];
+layout(descriptor_heap, rgba32f) uniform image2D images[];
+layout(descriptor_heap) uniform sampler samplers[];
+
+layout(push_constant) uniform registers {
     camera cam;
 
     uint max_bounce;
@@ -102,13 +107,7 @@ layout(buffer_reference) readonly buffer global_params {
     uint enable_dof;
     uint debug_bvh;
     int downscale_factor;
-};
 
-layout(buffer_reference) readonly buffer pass_params {
-    uint padding;
-};
-
-layout(buffer_reference) readonly buffer draw_params {
     nodes_array bvh;
     indices_array indices_arr;
     positions_array positions_arr;
@@ -117,17 +116,6 @@ layout(buffer_reference) readonly buffer draw_params {
     materials_array materials_arr;
     uint output_image_index;
     uint accumulation_image_index;
-    uint padding[2];
-};
-
-layout(set = 0, binding = 0) uniform sampler samplers[];
-layout(set = 0, binding = 1) uniform texture2D textures[];
-layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
-
-layout(push_constant) uniform registers {
-    global_params globals;
-    pass_params pass;
-    draw_params draw;
 } regs;
 
 #include "ray.h"
@@ -137,7 +125,7 @@ vec3 ray_color(ray r, uint seed) {
     vec3 radiance = vec3(0.0);
     vec3 throughput = vec3(1.0);
 
-    for (uint bounce = 0; bounce < regs.globals.max_bounce; bounce++) {
+    for (uint bounce = 0; bounce < regs.max_bounce; bounce++) {
         if (!hit_node(r, info))
             return throughput * vec3(1.0);
 
@@ -247,7 +235,7 @@ vec3 ray_color(ray r, uint seed) {
         // Russian Roulette
         // As the throughput gets smaller, the ray is more likely to get terminated early.
         // Survivors have their value boosted to make up for fewer samples being in the average.
-        if (bounce > regs.globals.min_bounce) {
+        if (bounce > regs.min_bounce) {
             float probability = min(0.95f, luminance(throughput));
             if (probability < rand(seed)) break;
             throughput /= probability;
@@ -258,42 +246,42 @@ vec3 ray_color(ray r, uint seed) {
 }
 
 ray generate_camera_ray(ivec2 coords, uint seed) {
-    vec2 scene_size = vec2(regs.globals.width - 1, regs.globals.height - 1);
+    vec2 scene_size = vec2(regs.width - 1, regs.height - 1);
     vec2 uv = vec2(coords.x / scene_size.x, 1.0 - coords.y / scene_size.y);
     vec2 rand_disk = disk_vec(vec2(rand(seed), rand(seed)));
     vec2 jittered_uvs = uv + vec2(rand(seed), rand(seed)) / scene_size;
     vec2 lens_disk = vec2(0.0);
 
-    if (regs.globals.enable_dof == 1) {
-        lens_disk = rand_disk * regs.globals.cam.lens_radius;
+    if (regs.enable_dof == 1) {
+        lens_disk = rand_disk * regs.cam.lens_radius;
     }
 
-    vec3 offset = lens_disk.x * regs.globals.cam.right.xyz + lens_disk.y * regs.globals.cam.up.xyz;
-    vec3 proj_plane_pos = regs.globals.cam.first_pixel.xyz + jittered_uvs.x * regs.globals.cam.horizontal.xyz + jittered_uvs.y * regs.globals.cam.vertical.xyz;
+    vec3 offset = lens_disk.x * regs.cam.right.xyz + lens_disk.y * regs.cam.up.xyz;
+    vec3 proj_plane_pos = regs.cam.first_pixel.xyz + jittered_uvs.x * regs.cam.horizontal.xyz + jittered_uvs.y * regs.cam.vertical.xyz;
 
-    return ray(regs.globals.cam.position.xyz + offset, proj_plane_pos.xyz - regs.globals.cam.position.xyz - offset, 0.001f, 1e15);
+    return ray(regs.cam.position.xyz + offset, proj_plane_pos.xyz - regs.cam.position.xyz - offset, 0.001f, 1e15);
 }
 
 void main() {
-    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(regs.globals.width, regs.globals.height))))
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(regs.width, regs.height))))
         return;
 
-    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * regs.globals.downscale_factor;
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * regs.downscale_factor;
 
-    uint seed = uint(coords.x * uint(1973) + coords.y * uint(9277) + regs.globals.sample_index * uint(26699)) | uint(1);
+    uint seed = uint(coords.x * uint(1973) + coords.y * uint(9277) + regs.sample_index * uint(26699)) | uint(1);
     ray r = generate_camera_ray(coords, seed);
 
     vec3 out_color = vec3(0.0);
-    if (regs.globals.debug_bvh == 1) {
+    if (regs.debug_bvh == 1) {
         out_color = hit_aabbs(r) * vec3(0.001, 0.0, 0.0);
     } else {
         out_color = ray_color(r, seed);
     }
 
     // TODO: what is going on with srgb here ?
-    float spp_scale = (1.0 / regs.globals.sample_index);
-    vec3 acc_color = srgb_to_linear(imageLoad(images[nonuniformEXT(regs.draw.accumulation_image_index)], coords).xyz);
+    float spp_scale = (1.0 / regs.sample_index);
+    vec3 acc_color = srgb_to_linear(imageLoad(images[nonuniformEXT(regs.accumulation_image_index)], coords).xyz);
     out_color = linear_to_srgb(mix(acc_color, out_color, spp_scale));
 
-    imageStore(images[nonuniformEXT(regs.draw.output_image_index)], coords, vec4(out_color, 1.0));
+    imageStore(images[nonuniformEXT(regs.output_image_index)], coords, vec4(out_color, 1.0));
 }

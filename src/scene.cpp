@@ -55,15 +55,12 @@ metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
     : cam(cam), width(width), height(height) {}
 
 scene::scene(const camera& cam, uint32_t width, uint32_t height)
-    :model("../models/sponza/Sponza.gltf"), meta(cam, width, height) {
+    // :model("../models/sponza/Sponza.gltf"), meta(cam, width, height) {
     // :model("../models/BistroInterior/BistroInterior.gltf"), meta(cam, width, height) {
     // :model("../models/BistroExterior/BistroExterior.gltf"), meta(cam, width, height) {
-    // :model("../models/sponza-avif-hi.glb"), meta(cam, width, height) {
     // :model("../models/main_sponza/NewSponza_Main_glTF_003.gltf"), meta(cam, width, height) {
     // :model("../models/pkg_a_curtains/NewSponza_Curtains_glTF.gltf"), meta(cam, width, height) {
-    // :model("../models/sponza.glb", true), meta(cam, width, height) {
-
-    auto& device = vkdevice::get();
+    :model("../models/sponza.glb", true), meta(cam, width, height) {
 
     // Geometry & BVH
     std::vector<uint32_t>       indices;
@@ -151,12 +148,12 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
                 });
 
                 if (material.base_color_texture.id != handle<device_texture>::invalid_id) {
-                    mat.albedo_texture_id = device.get_texture(material.base_color_texture).get_sampled_index();
+                    mat.albedo_texture_id = vkdevice::get().get_texture(material.base_color_texture)->get_sampled_index();
                     // mat.albedo_texture_sampler_id = device.get_sampler(0);
                 }
 
                 if (material.metallic_roughness_texture.id != handle<device_texture>::invalid_id) {
-                    mat.metallic_roughness_texture_id = device.get_texture(material.metallic_roughness_texture).get_sampled_index();
+                    mat.metallic_roughness_texture_id = vkdevice::get().get_texture(material.metallic_roughness_texture)->get_sampled_index();
                     // mat.metallic_roughness_texture_sampler_id = device.get_sampler(0);
                 }
             }
@@ -179,80 +176,80 @@ scene::scene(const camera& cam, uint32_t width, uint32_t height)
     // bvh builder(spheres, packed_nodes);
 
     {
-        indices_buffer_handle = device.create_buffer({
+        indices_buffer_handle = vkdevice::get().create_buffer({
             .size = indices.size() * sizeof(indices[0]),
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "indices",
         });
-        const auto& indices_buffer = device.get_buffer(indices_buffer_handle);
-        void* ptr = indices_buffer.mapped_ptr;
+        const auto& indices_buffer = vkdevice::get().get_buffer(indices_buffer_handle);
+        void* ptr = indices_buffer->mapped_ptr;
         memcpy(ptr, indices.data(), indices.size() * sizeof(indices[0]));
     }
 
     {
-        positions_buffer_handle = device.create_buffer({
+        positions_buffer_handle = vkdevice::get().create_buffer({
             .size = positions.size() * sizeof(positions[0]),
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "positions",
         });
-        const auto& positions_buffer = device.get_buffer(positions_buffer_handle);
-        void* ptr = positions_buffer.mapped_ptr;
+        const auto& positions_buffer = vkdevice::get().get_buffer(positions_buffer_handle);
+        void* ptr = positions_buffer->mapped_ptr;
         memcpy(ptr, positions.data(), positions.size() * sizeof(positions[0]));
     }
 
     {
-        normals_buffer_handle = device.create_buffer({
+        normals_buffer_handle = vkdevice::get().create_buffer({
             .size = normals.size() * sizeof(normals[0]),
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "normals",
         });
-        const auto& normals_buffer = device.get_buffer(normals_buffer_handle);
-        void* ptr = normals_buffer.mapped_ptr;
+        const auto& normals_buffer = vkdevice::get().get_buffer(normals_buffer_handle);
+        void* ptr = normals_buffer->mapped_ptr;
         memcpy(ptr, normals.data(), normals.size() * sizeof(normals[0]));
     }
 
     {
-        uvs_buffer_handle = device.create_buffer({
+        uvs_buffer_handle = vkdevice::get().create_buffer({
             .size = uvs.size() * sizeof(uvs[0]),
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "uvs",
         });
-        const auto& uvs_buffer = device.get_buffer(uvs_buffer_handle);
-        void* ptr = uvs_buffer.mapped_ptr;
+        const auto& uvs_buffer = vkdevice::get().get_buffer(uvs_buffer_handle);
+        void* ptr = uvs_buffer->mapped_ptr;
         memcpy(ptr, uvs.data(), uvs.size() * sizeof(uvs[0]));
     }
 
     {
-        bvh_buffer_handle = device.create_buffer({
+        bvh_buffer_handle = vkdevice::get().create_buffer({
             .size = packed_nodes.size() * sizeof(packed_nodes[0]),
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "bvh",
         });
-        const auto& bvh_buffer = device.get_buffer(bvh_buffer_handle);
-        void* ptr = bvh_buffer.mapped_ptr;
+        const auto& bvh_buffer = vkdevice::get().get_buffer(bvh_buffer_handle);
+        void* ptr = bvh_buffer->mapped_ptr;
         memcpy(ptr, packed_nodes.data(), packed_nodes.size() * sizeof(packed_nodes[0]));
     }
 
     {
-        materials_buffer_handle = device.create_buffer({
+        materials_buffer_handle = vkdevice::get().create_buffer({
             .size = materials.size() * sizeof(materials[0]),
-            .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "materials",
         });
-        const auto& materials_buffer = device.get_buffer(materials_buffer_handle);
-        void* ptr = materials_buffer.mapped_ptr;
+        const auto& materials_buffer = vkdevice::get().get_buffer(materials_buffer_handle);
+        void* ptr = materials_buffer->mapped_ptr;
         memcpy(ptr, materials.data(), materials.size() * sizeof(materials[0]));
     }
 }

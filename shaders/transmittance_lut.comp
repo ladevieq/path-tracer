@@ -1,11 +1,12 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_descriptor_heap : require
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(set = 0, binding = 0) uniform sampler samplers[];
-layout(set = 0, binding = 1) uniform texture2D textures[];
-layout(set = 0, binding = 2, rgba32f) uniform image2D images[];
+layout(descriptor_heap) uniform texture2D textures[];
+layout(descriptor_heap, rgba32f) uniform image2D images[];
+layout(descriptor_heap) uniform sampler samplers[];
 
 layout(buffer_reference) readonly buffer draw_params {
     uint output_image_index;

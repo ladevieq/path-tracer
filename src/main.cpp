@@ -48,7 +48,6 @@
 #include "vulkan-loader.cpp"
 #include "vk-utils.cpp"
 #include "vk-device.cpp"
-#include "vk-bindless.cpp"
 #include "vk-command-buffer.cpp"
 #endif
 
@@ -190,15 +189,15 @@ int main() {
     const float focus_distance = 10.f;
 
 #if VK
-    auto& device = vkdevice::get();
+    auto& render_device = vkdevice::get();
 #else
-    auto& device = dx12::device::get();
+    auto& render_device = dx12::device::get();
 #endif
-    device.init();
+    render_device.init();
 
     scene main_scene = scene(camera(position, target, v_fov, aspect_ratio, aperture, focus_distance), window_width, window_height);
 
-    handle<device_surface> surface_handle = device.create_surface({
+    handle<device_surface> surface_handle = render_device.create_surface({
         .window_handle = wnd.handle,
 #if VK
         .surface_format = {
@@ -214,13 +213,13 @@ int main() {
 #endif
         .image_count = 2U,
     });
-    const device_surface* surface = device.get_surface(surface_handle);
+    const device_surface* surface = render_device.get_surface(surface_handle);
 
 
     // ==============
     // create buffers
     // ==============
-    const handle<device_buffer> staging_buffer_handle = device.create_buffer({
+    const handle<device_buffer> staging_buffer_handle = render_device.create_buffer({
         .size = 128 * MB,
 #if VK
         .usages = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
@@ -233,9 +232,9 @@ int main() {
         .heap_type  = D3D12_HEAP_TYPE_UPLOAD,
 #endif
     });
-    const device_buffer* staging_buffer = device.get_buffer(staging_buffer_handle);
+    const device_buffer* staging_buffer = render_device.get_buffer(staging_buffer_handle);
 
-    const handle<device_buffer> vertex_buffer_handle = device.create_buffer({
+    const handle<device_buffer> vertex_buffer_handle = render_device.create_buffer({
         .size = MB * sizeof(uint32_t),
 #if VK
         .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
@@ -245,7 +244,7 @@ int main() {
         #endif
     });
 
-    const handle<device_buffer> index_buffer_handle = device.create_buffer({
+    const handle<device_buffer> index_buffer_handle = render_device.create_buffer({
         .size = MB * sizeof(uint32_t),
 #if VK
         .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT,
@@ -255,8 +254,8 @@ int main() {
 #endif
     });
 
-    device_buffer* vertex_buffer = device.get_buffer(vertex_buffer_handle);
-    device_buffer* index_buffer = device.get_buffer(index_buffer_handle);
+    device_buffer* vertex_buffer = render_device.get_buffer(vertex_buffer_handle);
+    device_buffer* index_buffer = render_device.get_buffer(index_buffer_handle);
 
 
     // ================
@@ -265,20 +264,20 @@ int main() {
 #if VK
     size_t code_size = 0U;
     uint8_t* code = read_file("shaders/test.comp.spv", &code_size);
-    handle<device_pipeline> compute = device.create_compute_pipeline({
+    handle<device_pipeline> compute = render_device.create_compute_pipeline({
         .cs_code = code,
         .cs_code_size = code_size,
     });
 
     size_t rt_code_size = 0U;
     uint8_t* rt_code = read_file("shaders/compute.comp.spv", &rt_code_size);
-    handle<device_pipeline> raytracing = device.create_compute_pipeline({
+    handle<device_pipeline> raytracing = render_device.create_compute_pipeline({
         .cs_code = rt_code,
         .cs_code_size = rt_code_size,
     });
     size_t tonemapping_code_size = 0U;
     uint8_t* tonemapping_code = read_file("shaders/tonemapping.comp.spv", &tonemapping_code_size);
-    handle<device_pipeline> tonemapping = device.create_compute_pipeline({
+    handle<device_pipeline> tonemapping = render_device.create_compute_pipeline({
         .cs_code = tonemapping_code,
         .cs_code_size = tonemapping_code_size,
     });
@@ -288,7 +287,7 @@ int main() {
     uint8_t* vertex_code = read_file("shaders/api-test-ui.vert.spv", &vertex_code_size);
     size_t fragment_code_size = 0U;
     uint8_t* fragment_code = read_file("shaders/api-test-ui.frag.spv", &fragment_code_size);
-    handle<device_pipeline> graphics = device.create_graphics_pipeline({
+    handle<device_pipeline> graphics = render_device.create_graphics_pipeline({
         .vs_code = vertex_code,
         .vs_code_size = vertex_code_size,
         .fs_code = fragment_code,
@@ -299,7 +298,7 @@ int main() {
 
     size_t transmittance_lut_code_size = 0U;
     u8* transmittance_lut_code = read_file("shaders/transmittance_lut.comp.spv", &transmittance_lut_code_size);
-    handle<device_pipeline> transmittance_lut_compute = device.create_compute_pipeline({
+    handle<device_pipeline> transmittance_lut_compute = render_device.create_compute_pipeline({
         .cs_code = transmittance_lut_code,
         .cs_code_size = transmittance_lut_code_size,
         .name = "transmittance_lut_comp",
@@ -336,7 +335,7 @@ int main() {
     // ==============
     // create texures
     // ==============
-    const handle<device_texture> gpu_texture_handle = device.create_texture({
+    const handle<device_texture> gpu_texture_handle = render_device.create_texture({
         .width  = static_cast<uint32_t>(image_width),
         .height = static_cast<uint32_t>(image_height),
 #if VK
@@ -351,7 +350,7 @@ int main() {
 #endif
     });
 
-    const handle<device_texture> second_texture = device.create_texture({
+    const handle<device_texture> second_texture = render_device.create_texture({
         .width  = static_cast<uint32_t>(image_width),
         .height = static_cast<uint32_t>(image_height),
 #if VK
@@ -366,7 +365,7 @@ int main() {
 #endif
     });
 
-    const handle<device_texture> output_texture_handle = device.create_texture({
+    const handle<device_texture> output_texture_handle = render_device.create_texture({
         .width  = static_cast<uint32_t>(image_width),
         .height = static_cast<uint32_t>(image_height),
 #if VK
@@ -380,7 +379,7 @@ int main() {
 #endif
     });
 
-    const handle<device_texture> ui_texture_handle = device.create_texture({
+    const handle<device_texture> ui_texture_handle = render_device.create_texture({
         .width = static_cast<uint32_t>(atlas_width),
         .height = static_cast<uint32_t>(atlas_height),
 #if VK
@@ -396,7 +395,7 @@ int main() {
         .name = "glyph atlas"
     });
 
-    const handle<device_texture> acc_handle = device.create_texture({
+    const handle<device_texture> acc_handle = render_device.create_texture({
         .width = static_cast<uint32_t>(window_width),
         .height = static_cast<uint32_t>(window_height),
 #if VK
@@ -412,7 +411,7 @@ int main() {
         .name = "accumulation texture"
     });
 
-    const handle<device_texture> result_handle = device.create_texture({
+    const handle<device_texture> result_handle = render_device.create_texture({
         .width = static_cast<uint32_t>(window_width),
         .height = static_cast<uint32_t>(window_height),
 #if VK
@@ -428,7 +427,7 @@ int main() {
         .name = "output texture"
     });
 
-    const handle<device_texture> transmittance_lut_handle = device.create_texture({
+    const handle<device_texture> transmittance_lut_handle = render_device.create_texture({
         .width  = static_cast<uint32_t>(1024),
         .height = static_cast<uint32_t>(1024),
 #if VK
@@ -444,12 +443,12 @@ int main() {
     });
 
 #if VK
-    u32 acc_storage_index = device.get_texture(acc_handle)->get_storage_index();
-    u32 result_storage_index = device.get_texture(result_handle)->get_storage_index();
+    u32 acc_storage_index = render_device.get_texture(acc_handle)->get_storage_index();
+    u32 result_storage_index = render_device.get_texture(result_handle)->get_storage_index();
 #endif
 
-    const device_texture* ui_texture = device.get_texture(ui_texture_handle);
-    const device_texture* transmittance_lut = device.get_texture(transmittance_lut_handle);
+    const device_texture* ui_texture = render_device.get_texture(ui_texture_handle);
+    const device_texture* transmittance_lut = render_device.get_texture(transmittance_lut_handle);
     debug_texture_list.push_back(transmittance_lut_handle);
 
     io.Fonts->SetTexID(reinterpret_cast<void*>(static_cast<uintptr_t>(ui_texture->get_sampled_index())));
@@ -457,10 +456,10 @@ int main() {
 
 #if VK
     std::array<graphics_command_buffer, 4U> graphics_command_buffers;
-    device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), QueueType::GRAPHICS, "graphics_cmd_buf");
+    render_device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), QueueType::GRAPHICS, "graphics_cmd_buf");
 #else
     std::array<dx12::graphics_command_buffer, 4U> graphics_command_buffers;
-    device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), dx12::QueueType::GRAPHICS);
+    render_device.allocate_command_buffers(graphics_command_buffers.data(), graphics_command_buffers.size(), dx12::QueueType::GRAPHICS);
 #endif
 
 
@@ -485,21 +484,17 @@ int main() {
 
 
     {
-        // device_buffer* draws_uniform_buffer = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW);
         {
             struct params {
                 u32 input1;
                 u32 input2;
                 u32 output;
                 u32 pad;
-            // } *params = draws_uniform_buffer->allocate<struct params>();
-            } params;
-             // params->input1 = device.get_texture(second_texture)->get_storage_index();
-             // params->input2 = device.get_texture(gpu_texture_handle)->get_storage_index();
-             // params->output = device.get_texture(output_texture_handle)->get_storage_index();
-             params.input1 = device.get_texture(second_texture)->get_storage_index();
-             params.input2 = device.get_texture(gpu_texture_handle)->get_storage_index();
-             params.output = device.get_texture(output_texture_handle)->get_storage_index();
+            } params = {
+                .input1 = render_device.get_texture(second_texture)->get_storage_index(),
+                .input2 = render_device.get_texture(gpu_texture_handle)->get_storage_index(),
+                .output = render_device.get_texture(output_texture_handle)->get_storage_index(),
+            };
 
             graphics_command_buffers[0].dispatch({
                 .pipeline = compute,
@@ -515,14 +510,11 @@ int main() {
                 u32 width;
                 u32 height;
                 u32 pad;
-            // } *params = draws_uniform_buffer->allocate<struct params>();
-            } params;
-             // params->lut_id = transmittance_lut->get_storage_index();
-             // params->width = transmittance_lut->width;
-             // params->height = transmittance_lut->height;
-             params.lut_id = transmittance_lut->get_storage_index();
-             params.width = transmittance_lut->width;
-             params.height = transmittance_lut->height;
+            } params = {
+                .lut_id = transmittance_lut->get_storage_index(),
+                .width = transmittance_lut->width,
+                .height = transmittance_lut->height,
+            };
 
             graphics_command_buffers[0].dispatch({
                 .pipeline = transmittance_lut_compute,
@@ -538,8 +530,8 @@ int main() {
 
     graphics_command_buffers[0].stop();
 
-    device.submit(graphics_command_buffers.data(), 1);
-    device.wait();
+    render_device.submit(graphics_command_buffers.data(), 1);
+    render_device.wait();
 
     RD_END_CAPTURE;
 
@@ -665,16 +657,8 @@ int main() {
             }
         }
 
-        // ======================
-        // global uniforms update
-        // ======================
-        {
-            // metadata* const globals = vkdevice::get().get_bindingmodel().get_uniform_buffer(UniformTypes::GLOBAL)->allocate<metadata>();
-            // memcpy(static_cast<void*>(globals), &main_scene.meta, sizeof(main_scene.meta));
-        }
-
         // TODO: Refactor backbuffer acquisition
-        auto backbuffer = surface->swapchain_images[device.acquire_image_index(surface_handle)];
+        auto backbuffer = surface->swapchain_images[render_device.acquire_image_index(surface_handle)];
         color_attachment[0] = backbuffer;
 
         // RD_START_CAPTURE;
@@ -692,7 +676,9 @@ int main() {
             }
 
             {
+                // TODO: Pack this fields
                 struct params {
+                    struct metadata meta;
                     uintptr_t bvh_buffer;
                     uintptr_t indices_buffer;
                     uintptr_t positions_buffer;
@@ -701,25 +687,17 @@ int main() {
                     uintptr_t materials_buffer;
                     u32 output_id;
                     u32 accumulation_id;
+                } uniforms = {
+                    .meta             = main_scene.meta,
+                    .bvh_buffer       = main_scene.bvh_buffer_address(),
+                    .indices_buffer   = main_scene.indices_buffer_address(),
+                    .positions_buffer = main_scene.positions_buffer_address(),
+                    .normals_buffer   = main_scene.normals_buffer_address(),
+                    .uvs_buffer       = main_scene.uvs_buffer_address(),
+                    .materials_buffer = main_scene.materials_buffer_address(),
+                    .output_id        = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index,
+                    .accumulation_id  = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index,
                 };
-                // struct params* uniforms = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW)->allocate<params>();
-                // uniforms->bvh_buffer = main_scene.bvh_buffer_address();
-                // uniforms->indices_buffer = main_scene.indices_buffer_address();
-                // uniforms->positions_buffer = main_scene.positions_buffer_address();
-                // uniforms->normals_buffer = main_scene.normals_buffer_address();
-                // uniforms->uvs_buffer = main_scene.uvs_buffer_address();
-                // uniforms->materials_buffer = main_scene.materials_buffer_address();
-                // uniforms->output_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
-                // uniforms->accumulation_id = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index;
-                struct params uniforms = {};
-                uniforms.bvh_buffer = main_scene.bvh_buffer_address();
-                uniforms.indices_buffer = main_scene.indices_buffer_address();
-                uniforms.positions_buffer = main_scene.positions_buffer_address();
-                uniforms.normals_buffer = main_scene.normals_buffer_address();
-                uniforms.uvs_buffer = main_scene.uvs_buffer_address();
-                uniforms.materials_buffer = main_scene.materials_buffer_address();
-                uniforms.output_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
-                uniforms.accumulation_id = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index;
 
                 command_buffer.dispatch({
                     .pipeline = raytracing,
@@ -730,15 +708,15 @@ int main() {
 
             {
                 struct params {
+                    s32 downscale_factor;
                     u32 output_id;
                     u32 accumulation_id;
-                // } *uniforms = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW)->allocate<params>();
-                } uniforms;
-                // TODO: Refactor backbuffer acquisition
-                // uniforms->output_id = device.get_texture(backbuffer)->get_storage_index();
-                // uniforms->accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
-                uniforms.output_id = device.get_texture(backbuffer)->get_storage_index();
-                uniforms.accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
+                } uniforms = {
+                    // TODO: Refactor backbuffer acquisition
+                    .downscale_factor = main_scene.meta.downscale_factor,
+                    .output_id = render_device.get_texture(backbuffer)->get_storage_index(),
+                    .accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index,
+                };
 
                 command_buffer.dispatch({
                     .pipeline = tonemapping,
@@ -761,7 +739,6 @@ int main() {
             .color_attachments_count = color_attachment.size(),
         });
 
-        // device_buffer* draws_uniform_buffer = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW);
         uint32_t vertex_offset = 0;
         uint32_t index_offset = 0;
         for (s32 index = 0U ; index < draw_data->CmdListsCount; index++) {
@@ -775,10 +752,7 @@ int main() {
                     float translate[2U];
                     uint32_t texture_index;
                     u32 padding;
-                };
-                // struct ui_params* ui_param = draws_uniform_buffer->allocate<ui_params>();
-                // *ui_param = ui_params{
-                struct ui_params ui_param = ui_params{
+                } ui_param = {
                     .vertex_buffer = vertex_buffer->device_address,
                     .scale {
                         2.f / draw_data->DisplaySize.x,
@@ -809,9 +783,8 @@ int main() {
 
         command_buffer.stop();
 
-        device.submit_before_present(surface_handle, &command_buffer, 1U);
-        device.present(surface_handle);
-        // device.wait();
+        render_device.submit_before_present(surface_handle, &command_buffer, 1U);
+        render_device.present(surface_handle);
 
         LARGE_INTEGER end_qpc;
         QueryPerformanceCounter(&end_qpc);
@@ -822,31 +795,31 @@ int main() {
         // RD_END_CAPTURE;
     }
 
-    device.wait();
+    render_device.wait();
 
     main_scene.deinit();
 
-    device.destroy_surface(surface_handle);
+    render_device.destroy_surface(surface_handle);
 
-    device.destroy_pipeline(compute);
-    device.destroy_pipeline(graphics);
-    device.destroy_pipeline(raytracing);
-    device.destroy_pipeline(tonemapping);
+    render_device.destroy_pipeline(compute);
+    render_device.destroy_pipeline(graphics);
+    render_device.destroy_pipeline(raytracing);
+    render_device.destroy_pipeline(tonemapping);
 
-    device.destroy_pipeline(transmittance_lut_compute);
-    device.destroy_texture(transmittance_lut_handle);
+    render_device.destroy_pipeline(transmittance_lut_compute);
+    render_device.destroy_texture(transmittance_lut_handle);
 
-    device.destroy_texture(gpu_texture_handle);
-    device.destroy_texture(second_texture);
-    device.destroy_texture(output_texture_handle);
-    device.destroy_texture(ui_texture_handle);
-    device.destroy_texture(acc_handle);
-    device.destroy_texture(result_handle);
+    render_device.destroy_texture(gpu_texture_handle);
+    render_device.destroy_texture(second_texture);
+    render_device.destroy_texture(output_texture_handle);
+    render_device.destroy_texture(ui_texture_handle);
+    render_device.destroy_texture(acc_handle);
+    render_device.destroy_texture(result_handle);
 
-    device.destroy_buffer(staging_buffer_handle);
-    device.destroy_buffer(vertex_buffer_handle);
-    device.destroy_buffer(index_buffer_handle);
-    device.deinit();
+    render_device.destroy_buffer(staging_buffer_handle);
+    render_device.destroy_buffer(vertex_buffer_handle);
+    render_device.destroy_buffer(index_buffer_handle);
+    render_device.deinit();
 
     ImGui::DestroyContext();
 #endif // VK

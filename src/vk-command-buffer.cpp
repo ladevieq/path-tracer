@@ -1,7 +1,5 @@
 #include "vk-command-buffer.hpp"
 
-uintptr_t constants[3U] = { 0U };
-
 void command_buffer::start() const {
     VkCommandBufferBeginInfo begin_info{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -12,20 +10,42 @@ void command_buffer::start() const {
 
     VKCHECK(vkBeginCommandBuffer(vk_command_buffer, &begin_info));
 
-    // TODO: Bind heaps
-    VkBindHeapInfoEXT image_bind_heap_info = {
-        .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-        .pNext = nullptr,
-    };
+    {
+        device_buffer* image_heap_buffer = vkdevice::get().get_buffer(image_heap);
 
-    vkCmdBindResourceHeapEXT(vk_command_buffer, &image_bind_heap_info);
+        VkDeviceAddressRangeEXT heap_range {
+            .address = image_heap_buffer->device_address,
+            .size = image_heap_buffer->size,
+        };
+        VkBindHeapInfoEXT bind_heap_info = {
+            .sType               = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+            .pNext               = nullptr,
+            .heapRange           = heap_range,
+            .reservedRangeOffset = 0U,
+            .reservedRangeSize   = descriptor_heap_props.minResourceHeapReservedRange,
+        };
 
-    VkBindHeapInfoEXT sampler_bind_heap_info = {
-        .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-        .pNext = nullptr,
-    };
+        vkCmdBindResourceHeapEXT(vk_command_buffer, &bind_heap_info);
+    }
 
-    vkCmdBindSamplerHeapEXT(vk_command_buffer, &sampler_bind_heap_info);
+    {
+        device_buffer* sampler_heap_buffer = vkdevice::get().get_buffer(sampler_heap);
+
+        VkDeviceAddressRangeEXT heap_range {
+            .address = sampler_heap_buffer->device_address,
+            .size = sampler_heap_buffer->size,
+        };
+
+        VkBindHeapInfoEXT sampler_bind_heap_info = {
+            .sType               = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+            .pNext               = nullptr,
+            .heapRange           = heap_range,
+            .reservedRangeOffset = 0U,
+            .reservedRangeSize   = descriptor_heap_props.minSamplerHeapReservedRange,
+        };
+
+        vkCmdBindSamplerHeapEXT(vk_command_buffer, &sampler_bind_heap_info);
+    }
 }
 
 void command_buffer::stop() const {
@@ -77,9 +97,8 @@ void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineSt
 }
 
 void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_texture> texture_handle, uint64_t offset) const {
-    auto&                   device      = vkdevice::get();
-    const device_buffer*    buffer      = device.get_buffer(buffer_handle);
-    const device_texture*   texture     = device.get_texture(texture_handle);
+    const device_buffer*    buffer      = vkdevice::get().get_buffer(buffer_handle);
+    const device_texture*   texture     = vkdevice::get().get_texture(texture_handle);
 
     VkImageSubresourceLayers image_subresource_layers{
         .aspectMask     = texture->aspects,
@@ -106,13 +125,8 @@ void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_t
 
 void graphics_command_buffer::dispatch(const dispatch_params& params, const void* data, size_t size) const {
     const device_pipeline* pipeline = vkdevice::get().get_pipeline(params.pipeline);
-    // const bindless_model& bindless = vkdevice::get().get_bindingmodel();
-
     vkCmdBindPipeline(vk_command_buffer, pipeline->bind_point, pipeline->vk_pipeline);
 
-    // const device_buffer* draw_uniforms = bindless.get_uniform_buffer(UniformTypes::DRAW);
-    // constants[UniformTypes::DRAW] = draw_uniforms->device_address + draw_uniforms->offset;
-    // vkCmdPushConstants(vk_command_buffer, bindless.global_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(constants), &constants);
     VkPushDataInfoEXT push_data {
         .sType  = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
         .pNext  = nullptr,
@@ -124,9 +138,9 @@ void graphics_command_buffer::dispatch(const dispatch_params& params, const void
     };
     vkCmdPushDataEXT(vk_command_buffer, &push_data);
 
-    auto x = params.group_size.vec.x / params.local_group_size.vec.x;
-    auto y = params.group_size.vec.y / params.local_group_size.vec.y;
-    auto z = params.group_size.vec.z / params.local_group_size.vec.z;
+    u32 x = params.group_size.vec.x / params.local_group_size.vec.x;
+    u32 y = params.group_size.vec.y / params.local_group_size.vec.y;
+    u32 z = params.group_size.vec.z / params.local_group_size.vec.z;
     vkCmdDispatch(vk_command_buffer, x, y, z);
 }
 
@@ -185,25 +199,13 @@ void graphics_command_buffer::begin_renderpass(const renderpass_params& params) 
     };
     vkCmdBeginRendering(vk_command_buffer, &rendering_info);
 
-    // const bindless_model& bindless   = vkdevice::get().get_bindingmodel();
-    // const device_buffer* pass_uniforms = bindless.get_uniform_buffer(UniformTypes::PASS);
-    // constants[UniformTypes::PASS] = pass_uniforms->device_address + pass_uniforms->offset;
-
     vkCmdSetScissor(vk_command_buffer, 0U, 1U, &scissor);
     vkCmdSetViewport(vk_command_buffer, 0U, 1U, &viewport);
 }
 
 void graphics_command_buffer::draw(const draw_params& params, const void* data, size_t size) const {
-    auto&       device   = vkdevice::get();
-    const device_pipeline* pipeline = device.get_pipeline(params.pipeline);
-
-    // const auto& bindless = device.get_bindingmodel();
-
+    const device_pipeline* pipeline = vkdevice::get().get_pipeline(params.pipeline);
     vkCmdBindPipeline(vk_command_buffer, pipeline->bind_point, pipeline->vk_pipeline);
-
-    // const device_buffer* draw_uniforms = bindless.get_uniform_buffer(UniformTypes::DRAW);
-    // constants[UniformTypes::DRAW] = draw_uniforms->device_address + draw_uniforms->offset;
-    // vkCmdPushConstants(vk_command_buffer, bindless.global_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(constants), &constants);
 
     VkPushDataInfoEXT push_data {
         .sType  = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
@@ -220,16 +222,8 @@ void graphics_command_buffer::draw(const draw_params& params, const void* data, 
 }
 
 void graphics_command_buffer::draw_indexed(const draw_indexed_params& params, const void* data, size_t size) const {
-    auto&       device   = vkdevice::get();
-    const device_pipeline* pipeline = device.get_pipeline(params.pipeline);
-
-    // const auto& bindless = device.get_bindingmodel();
-
+    const device_pipeline* pipeline = vkdevice::get().get_pipeline(params.pipeline);
     vkCmdBindPipeline(vk_command_buffer, pipeline->bind_point, pipeline->vk_pipeline);
-
-    // const device_buffer* draw_uniforms = bindless.get_uniform_buffer(UniformTypes::DRAW);
-    // constants[UniformTypes::DRAW] = draw_uniforms->device_address + draw_uniforms->offset;
-    // vkCmdPushConstants(vk_command_buffer, bindless.global_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(constants), &constants);
 
     VkPushDataInfoEXT push_data {
         .sType  = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
@@ -242,7 +236,7 @@ void graphics_command_buffer::draw_indexed(const draw_indexed_params& params, co
     };
     vkCmdPushDataEXT(vk_command_buffer, &push_data);
 
-    const device_buffer* index_buffer = device.get_buffer(params.index_buffer);
+    const device_buffer* index_buffer = vkdevice::get().get_buffer(params.index_buffer);
     vkCmdBindIndexBuffer(vk_command_buffer, index_buffer->vk_buffer, 0U, VK_INDEX_TYPE_UINT16);
     vkCmdDrawIndexed(vk_command_buffer, params.vertex_count, params.instance_count, params.index_offset, static_cast<int32_t>(params.vertex_offset), 0U);
 }

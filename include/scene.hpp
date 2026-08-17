@@ -38,12 +38,12 @@ public:
     handle<device_buffer>    bvh_buffer_handle;
     handle<device_buffer>    materials_buffer_handle;
 
-    uint64_t indices_buffer_address() { return vkdevice::get().get_buffer(indices_buffer_handle).device_address; };
-    uint64_t positions_buffer_address() { return vkdevice::get().get_buffer(positions_buffer_handle).device_address; };
-    uint64_t normals_buffer_address() { return vkdevice::get().get_buffer(normals_buffer_handle).device_address; };
-    uint64_t uvs_buffer_address() { return vkdevice::get().get_buffer(uvs_buffer_handle).device_address; };
-    uint64_t bvh_buffer_address() { return vkdevice::get().get_buffer(bvh_buffer_handle).device_address; };
-    uint64_t materials_buffer_address() { return vkdevice::get().get_buffer(materials_buffer_handle).device_address; };
+    uint64_t indices_buffer_address() { return vkdevice::get().get_buffer(indices_buffer_handle)->device_address; };
+    uint64_t positions_buffer_address() { return vkdevice::get().get_buffer(positions_buffer_handle)->device_address; };
+    uint64_t normals_buffer_address() { return vkdevice::get().get_buffer(normals_buffer_handle)->device_address; };
+    uint64_t uvs_buffer_address() { return vkdevice::get().get_buffer(uvs_buffer_handle)->device_address; };
+    uint64_t bvh_buffer_address() { return vkdevice::get().get_buffer(bvh_buffer_handle)->device_address; };
+    uint64_t materials_buffer_address() { return vkdevice::get().get_buffer(materials_buffer_handle)->device_address; };
 };
 
 #endif // !__SCENE_HPP_

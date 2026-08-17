@@ -1,7 +1,6 @@
 #pragma once
 
 #include "freelist.hpp"
-#include "vk-bindless.hpp"
 #include "vk-command-buffer.hpp"
 
 using VmaAllocator = struct VmaAllocator_T*;
@@ -72,14 +71,6 @@ class vkdevice {
         return &surfaces[handle];
     }
 
-    inline VmaAllocator get_allocator() const {
-        return gpu_allocator;
-    }
-
-    inline VkDevice get_device() const {
-        return device;
-    }
-
     // uint64_t submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle);
     uint32_t acquire_image_index(handle<device_surface> surface_handle);
     uint64_t submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count);
@@ -104,26 +95,9 @@ class vkdevice {
 
     void                        create_device();
 
-    void                        create_heaps(VkPhysicalDeviceDescriptorHeapPropertiesEXT& descriptor_heap_props);
-
     bool                        device_support_features(VkPhysicalDevice physical_dev);
 
     queue                       queues[static_cast<uint32_t>(QueueType::MAX)];
-
-    VkInstance                  instance;
-    VkPhysicalDevice            physical_device;
-    VkPhysicalDeviceProperties2 physical_device_props;
-    VkDevice                    device;
-
-    handle<device_buffer>       image_heap; // TODO: Dont use handle for internally used resources
-    handle<device_buffer>       sampler_heap;
-
-    static constexpr size_t     max_images_count = UINT16_MAX;
-    static constexpr size_t     max_samplers_count = 16U;
-
-    static size_t               
-
-    VmaAllocator                gpu_allocator;
 
     static constexpr size_t     max_allocable_command_buffers  = 16;
     static constexpr size_t     max_submitable_command_buffers = 16;

@@ -18,38 +18,38 @@ struct hit_info {
 };
 
 uvec4 decode_triangle_indices(uint triangle_id) {
-    uint id1 = regs.draw.indices_arr.indices[triangle_id * 3]        & 0x00ffffff;
-    uint id2 = regs.draw.indices_arr.indices[triangle_id * 3 + 1]    & 0x00ffffff;
-    uint id3 = regs.draw.indices_arr.indices[triangle_id * 3 + 2]    & 0x00ffffff;
+    uint id1 = regs.indices_arr.indices[triangle_id * 3]        & 0x00ffffff;
+    uint id2 = regs.indices_arr.indices[triangle_id * 3 + 1]    & 0x00ffffff;
+    uint id3 = regs.indices_arr.indices[triangle_id * 3 + 2]    & 0x00ffffff;
 
-    uint mat_id = (regs.draw.indices_arr.indices[triangle_id * 3]        & 0xff000000) >> 8
-                | (regs.draw.indices_arr.indices[triangle_id * 3 + 1]    & 0xff000000) >> 16
-                | (regs.draw.indices_arr.indices[triangle_id * 3 + 2]    & 0xff000000) >> 24;
+    uint mat_id = (regs.indices_arr.indices[triangle_id * 3]        & 0xff000000) >> 8
+                | (regs.indices_arr.indices[triangle_id * 3 + 1]    & 0xff000000) >> 16
+                | (regs.indices_arr.indices[triangle_id * 3 + 2]    & 0xff000000) >> 24;
 
     return uvec4(id1, id2, id3, mat_id);
 }
 
 vec3[3] get_triangle_positions(uvec3 indices) {
     return vec3[3](
-        vec3(regs.draw.positions_arr.positions[indices[0] * 3], regs.draw.positions_arr.positions[indices[0] * 3 + 1], regs.draw.positions_arr.positions[indices[0] * 3 + 2]),
-        vec3(regs.draw.positions_arr.positions[indices[1] * 3], regs.draw.positions_arr.positions[indices[1] * 3 + 1], regs.draw.positions_arr.positions[indices[1] * 3 + 2]),
-        vec3(regs.draw.positions_arr.positions[indices[2] * 3], regs.draw.positions_arr.positions[indices[2] * 3 + 1], regs.draw.positions_arr.positions[indices[2] * 3 + 2])
+        vec3(regs.positions_arr.positions[indices[0] * 3], regs.positions_arr.positions[indices[0] * 3 + 1], regs.positions_arr.positions[indices[0] * 3 + 2]),
+        vec3(regs.positions_arr.positions[indices[1] * 3], regs.positions_arr.positions[indices[1] * 3 + 1], regs.positions_arr.positions[indices[1] * 3 + 2]),
+        vec3(regs.positions_arr.positions[indices[2] * 3], regs.positions_arr.positions[indices[2] * 3 + 1], regs.positions_arr.positions[indices[2] * 3 + 2])
     );
 }
 
 vec3[3] get_triangle_normals(uvec3 indices) {
     return vec3[3](
-        vec3(regs.draw.normals_arr.normals[indices[0] * 3], regs.draw.normals_arr.normals[indices[0] * 3 + 1], regs.draw.normals_arr.normals[indices[0] * 3 + 2]),
-        vec3(regs.draw.normals_arr.normals[indices[1] * 3], regs.draw.normals_arr.normals[indices[1] * 3 + 1], regs.draw.normals_arr.normals[indices[1] * 3 + 2]),
-        vec3(regs.draw.normals_arr.normals[indices[2] * 3], regs.draw.normals_arr.normals[indices[2] * 3 + 1], regs.draw.normals_arr.normals[indices[2] * 3 + 2])
+        vec3(regs.normals_arr.normals[indices[0] * 3], regs.normals_arr.normals[indices[0] * 3 + 1], regs.normals_arr.normals[indices[0] * 3 + 2]),
+        vec3(regs.normals_arr.normals[indices[1] * 3], regs.normals_arr.normals[indices[1] * 3 + 1], regs.normals_arr.normals[indices[1] * 3 + 2]),
+        vec3(regs.normals_arr.normals[indices[2] * 3], regs.normals_arr.normals[indices[2] * 3 + 1], regs.normals_arr.normals[indices[2] * 3 + 2])
     );
 }
 
 vec2[3] get_triangle_uvs(uvec3 indices) {
     return vec2[3](
-        vec2(regs.draw.uvs_arr.uvs[indices[0] * 2], regs.draw.uvs_arr.uvs[indices[0] * 2 + 1]),
-        vec2(regs.draw.uvs_arr.uvs[indices[1] * 2], regs.draw.uvs_arr.uvs[indices[1] * 2 + 1]),
-        vec2(regs.draw.uvs_arr.uvs[indices[2] * 2], regs.draw.uvs_arr.uvs[indices[2] * 2 + 1])
+        vec2(regs.uvs_arr.uvs[indices[0] * 2], regs.uvs_arr.uvs[indices[0] * 2 + 1]),
+        vec2(regs.uvs_arr.uvs[indices[1] * 2], regs.uvs_arr.uvs[indices[1] * 2 + 1]),
+        vec2(regs.uvs_arr.uvs[indices[2] * 2], regs.uvs_arr.uvs[indices[2] * 2 + 1])
     );
 }
 
@@ -59,7 +59,7 @@ triangle get_triangle(uint triangle_id) {
         get_triangle_positions(indices.xyz),
         get_triangle_normals(indices.xyz),
         get_triangle_uvs(indices.xyz),
-        regs.draw.materials_arr.materials[indices.w]
+        regs.materials_arr.materials[indices.w]
     );
 }
 
@@ -82,20 +82,20 @@ uint hit_aabbs(ray r) {
     int id = 0;
 
     while(id != -1) {
-        if (regs.draw.bvh.nodes[id].primitive_id != -1) {
-            // triangle tri = bufs.geometry.triangles[regs.draw.bvh.nodes[id].primitive_id];
+        if (regs.bvh.nodes[id].primitive_id != -1) {
+            // triangle tri = bufs.geometry.triangles[regs.bvh.nodes[id].primitive_id];
             // vec3 minimum = min(tri.v1.position, min(tri.v2.position, tri.v3.position)).xyz;
             // vec3 maximum = max(tri.v1.position, max(tri.v2.position, tri.v3.position)).xyz;
 
             // if (hit_aabb(minimum, maximum, r)) {
             //     hit_count++;
             // }
-            id = regs.draw.bvh.nodes[id].next_id;
-        } else if (hit_aabb(regs.draw.bvh.nodes[id].min, regs.draw.bvh.nodes[id].max, r)) {
+            id = regs.bvh.nodes[id].next_id;
+        } else if (hit_aabb(regs.bvh.nodes[id].min, regs.bvh.nodes[id].max, r)) {
                 hit_count++;
                 id++;
         } else {
-            id = regs.draw.bvh.nodes[id].next_id;
+            id = regs.bvh.nodes[id].next_id;
         }
     }
 
@@ -169,22 +169,22 @@ bool hit_node(ray r, out hit_info info) {
 
     while(id != -1) {
         // Leafs
-        if (regs.draw.bvh.nodes[id].primitive_id != -1) {
-            // if (hit_sphere(bufs.geometry.spheres[regs.draw.bvh.nodes[id].primitive_id], r, temp_info)) {
+        if (regs.bvh.nodes[id].primitive_id != -1) {
+            // if (hit_sphere(bufs.geometry.spheres[regs.bvh.nodes[id].primitive_id], r, temp_info)) {
             //     info = temp_info;
             //     r.max_t = temp_info.t;
             //     hit = true;
             // }
-            if (hit_triangle(regs.draw.bvh.nodes[id].primitive_id, r, temp_info)) {
+            if (hit_triangle(regs.bvh.nodes[id].primitive_id, r, temp_info)) {
                 info = temp_info;
                 r.max_t = temp_info.t;
                 hit = true;
             }
-            id = regs.draw.bvh.nodes[id].next_id;
-        } else if (hit_aabb(regs.draw.bvh.nodes[id].min, regs.draw.bvh.nodes[id].max, r)) {
+            id = regs.bvh.nodes[id].next_id;
+        } else if (hit_aabb(regs.bvh.nodes[id].min, regs.bvh.nodes[id].max, r)) {
                 id++;
         } else {
-            id = regs.draw.bvh.nodes[id].next_id;
+            id = regs.bvh.nodes[id].next_id;
         }
     }
 

@@ -4,7 +4,58 @@
 
 #include <vk_mem_alloc.h>
 
-device_semaphore create_semaphore(VkDevice device, const semaphore_desc& desc, const char* name) {
+
+static VkInstance                  instance;
+static VkPhysicalDevice            physical_device;
+static VkPhysicalDeviceProperties2 physical_device_props;
+static VkDevice                    device;
+
+static constexpr size_t     max_images_count = 10000U;
+static constexpr size_t     max_samplers_count = 16U;
+static constexpr size_t     storage_images_offset = 0U;
+static constexpr size_t     sampled_images_offset = max_images_count / 2U;
+
+// TODO: Dont use handle for internally used resources
+handle<device_buffer> image_heap;
+handle<device_buffer> sampler_heap;
+
+static VmaAllocator                gpu_allocator;
+
+VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptor_heap_props {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,
+};
+
+void create_heaps(size_t max_images, size_t max_samplers) {
+    // create image heap
+    {
+        image_heap = vkdevice::get().create_buffer({
+            .size = descriptor_heap_props.minResourceHeapReservedRange + max_images * descriptor_heap_props.imageDescriptorSize,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
+                      VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
+                      VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            // .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .name = "image descriptor_heap",
+        });
+    }
+
+    // create sampler heap
+    {
+        sampler_heap = vkdevice::get().create_buffer({
+            .size = descriptor_heap_props.minSamplerHeapReservedRange + max_samplers * descriptor_heap_props.samplerDescriptorSize,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
+                      VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
+                      VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+            .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+            // .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .name = "sampler descriptor_heap",
+        });
+    }
+}
+
+device_semaphore create_semaphore(const semaphore_desc& desc, const char* name) {
     device_semaphore semaphore {
         .value = desc.initial_value,
     };
@@ -37,7 +88,7 @@ device_semaphore create_semaphore(VkDevice device, const semaphore_desc& desc, c
 }
 
 
-static VkShaderModule create_shader_module(VkDevice device, uint8_t* code, size_t code_size) {
+static VkShaderModule create_shader_module(uint8_t* code, size_t code_size) {
     VkShaderModule shader_module;
     VkShaderModuleCreateInfo create_info{
         .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -94,7 +145,6 @@ void vkdevice::init() {
     create_device();
 
     fence = create_semaphore(
-        device,
         {
             .type = VK_SEMAPHORE_TYPE_TIMELINE,
         }, "timeline_semaphore"
@@ -193,7 +243,7 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     };
 
     VKCHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.vk_buffer, &device_buffer.alloc, &alloc_info));
-    vmaSetAllocationName(render_device.get_allocator(), device_buffer.alloc, desc.name);
+    vmaSetAllocationName(gpu_allocator, device_buffer.alloc, desc.name);
 
     if ((desc.usages & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0U) {
         VkBufferDeviceAddressInfo address_info {
@@ -218,7 +268,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
             .pNext               = nullptr,
             .flags               = 0U,
             .stage               = VK_SHADER_STAGE_VERTEX_BIT,
-            .module              = create_shader_module(device, desc.vs_code, desc.vs_code_size),
+            .module              = create_shader_module(desc.vs_code, desc.vs_code_size),
             .pName               = "main",
             .pSpecializationInfo = nullptr,
         },
@@ -227,7 +277,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
             .pNext               = nullptr,
             .flags               = 0U,
             .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module              = create_shader_module(device, desc.fs_code, desc.fs_code_size),
+            .module              = create_shader_module(desc.fs_code, desc.fs_code_size),
             .pName               = "main",
             .pSpecializationInfo = nullptr,
         },
@@ -320,9 +370,15 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
         .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
     };
 
+    VkPipelineCreateFlags2CreateInfo create_flags2 {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+        .pNext = &pipeline_rendering_create_info,
+        .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+    };
+
     VkGraphicsPipelineCreateInfo create_info{
         .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext               = &pipeline_rendering_create_info,
+        .pNext               = &create_flags2,
         .flags               = 0U,
         .stageCount          = sizeof(shader_stages_create_info) / sizeof(VkPipelineShaderStageCreateInfo),
         .pStages             = shader_stages_create_info,
@@ -372,14 +428,20 @@ handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline
         .pNext               = nullptr,
         .flags               = 0U,
         .stage               = VK_SHADER_STAGE_COMPUTE_BIT,
-        .module              = create_shader_module(device, desc.cs_code, desc.cs_code_size),
+        .module              = create_shader_module(desc.cs_code, desc.cs_code_size),
         .pName               = "main",
         .pSpecializationInfo = nullptr,
     };
 
+    VkPipelineCreateFlags2CreateInfo create_flags2 {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+    };
+
     VkComputePipelineCreateInfo create_info{
         .sType              = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-        .pNext              = nullptr,
+        .pNext              = &create_flags2,
         .flags              = 0U,
         .stage              = stage_create_info,
         // .layout             = bindless.global_layout,
@@ -428,13 +490,11 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
 
     for (uint32_t index = 0u; index < device_surface.image_count; index++) {
         device_surface.acquire_semaphores[index] = create_semaphore(
-            device,
             {
                 .type = VK_SEMAPHORE_TYPE_BINARY,
             }, "acquire_semaphore"
         );
         device_surface.submit_semaphores[index]  = create_semaphore(
-            device,
             {
                 .type = VK_SEMAPHORE_TYPE_BINARY,
             }, "submit_semaphore"
@@ -802,9 +862,6 @@ void vkdevice::create_instance() {
 void vkdevice::create_device() {
     // pick physical device
     // TODO: change put this in another scope
-    VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptor_heap_props {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,
-    };
     {
         u32 physical_devices_count = 0U;
         vkEnumeratePhysicalDevices(instance, &physical_devices_count, nullptr);
@@ -822,6 +879,7 @@ void vkdevice::create_device() {
             VkPhysicalDevice physical_dev = physical_devices[physical_device_index];
             if (device_support_features(physical_dev)) {
                 physical_device = physical_dev;
+
                 break;
             }
         }
@@ -863,6 +921,7 @@ void vkdevice::create_device() {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME,
         VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
+        VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME,
     };
 
     VkPhysicalDeviceVulkan12Features physical_device_12_features{
@@ -884,9 +943,22 @@ void vkdevice::create_device() {
         .dynamicRendering = VK_TRUE,
     };
 
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features {
+        .sType                       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+        .pNext                       = &physical_device_13_features,
+        .descriptorHeap              = VK_TRUE,
+        .descriptorHeapCaptureReplay = VK_TRUE,
+    };
+
+    VkPhysicalDeviceShaderUntypedPointersFeaturesKHR shader_untyped_pointers_features {
+        .sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
+        .pNext                 = &descriptor_heap_features,
+        .shaderUntypedPointers = VK_TRUE,
+    };
+
     VkDeviceCreateInfo create_info{
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext                   = &physical_device_13_features,
+        .pNext                   = &shader_untyped_pointers_features,
         .flags                   = 0U,
         .queueCreateInfoCount    = static_cast<uint32_t>(QueueType::MAX),
         .pQueueCreateInfos       = queue_create_infos,
@@ -938,33 +1010,7 @@ void vkdevice::create_device() {
         VKCHECK(vmaCreateAllocator(&allocator_create_info, &gpu_allocator));
     }
 
-    create_heaps(descriptor_heap_props);
-}
-
-void vkdevice::create_heaps(VkPhysicalDeviceDescriptorHeapPropertiesEXT& descriptor_heap_props) {
-    // create image heap
-    {
-        sampler_heap = create_buffer({
-            .size = descriptor_heap_props.minResourceHeapReservedRange + max_images_count * descriptor_heap_props.imageDescriptorSize,
-            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
-                      VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
-                      VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
-            .name = "image descriptor_heap",
-        });
-    }
-
-    // create sampler heap
-    {
-        sampler_heap = create_buffer({
-            .size = descriptor_heap_props.minSamplerHeapReservedRange + max_samplers_count * descriptor_heap_props.samplerDescriptorSize,
-            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
-                      VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
-                      VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
-            .name = "sampler descriptor_heap",
-        });
-    }
+    create_heaps(max_images_count, max_samplers_count);
 }
 
 
@@ -1026,7 +1072,6 @@ idlist<> device_sampler::sampler_indices = {};
 
 void device_texture::init(const texture_desc& desc) {
     auto& render_device = vkdevice::get();
-    auto* device = render_device.get_device();
 
     vk_image = desc.vk_image;
     format = desc.format;
@@ -1073,8 +1118,8 @@ void device_texture::init(const texture_desc& desc) {
             .pUserData      = nullptr,
         };
 
-        VKCHECK(vmaCreateImage(render_device.get_allocator(), &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
-        vmaSetAllocationName(render_device.get_allocator(), alloc, desc.name);
+        VKCHECK(vmaCreateImage(gpu_allocator, &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
+        vmaSetAllocationName(gpu_allocator, alloc, desc.name);
     }
 
     if (desc.name) {
@@ -1129,6 +1174,7 @@ void device_texture::init(const texture_desc& desc) {
         .layout = VK_IMAGE_LAYOUT_GENERAL,
     };
 
+    device_buffer* image_heap_buffer = render_device.get_buffer(image_heap);
     u32 descriptors_count = 0U;
     VkResourceDescriptorInfoEXT resource_descriptor_infos[2U];
     VkHostAddressRangeEXT resources_address[2U];
@@ -1142,10 +1188,11 @@ void device_texture::init(const texture_desc& desc) {
             },
         };
 
-        // resource_address[descriptors_count] = {
-        //     .address = storage_indices.add(),
-        //     .size    = ,
-        // }
+        storage_index = storage_indices.add();
+        resources_address[descriptors_count] = {
+            .address = ((u8*)image_heap_buffer->mapped_ptr) + descriptor_heap_props.imageDescriptorSize * (storage_index.id + storage_images_offset),
+            .size    = descriptor_heap_props.imageDescriptorSize,
+        };
 
         descriptors_count++;
     }
@@ -1159,10 +1206,11 @@ void device_texture::init(const texture_desc& desc) {
             },
         };
 
-        // resource_address[descriptors_count] = {
-        //     .address = sampled_indices.add(),
-        //     .size    = ,
-        // }
+        sampled_index = sampled_indices.add();
+        resources_address[descriptors_count] = {
+            .address = ((u8*)image_heap_buffer->mapped_ptr) + descriptor_heap_props.imageDescriptorSize * (sampled_index.id + sampled_images_offset),
+            .size    = descriptor_heap_props.imageDescriptorSize,
+        };
 
         descriptors_count++;
     }
@@ -1171,10 +1219,6 @@ void device_texture::init(const texture_desc& desc) {
 }
 
 void device_texture::release() {
-    vkdevice& render_device = vkdevice::get();
-    VkDevice device = render_device.get_device();
-    auto* gpu_allocator = render_device.get_allocator();
-
     if (alloc != nullptr) {
         vmaDestroyImage(gpu_allocator, vk_image, alloc);
     }
@@ -1200,8 +1244,7 @@ void device_texture::create_views() {
 
 
 void device_sampler::init(const sampler_desc& desc) {
-    auto& render_device = vkdevice::get();
-    auto* device = render_device.get_device();
+    vkdevice& render_device = vkdevice::get();
 
     VkSamplerCreateInfo sampler_create_info{
         .sType                      = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1228,22 +1271,14 @@ void device_sampler::init(const sampler_desc& desc) {
 
     sampler_index = sampler_indices.add();
 
-    // VkWriteDescriptorSet write_descriptor_set{
-    //     .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-    //     .pNext            = nullptr,
-    //     .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
-    //     .dstBinding       = 1U,
-    //     .dstArrayElement  = sampler_index.id,
-    //     .descriptorCount  = 1U,
-    //     .descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-    //     .pImageInfo       = images_info,
-    //     .pBufferInfo      = nullptr,
-    //     .pTexelBufferView = nullptr,
-    // });
-
-    // TODO: Write samplers to heap
     // TODO: Create previously immutable samplers
-    VKCHECK(vkWriteSamplerDescriptorsEXT());
+    device_buffer* sampler_heap_buffer = render_device.get_buffer(sampler_heap);
+
+    VkHostAddressRangeEXT destination_address {
+        .address = ((u8*)sampler_heap_buffer->mapped_ptr) + descriptor_heap_props.samplerDescriptorSize * sampler_index.id,
+        .size    = descriptor_heap_props.samplerDescriptorSize,
+    };
+    VKCHECK(vkWriteSamplerDescriptorsEXT(device, 1U, &sampler_create_info, &destination_address));
 }
 
 
