@@ -2,7 +2,7 @@
 // windows.h stuff
 // ===============
 #if defined(_WIN32)
-    #if defined(_M_AMD64)
+    #if defined(_M_AMD64) || defined(_M_X64)
         #define _AMD64_
     #endif
     #include <basetsd.h>
@@ -21,22 +21,15 @@
 // -------------------
 // thirdparties
 // -------------------
-#define IMGUI_DISABLE_WIN32_FUNCTIONS
-#include "imgui.cpp"
-#include "imgui_draw.cpp"
-#include "imgui_tables.cpp"
-#include "imgui_widgets.cpp"
+#include "imgui.h"
 
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 #include <simdjson.h>
-#include "simdjson.cpp"
 
 #define ENABLE_RENDERDOC 1
 #if ENABLE_RENDERDOC
 #include <renderdoc_app.h>
-
 
 
 #define RD_START_CAPTURE if(rdoc_api != nullptr) rdoc_api->StartFrameCapture(nullptr, nullptr)
@@ -120,10 +113,10 @@ void ui(scene* scene, float frame_time) {
 
     if (ImGui::CollapsingHeader("Images")) {
         for (const handle<device_texture>& handle : debug_texture_list) {
-            const device_texture& tex = vkdevice::get().get_texture(handle);
-            const char* name = tex.name;
+            const device_texture* tex = vkdevice::get().get_texture(handle);
+            const char* name = tex->name;
             ImGui::Text(name ? name : DUMMY_NAME);
-            ImGui::Image(tex.get_sampled_index(), ImVec2(128, 128));
+            ImGui::Image(tex->get_sampled_index(), ImVec2(128, 128));
         }
     }
 
@@ -221,7 +214,7 @@ int main() {
 #endif
         .image_count = 2U,
     });
-    const device_surface& surface = device.get_surface(surface_handle);
+    const device_surface* surface = device.get_surface(surface_handle);
 
 
     // ==============
@@ -230,7 +223,7 @@ int main() {
     const handle<device_buffer> staging_buffer_handle = device.create_buffer({
         .size = 128 * MB,
 #if VK
-        .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .usages = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 #else
@@ -240,12 +233,12 @@ int main() {
         .heap_type  = D3D12_HEAP_TYPE_UPLOAD,
 #endif
     });
-    const device_buffer& staging_buffer = device.get_buffer(staging_buffer_handle);
+    const device_buffer* staging_buffer = device.get_buffer(staging_buffer_handle);
 
     const handle<device_buffer> vertex_buffer_handle = device.create_buffer({
         .size = MB * sizeof(uint32_t),
 #if VK
-        .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 #else
@@ -255,15 +248,15 @@ int main() {
     const handle<device_buffer> index_buffer_handle = device.create_buffer({
         .size = MB * sizeof(uint32_t),
 #if VK
-        .usages = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 #else
 #endif
     });
 
-    device_buffer vertex_buffer = device.get_buffer(vertex_buffer_handle);
-    device_buffer index_buffer = device.get_buffer(index_buffer_handle);
+    device_buffer* vertex_buffer = device.get_buffer(vertex_buffer_handle);
+    device_buffer* index_buffer = device.get_buffer(index_buffer_handle);
 
 
     // ================
@@ -290,7 +283,7 @@ int main() {
         .cs_code_size = tonemapping_code_size,
     });
 
-    std::array<VkFormat, 1U> formats { surface.surface_format.format };
+    std::array<VkFormat, 1U> formats { surface->surface_format.format };
     size_t vertex_code_size = 0U;
     uint8_t* vertex_code = read_file("shaders/api-test-ui.vert.spv", &vertex_code_size);
     size_t fragment_code_size = 0U;
@@ -300,7 +293,8 @@ int main() {
         .vs_code_size = vertex_code_size,
         .fs_code = fragment_code,
         .fs_code_size = fragment_code_size,
-        .color_attachments_format = formats
+        .color_attachments_format = formats.data(),
+        .color_attachments_format_count = formats.size()
     });
 
     size_t transmittance_lut_code_size = 0U;
@@ -320,12 +314,12 @@ int main() {
     int channels;
     uint8_t* data = stbi_load("../models/sponza/466164707995436622.jpg", &image_width, &image_height, &channels, 4);
     size_t size = static_cast<size_t>(image_width) * image_height * 4U;
-    memcpy(staging_buffer.mapped_ptr, data, size);
+    memcpy(staging_buffer->mapped_ptr, data, size);
 
     off_t buffer_offset = image_width * image_height * 4;
     data = stbi_load("../models/sponza/715093869573992647.jpg", &image_width, &image_height, &channels, 4);
     size = static_cast<size_t>(image_width) * image_height * 4U;
-    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + buffer_offset);
+    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer->mapped_ptr) + buffer_offset);
     memcpy(addr, data, size);
 
     u8 *pixels = nullptr;
@@ -335,7 +329,7 @@ int main() {
 
     off_t ui_offset = 2L * buffer_offset;
     size = static_cast<size_t>(atlas_width) * atlas_height * 4U;
-    addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer.mapped_ptr) + ui_offset);
+    addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer->mapped_ptr) + ui_offset);
     memcpy(addr, pixels, size);
 
 
@@ -450,15 +444,15 @@ int main() {
     });
 
 #if VK
-    u32 acc_storage_index = device.get_texture(acc_handle).get_storage_index();
-    u32 result_storage_index = device.get_texture(result_handle).get_storage_index();
+    u32 acc_storage_index = device.get_texture(acc_handle)->get_storage_index();
+    u32 result_storage_index = device.get_texture(result_handle)->get_storage_index();
 #endif
 
-    const device_texture& ui_texture = device.get_texture(ui_texture_handle);
-    const device_texture& transmittance_lut = device.get_texture(transmittance_lut_handle);
+    const device_texture* ui_texture = device.get_texture(ui_texture_handle);
+    const device_texture* transmittance_lut = device.get_texture(transmittance_lut_handle);
     debug_texture_list.push_back(transmittance_lut_handle);
 
-    io.Fonts->SetTexID(reinterpret_cast<void*>(static_cast<uintptr_t>(ui_texture.get_sampled_index())));
+    io.Fonts->SetTexID(reinterpret_cast<void*>(static_cast<uintptr_t>(ui_texture->get_sampled_index())));
 
 
 #if VK
@@ -491,23 +485,28 @@ int main() {
 
 
     {
-        device_buffer& draws_uniform_buffer = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW);
+        // device_buffer* draws_uniform_buffer = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW);
         {
             struct params {
                 u32 input1;
                 u32 input2;
                 u32 output;
                 u32 pad;
-            } *params = draws_uniform_buffer.allocate<struct params>();
-             params->input1 = device.get_texture(second_texture).get_storage_index();
-             params->input2 = device.get_texture(gpu_texture_handle).get_storage_index();
-             params->output = device.get_texture(output_texture_handle).get_storage_index();
+            // } *params = draws_uniform_buffer->allocate<struct params>();
+            } params;
+             // params->input1 = device.get_texture(second_texture)->get_storage_index();
+             // params->input2 = device.get_texture(gpu_texture_handle)->get_storage_index();
+             // params->output = device.get_texture(output_texture_handle)->get_storage_index();
+             params.input1 = device.get_texture(second_texture)->get_storage_index();
+             params.input2 = device.get_texture(gpu_texture_handle)->get_storage_index();
+             params.output = device.get_texture(output_texture_handle)->get_storage_index();
 
             graphics_command_buffers[0].dispatch({
                 .pipeline = compute,
                 .group_size = { .vec = { static_cast<u32>(image_width), static_cast<u32>(image_height), 1U }},
                 .local_group_size = { .vec = { 8U, 8U, 1U }},
-            });
+            },
+            &params, sizeof(struct params));
         }
 
         {
@@ -516,16 +515,21 @@ int main() {
                 u32 width;
                 u32 height;
                 u32 pad;
-            } *params = draws_uniform_buffer.allocate<struct params>();
-             params->lut_id = transmittance_lut.get_storage_index();
-             params->width = transmittance_lut.width;
-             params->height = transmittance_lut.height;
+            // } *params = draws_uniform_buffer->allocate<struct params>();
+            } params;
+             // params->lut_id = transmittance_lut->get_storage_index();
+             // params->width = transmittance_lut->width;
+             // params->height = transmittance_lut->height;
+             params.lut_id = transmittance_lut->get_storage_index();
+             params.width = transmittance_lut->width;
+             params.height = transmittance_lut->height;
 
             graphics_command_buffers[0].dispatch({
                 .pipeline = transmittance_lut_compute,
                 .group_size = { .vec = { 1024U, 1024U, 1U }},
                 .local_group_size = { .vec { 8U, 8U, 1U }},
-            });
+            },
+            &params, sizeof(struct params));
         }
     }
 
@@ -651,12 +655,12 @@ int main() {
                 ImDrawList* cmd_list = draw_data->CmdLists[index];
 
                 size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
-                u8* vtx_ptr = static_cast<uint8_t*>(vertex_buffer.mapped_ptr) + vertex_offset;
+                u8* vtx_ptr = static_cast<uint8_t*>(vertex_buffer->mapped_ptr) + vertex_offset;
                 memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
                 vertex_offset += static_cast<off_t>(vertex_bytes_size);
 
                 size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
-                memcpy(static_cast<uint8_t*>(index_buffer.mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
+                memcpy(static_cast<uint8_t*>(index_buffer->mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
                 index_offset += static_cast<off_t>(index_bytes_size);
             }
         }
@@ -665,12 +669,12 @@ int main() {
         // global uniforms update
         // ======================
         {
-            metadata * const globals = vkdevice::get().get_bindingmodel().get_uniform_buffer(UniformTypes::GLOBAL).allocate<metadata>();
-            memcpy(static_cast<void*>(globals), &main_scene.meta, sizeof(main_scene.meta));
+            // metadata* const globals = vkdevice::get().get_bindingmodel().get_uniform_buffer(UniformTypes::GLOBAL)->allocate<metadata>();
+            // memcpy(static_cast<void*>(globals), &main_scene.meta, sizeof(main_scene.meta));
         }
 
         // TODO: Refactor backbuffer acquisition
-        auto backbuffer = surface.swapchain_images[device.acquire_image_index(surface_handle)];
+        auto backbuffer = surface->swapchain_images[device.acquire_image_index(surface_handle)];
         color_attachment[0] = backbuffer;
 
         // RD_START_CAPTURE;
@@ -698,37 +702,49 @@ int main() {
                     u32 output_id;
                     u32 accumulation_id;
                 };
-                struct params* uniforms = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW).allocate<params>();
-                uniforms->bvh_buffer = main_scene.bvh_buffer_address();
-                uniforms->indices_buffer = main_scene.indices_buffer_address();
-                uniforms->positions_buffer = main_scene.positions_buffer_address();
-                uniforms->normals_buffer = main_scene.normals_buffer_address();
-                uniforms->uvs_buffer = main_scene.uvs_buffer_address();
-                uniforms->materials_buffer = main_scene.materials_buffer_address();
-                uniforms->output_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
-                uniforms->accumulation_id = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index;
+                // struct params* uniforms = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW)->allocate<params>();
+                // uniforms->bvh_buffer = main_scene.bvh_buffer_address();
+                // uniforms->indices_buffer = main_scene.indices_buffer_address();
+                // uniforms->positions_buffer = main_scene.positions_buffer_address();
+                // uniforms->normals_buffer = main_scene.normals_buffer_address();
+                // uniforms->uvs_buffer = main_scene.uvs_buffer_address();
+                // uniforms->materials_buffer = main_scene.materials_buffer_address();
+                // uniforms->output_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
+                // uniforms->accumulation_id = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index;
+                struct params uniforms = {};
+                uniforms.bvh_buffer = main_scene.bvh_buffer_address();
+                uniforms.indices_buffer = main_scene.indices_buffer_address();
+                uniforms.positions_buffer = main_scene.positions_buffer_address();
+                uniforms.normals_buffer = main_scene.normals_buffer_address();
+                uniforms.uvs_buffer = main_scene.uvs_buffer_address();
+                uniforms.materials_buffer = main_scene.materials_buffer_address();
+                uniforms.output_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
+                uniforms.accumulation_id = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index;
 
                 command_buffer.dispatch({
                     .pipeline = raytracing,
                     .group_size = { .vec { window_width / main_scene.meta.downscale_factor, window_height / main_scene.meta.downscale_factor, 1U, } },
                     .local_group_size = { .vec { 8U, 8U, 1U, } },
-                });
+                }, (const void*)&uniforms, sizeof(struct params));
             }
 
             {
                 struct params {
                     u32 output_id;
                     u32 accumulation_id;
-                } *uniforms = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW).allocate<params>();
+                // } *uniforms = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW)->allocate<params>();
+                } uniforms;
                 // TODO: Refactor backbuffer acquisition
-                uniforms->output_id = device.get_texture(backbuffer).get_storage_index();
-                uniforms->accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
+                // uniforms->output_id = device.get_texture(backbuffer)->get_storage_index();
+                // uniforms->accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
+                uniforms.output_id = device.get_texture(backbuffer)->get_storage_index();
+                uniforms.accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index;
 
                 command_buffer.dispatch({
                     .pipeline = tonemapping,
                     .group_size = { .vec { window_width / main_scene.meta.downscale_factor, window_height / main_scene.meta.downscale_factor, 1U, } },
                     .local_group_size = { .vec { 8U, 8U, 1U, } },
-                });
+                }, &uniforms, sizeof(struct params));
             }
         }
 
@@ -741,10 +757,11 @@ int main() {
                 .width = static_cast<uint32_t>(draw_data->DisplaySize.x),
                 .height = static_cast<uint32_t>(draw_data->DisplaySize.y),
             },
-            .color_attachments = color_attachment,
+            .color_attachments = color_attachment.data(),
+            .color_attachments_count = color_attachment.size(),
         });
 
-        auto& draws_uniform_buffer = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW);
+        // device_buffer* draws_uniform_buffer = device.get_bindingmodel().get_uniform_buffer(UniformTypes::DRAW);
         uint32_t vertex_offset = 0;
         uint32_t index_offset = 0;
         for (s32 index = 0U ; index < draw_data->CmdListsCount; index++) {
@@ -752,28 +769,27 @@ int main() {
 
             for (auto& draw_command : cmd_list->CmdBuffer) {
                 ImTextureID texture_id = draw_command.TexRef.GetTexID();
-                {
-                    struct ui_params {
-                        u64 vertex_buffer;
-                        float scale[2U];
-                        float translate[2U];
-                        uint32_t texture_index;
-                        u32 padding;
-                    };
-                    struct ui_params* ui_param = draws_uniform_buffer.allocate<ui_params>();
-                    *ui_param = ui_params{
-                        .vertex_buffer = vertex_buffer.device_address,
-                        .scale {
-                            2.f / draw_data->DisplaySize.x,
-                            2.f / draw_data->DisplaySize.y,
-                        },
-                        .translate {
-                            -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
-                            -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
-                        },
-                        .texture_index = *reinterpret_cast<uint32_t*>(&texture_id),
-                    };
-                }
+                struct ui_params {
+                    u64 vertex_buffer;
+                    float scale[2U];
+                    float translate[2U];
+                    uint32_t texture_index;
+                    u32 padding;
+                };
+                // struct ui_params* ui_param = draws_uniform_buffer->allocate<ui_params>();
+                // *ui_param = ui_params{
+                struct ui_params ui_param = ui_params{
+                    .vertex_buffer = vertex_buffer->device_address,
+                    .scale {
+                        2.f / draw_data->DisplaySize.x,
+                        2.f / draw_data->DisplaySize.y,
+                    },
+                    .translate {
+                        -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
+                        -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
+                    },
+                    .texture_index = *reinterpret_cast<uint32_t*>(&texture_id),
+                };
 
                 command_buffer.draw_indexed({
                     .pipeline = graphics,
@@ -782,7 +798,7 @@ int main() {
                     .vertex_offset = draw_command.VtxOffset + vertex_offset,
                     .index_offset = draw_command.IdxOffset + index_offset,
                     .instance_count = 1U,
-                });
+                }, &ui_param, sizeof(ui_param));
             }
             vertex_offset += cmd_list->VtxBuffer.size();
             index_offset += cmd_list->IdxBuffer.size();

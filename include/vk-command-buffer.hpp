@@ -25,7 +25,8 @@ private:
 
 public:
     rect render_area;
-    std::span<handle<device_texture>> color_attachments;
+    handle<device_texture>* color_attachments;
+    size_t                  color_attachments_count;
 };
 
 struct draw_params {
@@ -55,15 +56,17 @@ struct command_buffer {
 
     VkCommandBuffer vk_command_buffer;
     QueueType       queue_type;
+
+    // TODO: Add relevant fields in order to bind heaps
 };
 
 // General purpose queue
 struct graphics_command_buffer: public command_buffer {
-    void dispatch(const dispatch_params& params) const;
+    void dispatch(const dispatch_params& params, const void* data, size_t size) const;
 
     void begin_renderpass(const renderpass_params& params) const;
-    void draw(const draw_params& params) const;
-    void draw_indexed(const draw_indexed_params& params) const;
+    void draw(const draw_params& params, const void* data, size_t size) const;
+    void draw_indexed(const draw_indexed_params& params, const void* data, size_t size) const;
     void end_renderpass() const;
 };
 

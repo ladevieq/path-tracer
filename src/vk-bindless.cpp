@@ -3,7 +3,7 @@
 #include "vk-device.hpp"
 #include "vk-utils.hpp"
 
-device_buffer& bindless_model::get_uniform_buffer(enum UniformTypes type) const {
+device_buffer* bindless_model::get_uniform_buffer(enum UniformTypes type) const {
     return vkdevice::get().get_buffer(uniform_buffers[type]);
 }
 
@@ -185,7 +185,7 @@ void bindless_model::init() {
     {
         uniform_buffers[UniformTypes::GLOBAL] = render_device.create_buffer({
             .size = globals_uniform_buffer_size,
-            .usages = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "global uniform buffer",
@@ -198,7 +198,7 @@ void bindless_model::init() {
     {
         uniform_buffers[UniformTypes::PASS] = render_device.create_buffer({
             .size = passes_uniform_buffer_size,
-            .usages = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "passes uniform buffer"
@@ -211,7 +211,7 @@ void bindless_model::init() {
     {
         uniform_buffers[UniformTypes::DRAW] = render_device.create_buffer({
             .size = draws_uniform_buffer_size,
-            .usages = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "draws uniform buffer",

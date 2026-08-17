@@ -160,7 +160,8 @@ struct graphics_pipeline_desc {
     size_t              vs_code_size;
     uint8_t*            fs_code;
     size_t              fs_code_size;
-    std::span<VkFormat> color_attachments_format;
+    VkFormat*           color_attachments_format;
+    size_t              color_attachments_format_count;
     VkFormat            depth_attachment_format;
     VkFormat            stencil_attachment_format;
     const char*         name;
@@ -202,17 +203,17 @@ struct surface_desc {
 };
 
 struct device_surface {
-    VkSurfaceKHR                vk_surface;
-    VkSwapchainKHR              vk_swapchain;
-    VkSurfaceFormatKHR          surface_format;
+    VkSurfaceKHR            vk_surface;
+    VkSwapchainKHR          vk_swapchain;
+    VkSurfaceFormatKHR      surface_format;
 
-    handle<device_texture>      swapchain_images[surface_desc::max_image_count];
-    uint32_t                    image_index;
-    uint32_t                    image_count;
-    uint32_t                    frame_index = 0U;
+    handle<device_texture>  swapchain_images[surface_desc::max_image_count];
+    uint32_t                image_index;
+    uint32_t                image_count;
+    uint32_t                frame_index = 0U;
 
-    handle<device_semaphore>    acquire_semaphores[surface_desc::max_image_count];
-    handle<device_semaphore>    submit_semaphores[surface_desc::max_image_count];
+    device_semaphore        acquire_semaphores[surface_desc::max_image_count];
+    device_semaphore        submit_semaphores[surface_desc::max_image_count];
 
     uint32_t                acquire_image_index();
 };

@@ -1,7 +1,41 @@
 #include "vk-device.hpp"
+#include "vk-device-types.hpp"
+#include "vulkan-loader.hpp"
 
-#define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
+
+device_semaphore create_semaphore(VkDevice device, const semaphore_desc& desc, const char* name) {
+    device_semaphore semaphore {
+        .value = desc.initial_value,
+    };
+    VkSemaphoreTypeCreateInfo semaphore_type_create_info{
+        .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+        .pNext         = nullptr,
+        .semaphoreType = desc.type,
+        .initialValue  = desc.initial_value,
+    };
+
+    VkSemaphoreCreateInfo create_info{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = &semaphore_type_create_info,
+        .flags = 0U,
+    };
+
+    VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
+
+    if (name) {
+        VkDebugUtilsObjectNameInfoEXT object_name{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext = nullptr,
+            .objectType = VK_OBJECT_TYPE_SEMAPHORE,
+            .objectHandle = reinterpret_cast<uint64_t>(semaphore.vk_semaphore),
+            .pObjectName = name,
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &object_name);
+    }
+    return semaphore;
+}
+
 
 static VkShaderModule create_shader_module(VkDevice device, uint8_t* code, size_t code_size) {
     VkShaderModule shader_module;
@@ -37,26 +71,38 @@ void vkdevice::init() {
 
     create_instance();
 
+    // create debug layer callback
 #ifdef _DEBUG
-    create_debug_layer_callback();
+    {
+    VkDebugUtilsMessengerCreateInfoEXT create_info{
+        .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .pNext           = nullptr,
+        .flags           = 0U,
+        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+        .pfnUserCallback = debug_callback,
+        .pUserData       = nullptr,
+    };
+
+    VKCHECK(vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
+    }
 #endif // _DEBUG
 
     create_device();
 
-    create_memory_allocator();
-
-    bindless.init();
-
-    auto semaphore = create_semaphore({
-        .type = VK_SEMAPHORE_TYPE_TIMELINE,
-    }, "timeline_semaphore");
-    timeline_semaphore = get_semaphore(semaphore);
+    fence = create_semaphore(
+        device,
+        {
+            .type = VK_SEMAPHORE_TYPE_TIMELINE,
+        }, "timeline_semaphore"
+    );
 }
 
 void vkdevice::deinit() {
     vkDeviceWaitIdle(device);
-
-    bindless.deinit();
 
     vmaDestroyAllocator(gpu_allocator);
 
@@ -64,7 +110,7 @@ void vkdevice::deinit() {
         vkDestroyCommandPool(device, queue.command_pool, nullptr);
     }
 
-    vkDestroySemaphore(device, timeline_semaphore.vk_semaphore, nullptr);
+    vkDestroySemaphore(device, fence.vk_semaphore, nullptr);
 
     vkDestroyDevice(device, nullptr);
 
@@ -81,19 +127,20 @@ void vkdevice::wait() {
 };
 
 void vkdevice::wait_for_fence(u64 value) {
-    VkSemaphoreWaitInfoKHR semaphore_wait_info {
-        .type = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO_KHR,
+    VkSemaphoreWaitInfo semaphore_wait_info {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .pNext = nullptr,
+        .flags = 0U,
+        .semaphoreCount = 1U,
+        .pSemaphores    = &fence.vk_semaphore,
+        .pValues        = &value,
     };
-    semaphore_wait_info.pSemaphores    = &semaphore;
-    semaphore_wait_info.semaphoreCount = 1;
-    semaphore_wait_info.pValues        = &value;
-    VK_CHECK(vkWaitSemaphoresKHR(device->get_handle(), &semaphore_wait_info, UINT64_MAX));
+
+    VKCHECK(vkWaitSemaphores(device, &semaphore_wait_info, UINT64_MAX));
 }
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
     device_texture device_texture;
-    // TODO: This must always be present since we want to display images in ImGui
-    const_cast<texture_desc&>(desc).usages |= VK_IMAGE_USAGE_SAMPLED_BIT;
     device_texture.init(desc);
 
     return textures.add(device_texture);
@@ -113,12 +160,16 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
         .name   = desc.name,
     };
 
+    VkBufferUsageFlags2CreateInfo usage_flags2 {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO_KHR,
+        .usage = desc.usages,
+    };
     VkBufferCreateInfo create_info{
         .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext                 = nullptr,
+        .pNext                 = &usage_flags2,
         .flags                 = 0U,
         .size                  = desc.size,
-        .usage                 = desc.usages,
+        .usage                 = 0U,
         .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices   = nullptr,
@@ -144,7 +195,7 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
     VKCHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.vk_buffer, &device_buffer.alloc, &alloc_info));
     vmaSetAllocationName(render_device.get_allocator(), device_buffer.alloc, desc.name);
 
-    if ((desc.usages & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0U) {
+    if ((desc.usages & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0U) {
         VkBufferDeviceAddressInfo address_info {
             .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
             .pNext = nullptr,
@@ -263,8 +314,8 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
         .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .pNext                   = nullptr,
         .viewMask                = 0U,
-        .colorAttachmentCount    = static_cast<uint32_t>(desc.color_attachments_format.size()),
-        .pColorAttachmentFormats = desc.color_attachments_format.data(),
+        .colorAttachmentCount    = static_cast<uint32_t>(desc.color_attachments_format_count),
+        .pColorAttachmentFormats = desc.color_attachments_format,
         .depthAttachmentFormat   = VK_FORMAT_UNDEFINED,
         .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
     };
@@ -284,7 +335,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
         .pDepthStencilState  = nullptr,
         .pColorBlendState    = &color_blend_state_create_info,
         .pDynamicState       = &dynamic_state_create_info,
-        .layout              = bindless.global_layout,
+        // .layout              = bindless.global_layout,
         .renderPass          = nullptr,
         .subpass             = 0U,
         .basePipelineHandle  = nullptr,
@@ -331,7 +382,7 @@ handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline
         .pNext              = nullptr,
         .flags              = 0U,
         .stage              = stage_create_info,
-        .layout             = bindless.global_layout,
+        // .layout             = bindless.global_layout,
         .basePipelineHandle = nullptr,
         .basePipelineIndex  = 0,
     };
@@ -376,171 +427,58 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
     assert(surface_desc::max_image_count >= device_surface.image_count);
 
     for (uint32_t index = 0u; index < device_surface.image_count; index++) {
-        device_surface.acquire_semaphores[index] = create_semaphore({
-            .type = VK_SEMAPHORE_TYPE_BINARY,
-        }, "acquire_semaphore");
-        device_surface.submit_semaphores[index]  = create_semaphore({
-            .type = VK_SEMAPHORE_TYPE_BINARY,
-        }, "submit_semaphore");
+        device_surface.acquire_semaphores[index] = create_semaphore(
+            device,
+            {
+                .type = VK_SEMAPHORE_TYPE_BINARY,
+            }, "acquire_semaphore"
+        );
+        device_surface.submit_semaphores[index]  = create_semaphore(
+            device,
+            {
+                .type = VK_SEMAPHORE_TYPE_BINARY,
+            }, "submit_semaphore"
+        );
     }
 
     return surfaces.add(device_surface);
 }
 
-handle<device_semaphore> vkdevice::create_semaphore(const semaphore_desc& desc, const char* name) {
-    device_semaphore semaphore {
-        .value = desc.initial_value,
-    };
-    VkSemaphoreTypeCreateInfo semaphore_type_create_info{
-        .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-        .pNext         = nullptr,
-        .semaphoreType = desc.type,
-        .initialValue  = desc.initial_value,
-    };
-
-    VkSemaphoreCreateInfo create_info{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = &semaphore_type_create_info,
-        .flags = 0U,
-    };
-
-    VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
-
-    if (name) {
-        VkDebugUtilsObjectNameInfoEXT object_name{
-            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-            .pNext = nullptr,
-            .objectType = VK_OBJECT_TYPE_SEMAPHORE,
-            .objectHandle = reinterpret_cast<uint64_t>(semaphore.vk_semaphore),
-            .pObjectName = name,
-        };
-        vkSetDebugUtilsObjectNameEXT(device, &object_name);
-    }
-    return semaphores.add(semaphore);
-}
-
 void vkdevice::destroy_texture(handle<device_texture> handle) {
-    auto& texture = get_texture(handle);
+    device_texture* texture = get_texture(handle);
 
-    texture.release();
+    texture->release();
     textures.remove(handle);
 }
 
 void vkdevice::destroy_buffer(handle<device_buffer> handle) {
-    const auto& buffer = get_buffer(handle);
+    device_buffer* buffer = get_buffer(handle);
 
-    vmaDestroyBuffer(gpu_allocator, buffer.vk_buffer, buffer.alloc);
+    vmaDestroyBuffer(gpu_allocator, buffer->vk_buffer, buffer->alloc);
     buffers.remove(handle);
 }
 
 void vkdevice::destroy_pipeline(handle<device_pipeline> handle) {
-    const auto& pipeline = vkdevice::get_pipeline(handle);
+    const device_pipeline* pipeline = get_pipeline(handle);
 
-    vkDestroyPipeline(device, pipeline.vk_pipeline, nullptr);
+    vkDestroyPipeline(device, pipeline->vk_pipeline, nullptr);
     pipelines.remove(handle);
 }
 
-void vkdevice::destroy_semaphore(handle<device_semaphore> handle) {
-    auto& semaphore = vkdevice::get_semaphore(handle);
-
-    vkDestroySemaphore(device, semaphore.vk_semaphore, nullptr);
-    semaphores.remove(handle);
-}
-
 void vkdevice::destroy_surface(handle<device_surface> handle) {
-    auto& surface = vkdevice::get_surface(handle);
+    device_surface* surface = get_surface(handle);
 
-    for (auto texture_index{0U}; texture_index < surface.image_count; texture_index++) {
-        auto texture_handle = surface.swapchain_images[texture_index];
-        destroy_texture(texture_handle);
+    for (u32 index = 0U; index < surface->image_count; index++) {
+        destroy_texture(surface->swapchain_images[index]);
+
+        vkDestroySemaphore(device, surface->acquire_semaphores[index].vk_semaphore, nullptr);
+        vkDestroySemaphore(device, surface->submit_semaphores[index].vk_semaphore, nullptr);
     }
 
-    for (uint32_t index = 0u; index < surface.image_count; index++) {
-        destroy_semaphore(surface.acquire_semaphores[index]);
-        destroy_semaphore(surface.submit_semaphores[index]);
-    }
+    vkDestroySwapchainKHR(device, surface->vk_swapchain, nullptr);
 
-    vkDestroySwapchainKHR(device, surface.vk_swapchain, nullptr);
-
-    vkDestroySurfaceKHR(instance, surface.vk_surface, nullptr);
+    vkDestroySurfaceKHR(instance, surface->vk_surface, nullptr);
 }
-
-// uint64_t vkdevice::submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle) {
-//     assert((max_submitable_command_buffers - buffers.size()) >= 0);
-//     const auto queue_type = buffers[0].queue_type;
-// 
-//     VkCommandBufferSubmitInfo command_buffers_info[buffers.size()];
-// 
-//     for (auto index{ 0U }; index < buffers.size(); index++) {
-//         assert(queue_type == buffers[index].queue_type);
-// 
-//         auto& command_buffer_info         = command_buffers_info[index];
-//         command_buffer_info.sType         = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-//         command_buffer_info.pNext         = nullptr;
-//         command_buffer_info.commandBuffer = buffers[index].vk_command_buffer;
-//         command_buffer_info.deviceMask    = 0U;
-//     }
-// 
-//     VkSemaphoreSubmitInfo wait_semaphore_info{
-//         .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-//         .pNext       = nullptr,
-//         .stageMask   = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-//         .deviceIndex = 0U,
-//     };
-// 
-//     VkSemaphoreSubmitInfo signal_semaphore_infos[2U];
-// 
-//     VkSubmitInfo2 submit_info{
-//         .sType                    = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-//         .pNext                    = nullptr,
-//         .flags                    = 0U,
-//         .waitSemaphoreInfoCount   = 0U,
-//         .commandBufferInfoCount   = static_cast<uint32_t>(buffers.size()),
-//         .pCommandBufferInfos      = command_buffers_info,
-//         .pSignalSemaphoreInfos    = signal_semaphore_infos,
-//     };
-// 
-//     if (wait_handle.is_valid()) {
-//         const auto& wait = vkdevice::get_render_device().get_semaphore(wait_handle);
-//         wait_semaphore_info.semaphore      = wait.vk_semaphore;
-//         wait_semaphore_info.value          = wait.value;
-//         submit_info.waitSemaphoreInfoCount++;
-//         submit_info.pWaitSemaphoreInfos    = &wait_semaphore_info;
-//     }
-// 
-//     if (signal_handle.is_valid()) {
-//         auto& signal = vkdevice::get_render_device().get_semaphore(signal_handle);
-//         signal_semaphore_infos[0U] = {
-//             .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-//             .pNext          = nullptr,
-//             .semaphore      = signal.vk_semaphore,
-//             .value          = signal.value,
-//             .stageMask      = VK_PIPELINE_STAGE_2_NONE,
-//             .deviceIndex    = 0U,
-//         };
-//         submit_info.signalSemaphoreInfoCount++;
-//     }
-// 
-//     uint64_t ret = -1;
-// 
-//     if (fence_handle.is_valid()) {
-//         auto& fence = vkdevice::get_render_device().get_semaphore(fence_handle);
-//         auto fence_index = submit_info.signalSemaphoreInfoCount;
-//         signal_semaphore_infos[fence_index] = {
-//             .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-//             .pNext          = nullptr,
-//             .semaphore      = fence.vk_semaphore,
-//             .value          = ++fence.value,
-//             .stageMask      = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-//             .deviceIndex    = 0U,
-//         };
-//         ret = fence.value;
-//     }
-// 
-//     VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
-// 
-//     return ret;
-// }
 
 uint64_t vkdevice::submit(command_buffer* cmd_buffers, uint32_t count) {
     assert((max_submitable_command_buffers - count) >= 0);
@@ -569,7 +507,6 @@ uint64_t vkdevice::submit(command_buffer* cmd_buffers, uint32_t count) {
         .pCommandBufferInfos      = command_buffers_info,
     };
 
-    auto& fence = timeline_semaphore;
     VkSemaphoreSubmitInfo signal_semaphore_infos[] = {
         {
             .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -605,8 +542,8 @@ uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, 
         command_buffer_info.deviceMask    = 0U;
     }
 
-    const device_surface& surface = get_surface(surface_handle);
-    device_semaphore& wait = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
+    const device_surface* surface = get_surface(surface_handle);
+    const device_semaphore& wait = surface->acquire_semaphores[surface->frame_index];
     VkSemaphoreSubmitInfo wait_semaphore_info = {
             .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .pNext       = nullptr,
@@ -626,8 +563,7 @@ uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, 
         .pCommandBufferInfos      = command_buffers_info,
     };
 
-    auto& fence = timeline_semaphore;
-    auto& signal = get_semaphore(surface.submit_semaphores[surface.frame_index]);
+    const device_semaphore& signal = surface->submit_semaphores[surface->frame_index];
     VkSemaphoreSubmitInfo signal_semaphore_infos[] = {
         {
             .sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -655,25 +591,25 @@ uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, 
 }
 
 void vkdevice::present(handle<device_surface> surface_handle) {
-    auto& surface = render_device.get_surface(surface_handle);
+    device_surface* surface = render_device.get_surface(surface_handle);
     VkResult result;
     VkPresentInfoKHR present_info{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext = nullptr,
         .swapchainCount = 1U,
-        .pSwapchains = &surface.vk_swapchain,
-        .pImageIndices = &surface.image_index,
+        .pSwapchains = &surface->vk_swapchain,
+        .pImageIndices = &surface->image_index,
         .pResults = &result,
     };
 
-    const auto& semaphore = get_semaphore(surface.submit_semaphores[surface.frame_index]);
+    const device_semaphore& semaphore = surface->submit_semaphores[surface->frame_index];
     present_info.waitSemaphoreCount = 1U;
     present_info.pWaitSemaphores = &semaphore.vk_semaphore;
 
     VKCHECK(vkQueuePresentKHR(queues[static_cast<uint32_t>(QueueType::GRAPHICS)].vk_queue, &present_info));
 
     VKCHECK(result);
-    surface.frame_index = (surface.frame_index + 1) % surface.image_count;
+    surface->frame_index = (surface->frame_index + 1) % surface->image_count;
 }
 
 // private
@@ -738,14 +674,15 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
     }
 
     {
-        auto supported = false;
-        auto supported_formats_count = 0U;
+        bool supported = false;
+        u32 supported_formats_count = 0U;
         VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, nullptr));
 
-        std::vector<VkSurfaceFormatKHR> supported_formats{ supported_formats_count };
-        VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, supported_formats.data()));
+        VkSurfaceFormatKHR* supported_formats = static_cast<VkSurfaceFormatKHR*>(_malloca(supported_formats_count * sizeof(VkSurfaceFormatKHR)));
+        VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, supported_formats));
 
-        for (auto& surface_format : supported_formats) {
+        for (u32 format_index = 0U; format_index < supported_formats_count; format_index++) {
+            VkSurfaceFormatKHR surface_format = supported_formats[format_index];
             if (surface_format.format == desc.surface_format.format &&
                 surface_format.colorSpace == desc.surface_format.colorSpace) {
                 supported = true;
@@ -757,14 +694,15 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
     }
 
     {
-        auto supported = false;
-        auto supported_present_modes_count = 0U;
+        bool supported = false;
+        u32 supported_present_modes_count = 0U;
         VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, nullptr));
 
-        std::vector<VkPresentModeKHR> supported_present_modes{ supported_present_modes_count };
-        VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, supported_present_modes.data()));
+        VkPresentModeKHR* supported_present_modes = static_cast<VkPresentModeKHR*>(_malloca(supported_present_modes_count * sizeof(VkPresentModeKHR)));
+        VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, supported_present_modes));
 
-        for (auto& present_mode : supported_present_modes) {
+        for (u32 present_mode_index = 0U; present_mode_index < supported_present_modes_count; present_mode_index++) {
+            VkPresentModeKHR present_mode = supported_present_modes[present_mode_index];
             if (present_mode == desc.present_mode) {
                 supported = true;
                 break;
@@ -805,10 +743,10 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
     vkGetSwapchainImagesKHR(device, surface.vk_swapchain, &surface.image_count, nullptr);
     assert(surface.image_count <= surface_desc::max_image_count);
 
-    std::vector<VkImage> images {surface.image_count};
-    vkGetSwapchainImagesKHR(device, surface.vk_swapchain, &surface.image_count, images.data());
+    VkImage* images = static_cast<VkImage*>(_malloca(surface.image_count * sizeof(VkImage)));
+    vkGetSwapchainImagesKHR(device, surface.vk_swapchain, &surface.image_count, images);
 
-    for (auto index {0U}; index < surface.image_count; index++) {
+    for (u32 index = 0U; index < surface.image_count; index++) {
         surface.swapchain_images[index] = create_texture({
             .width = extent.width,
             .height = extent.height,
@@ -835,14 +773,14 @@ void vkdevice::create_instance() {
         .apiVersion         = VK_API_VERSION_1_3,
     };
 
-    constexpr const char* instance_layers[]{
+    const char* instance_layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
 
-    constexpr const char* instance_extensions[]{
+    const char* instance_extensions[]{
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-        "VK_KHR_surface",
-        "VK_KHR_win32_surface"
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_WIN32_SURFACE_EXTENSION_NAME
     };
 
     VkInstanceCreateInfo create_info{
@@ -862,7 +800,34 @@ void vkdevice::create_instance() {
 }
 
 void vkdevice::create_device() {
-    pick_physical_device();
+    // pick physical device
+    // TODO: change put this in another scope
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptor_heap_props {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,
+    };
+    {
+        u32 physical_devices_count = 0U;
+        vkEnumeratePhysicalDevices(instance, &physical_devices_count, nullptr);
+        assert(physical_devices_count > 0);
+
+        VkPhysicalDevice* physical_devices = static_cast<VkPhysicalDevice*>(_malloca(physical_devices_count * sizeof(VkPhysicalDevice)));
+        vkEnumeratePhysicalDevices(instance, &physical_devices_count, physical_devices);
+
+        physical_device_props = VkPhysicalDeviceProperties2 {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+            .pNext = &descriptor_heap_props,
+        };
+
+        for (u32 physical_device_index = 0U; physical_device_index < physical_devices_count; physical_device_index++) {
+            VkPhysicalDevice physical_dev = physical_devices[physical_device_index];
+            if (device_support_features(physical_dev)) {
+                physical_device = physical_dev;
+                break;
+            }
+        }
+
+        assert(true);
+    }
 
     float                   queue_priority = 1.f;
     VkDeviceQueueCreateInfo queue_create_infos[static_cast<uint32_t>(QueueType::MAX)];
@@ -875,17 +840,17 @@ void vkdevice::create_device() {
         queue_create_info.pQueuePriorities = &queue_priority;
     }
 
-    auto queue_properties_count = 0U;
+    u32 queue_properties_count = 0U;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, nullptr);
 
-    std::vector<VkQueueFamilyProperties> queue_properties{ queue_properties_count };
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, queue_properties.data());
+    VkQueueFamilyProperties* queue_properties = static_cast<VkQueueFamilyProperties*>(_malloca(queue_properties_count * sizeof(VkQueueFamilyProperties)));
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_properties_count, queue_properties);
 
-    for (auto index{ 0U }; index < static_cast<uint32_t>(QueueType::MAX); index++) {
-        auto& queue = queues[index];
+    for (u32 index = 0U; index < static_cast<uint32_t>(QueueType::MAX); index++) {
+        queue& queue = queues[index];
 
-        for (auto properties_index{ 0U }; properties_index < queue_properties_count; properties_index++) {
-            auto& queue_property = queue_properties[properties_index];
+        for (u32 properties_index = 0U; properties_index < queue_properties_count; properties_index++) {
+            VkQueueFamilyProperties queue_property = queue_properties[properties_index];
 
             if ((queue_property.queueFlags & queue.usages) == queue.usages) {
                 queue_create_infos[index].queueFamilyIndex = queue.index = properties_index;
@@ -894,9 +859,10 @@ void vkdevice::create_device() {
         }
     }
 
-    constexpr const char* device_extensions[] = {
+    const char* device_extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        // VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME
+        VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME,
+        VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
     };
 
     VkPhysicalDeviceVulkan12Features physical_device_12_features{
@@ -939,78 +905,72 @@ void vkdevice::create_device() {
         vkGetDeviceQueue(device, queue.index, 0, &queue.vk_queue);
     }
 
-    create_command_pools();
-}
+    // create command pool
+    {
+        VkCommandPoolCreateInfo command_pool_create_info{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        };
 
-void vkdevice::create_memory_allocator() {
-    VmaVulkanFunctions functions = {
-        .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
-        .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
-    };
-    VmaAllocatorCreateInfo create_info{
-        .flags            = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-        .physicalDevice   = physical_device,
-        .device           = device,
-        .pVulkanFunctions = &functions,
-        .instance         = instance,
-        .vulkanApiVersion = VK_API_VERSION_1_2,
-    };
+        for (queue& queue : queues) {
+            command_pool_create_info.queueFamilyIndex = queue.index;
 
-    VKCHECK(vmaCreateAllocator(&create_info, &gpu_allocator));
-}
-
-void vkdevice::create_command_pools() {
-    VkCommandPoolCreateInfo create_info{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    };
-
-    for (auto& queue : queues) {
-        create_info.queueFamilyIndex = queue.index;
-
-        VKCHECK(vkCreateCommandPool(device, &create_info, nullptr, &queue.command_pool));
-    }
-}
-
-void vkdevice::pick_physical_device() {
-    auto physical_devices_count = 0U;
-    vkEnumeratePhysicalDevices(instance, &physical_devices_count, nullptr);
-
-    assert(physical_devices_count > 0);
-
-    std::vector<VkPhysicalDevice> physical_devices{ physical_devices_count };
-    vkEnumeratePhysicalDevices(instance, &physical_devices_count, physical_devices.data());
-
-    physical_device_props = VkPhysicalDeviceProperties2 {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-        .pNext = nullptr,
-    };
-
-    for (auto& physical_dev : physical_devices) {
-        if (device_support_features(physical_dev)) {
-            physical_device = physical_dev;
-
-            return;
+            VKCHECK(vkCreateCommandPool(device, &command_pool_create_info, nullptr, &queue.command_pool));
         }
     }
 
-    assert(true);
+    // create memory allocator
+    {
+        VmaVulkanFunctions functions = {
+            .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+            .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+        };
+        VmaAllocatorCreateInfo allocator_create_info{
+            .flags            = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+            .physicalDevice   = physical_device,
+            .device           = device,
+            .pVulkanFunctions = &functions,
+            .instance         = instance,
+            .vulkanApiVersion = VK_API_VERSION_1_2,
+        };
+
+        VKCHECK(vmaCreateAllocator(&allocator_create_info, &gpu_allocator));
+    }
+
+    create_heaps(descriptor_heap_props);
 }
+
+void vkdevice::create_heaps(VkPhysicalDeviceDescriptorHeapPropertiesEXT& descriptor_heap_props) {
+    // create image heap
+    {
+        sampler_heap = create_buffer({
+            .size = descriptor_heap_props.minResourceHeapReservedRange + max_images_count * descriptor_heap_props.imageDescriptorSize,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
+                      VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
+                      VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .name = "image descriptor_heap",
+        });
+    }
+
+    // create sampler heap
+    {
+        sampler_heap = create_buffer({
+            .size = descriptor_heap_props.minSamplerHeapReservedRange + max_samplers_count * descriptor_heap_props.samplerDescriptorSize,
+            .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
+                      VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
+                      VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+            .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .name = "sampler descriptor_heap",
+        });
+    }
+}
+
 
 bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
     // limits
-    {
-        vkGetPhysicalDeviceProperties2(physical_dev, &physical_device_props);
-
-        VkPhysicalDeviceLimits* limits = &physical_device_props.properties.limits;
-        if (limits->maxPerStageDescriptorSampledImages < 0x10000 ||
-            limits->maxPerStageDescriptorStorageImages < 0x10000 ||
-            limits->maxDescriptorSetSampledImages      < 0x10000 ||
-            limits->maxDescriptorSetStorageImages      < 0x10000) {
-            return false;
-        }
-    }
+    vkGetPhysicalDeviceProperties2(physical_dev, &physical_device_props);
 
     // Vulkan 1.2 physical device features support
     {
@@ -1025,7 +985,6 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
 
         vkGetPhysicalDeviceFeatures2(physical_dev, &physical_device_features);
 
-        // clang-format off
         if (vulkan_12_features.bufferDeviceAddress                          == VK_FALSE ||
             vulkan_12_features.runtimeDescriptorArray                       == VK_FALSE ||
             vulkan_12_features.shaderStorageImageArrayNonUniformIndexing    == VK_FALSE ||
@@ -1035,7 +994,6 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
             vulkan_12_features.imagelessFramebuffer                         == VK_FALSE) {
             return false;
         }
-        // clang-format on
     }
 
     // Vulkan 1.3 physical device features support
@@ -1061,25 +1019,6 @@ bool vkdevice::device_support_features(VkPhysicalDevice physical_dev) {
     return true;
 }
 
-void vkdevice::create_debug_layer_callback() {
-#ifdef _DEBUG
-    VkDebugUtilsMessengerCreateInfoEXT create_info{
-        .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        .pNext           = nullptr,
-        .flags           = 0U,
-        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
-        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-        .pfnUserCallback = debug_callback,
-        .pUserData       = nullptr,
-    };
-
-    VKCHECK(vkCreateDebugUtilsMessengerEXT(instance, &create_info, nullptr, &debug_messenger));
-#endif // _DEBUG
-}
-
 
 idlist<> device_texture::sampled_indices = {};
 idlist<> device_texture::storage_indices = {};
@@ -1087,7 +1026,6 @@ idlist<> device_sampler::sampler_indices = {};
 
 void device_texture::init(const texture_desc& desc) {
     auto& render_device = vkdevice::get();
-    const auto& bindless = render_device.get_bindingmodel();
     auto* device = render_device.get_device();
 
     vk_image = desc.vk_image;
@@ -1150,59 +1088,91 @@ void device_texture::init(const texture_desc& desc) {
         vkSetDebugUtilsObjectNameEXT(device, &object_name);
     }
 
-    create_views();
-
-    // TODO: Handle mips views
-    VkDescriptorImageInfo images_info[]{
-        {
-            nullptr,
-            whole_view,
-            VK_IMAGE_LAYOUT_GENERAL,
+    VkImageViewCreateInfo image_view_create_info{
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext      = nullptr,
+        .flags      = 0U,
+        .image      = vk_image,
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = format,
+        .components = {
+            .r = VK_COMPONENT_SWIZZLE_R,
+            .g = VK_COMPONENT_SWIZZLE_G,
+            .b = VK_COMPONENT_SWIZZLE_B,
+            .a = VK_COMPONENT_SWIZZLE_A,
+        },
+        .subresourceRange = {
+            .aspectMask     = aspects,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
         },
     };
+    // create views
+    {
+        for (u32 mip_index = 0U; mip_index < mips; mip_index++) {
+            image_view_create_info.subresourceRange.baseMipLevel = mip_index;
+            VKCHECK(vkCreateImageView(device, &image_view_create_info, nullptr, &mips_views[mip_index]));
+        }
 
-    std::vector<VkWriteDescriptorSet> write_descriptor_sets;
+        image_view_create_info.subresourceRange.baseMipLevel = 0;
+        image_view_create_info.subresourceRange.levelCount   = mips;
+        VKCHECK(vkCreateImageView(device, &image_view_create_info, nullptr, &whole_view));
+    }
+
+    // TODO: Handle mips views
+    VkImageDescriptorInfoEXT image_info = {
+        .sType  = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+        .pNext  = nullptr,
+        .pView  = &image_view_create_info,
+        .layout = VK_IMAGE_LAYOUT_GENERAL,
+    };
+
+    u32 descriptors_count = 0U;
+    VkResourceDescriptorInfoEXT resource_descriptor_infos[2U];
+    VkHostAddressRangeEXT resources_address[2U];
     if ((desc.usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0) {
-        storage_index = storage_indices.add();
+        resource_descriptor_infos[descriptors_count] = VkResourceDescriptorInfoEXT{
+            .sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+            .pNext = nullptr,
+            .type  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .data  = {
+                .pImage = &image_info,
+            },
+        };
 
-        write_descriptor_sets.push_back({
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            // .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
-            .dstSet           = bindless.global_set,
-            .dstBinding       = 2U,
-            .dstArrayElement  = storage_index.id,
-            .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
-            .descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo       = images_info,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        });
+        // resource_address[descriptors_count] = {
+        //     .address = storage_indices.add(),
+        //     .size    = ,
+        // }
+
+        descriptors_count++;
     }
     if ((desc.usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0) {
-        sampled_index = sampled_indices.add();
+        resource_descriptor_infos[descriptors_count] = VkResourceDescriptorInfoEXT{
+            .sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+            .pNext = nullptr,
+            .type  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .data  = {
+                .pImage = &image_info,
+            },
+        };
 
-        write_descriptor_sets.push_back({
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            // .dstSet           = bindless.sets[BindlessSetType::GLOBAL],
-            .dstSet           = bindless.global_set,
-            .dstBinding       = 1U,
-            .dstArrayElement  = sampled_index.id,
-            .descriptorCount  = sizeof(images_info) / sizeof(VkDescriptorImageInfo),
-            .descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo       = images_info,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        });
+        // resource_address[descriptors_count] = {
+        //     .address = sampled_indices.add(),
+        //     .size    = ,
+        // }
+
+        descriptors_count++;
     }
 
-    vkUpdateDescriptorSets(device, static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0U, nullptr);
+    VKCHECK(vkWriteResourceDescriptorsEXT(device, static_cast<uint32_t>(descriptors_count), resource_descriptor_infos, resources_address));
 }
 
 void device_texture::release() {
-    auto& render_device = vkdevice::get();
-    auto* device = render_device.get_device();
+    vkdevice& render_device = vkdevice::get();
+    VkDevice device = render_device.get_device();
     auto* gpu_allocator = render_device.get_allocator();
 
     if (alloc != nullptr) {
@@ -1226,44 +1196,11 @@ void device_texture::release() {
 }
 
 void device_texture::create_views() {
-    auto* device = vkdevice::get().get_device();
-
-    VkImageViewCreateInfo create_info{
-        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext      = nullptr,
-        .flags      = 0U,
-        .image      = vk_image,
-        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = format,
-        .components = {
-            .r = VK_COMPONENT_SWIZZLE_R,
-            .g = VK_COMPONENT_SWIZZLE_G,
-            .b = VK_COMPONENT_SWIZZLE_B,
-            .a = VK_COMPONENT_SWIZZLE_A,
-        },
-        .subresourceRange = {
-            .aspectMask     = aspects,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        },
-    };
-
-    for (auto mip_index{ 0U }; mip_index < mips; mip_index++) {
-        create_info.subresourceRange.baseMipLevel = mip_index;
-        VKCHECK(vkCreateImageView(device, &create_info, nullptr, &mips_views[mip_index]));
-    }
-
-    create_info.subresourceRange.baseMipLevel = 0;
-    create_info.subresourceRange.levelCount   = mips;
-    VKCHECK(vkCreateImageView(device, &create_info, nullptr, &whole_view));
 }
 
 
 void device_sampler::init(const sampler_desc& desc) {
     auto& render_device = vkdevice::get();
-    // const auto& bindless = render_device.get_bindingmodel();
     auto* device = render_device.get_device();
 
     VkSamplerCreateInfo sampler_create_info{
@@ -1303,23 +1240,27 @@ void device_sampler::init(const sampler_desc& desc) {
     //     .pBufferInfo      = nullptr,
     //     .pTexelBufferView = nullptr,
     // });
+
+    // TODO: Write samplers to heap
+    // TODO: Create previously immutable samplers
+    VKCHECK(vkWriteSamplerDescriptorsEXT());
 }
 
 
 uint32_t vkdevice::acquire_image_index(handle<device_surface> surface_handle) {
-    auto& surface = get_surface(surface_handle);
-    const auto& signal = get_semaphore(surface.acquire_semaphores[surface.frame_index]);
+    device_surface* surface = get_surface(surface_handle);
+    const device_semaphore& signal = surface->acquire_semaphores[surface->frame_index];
 
     VkSemaphoreWaitInfo wait_info {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .pNext = nullptr,
         .flags = 0U,
         .semaphoreCount = 1U,
-        .pSemaphores = &timeline_semaphore.vk_semaphore,
-        .pValues = &timeline_semaphore.value,
+        .pSemaphores = &fence.vk_semaphore,
+        .pValues = &fence.value,
     };
     vkWaitSemaphores(device, &wait_info, UINT64_MAX);
-    VKCHECK(vkAcquireNextImageKHR(device, surface.vk_swapchain, UINT64_MAX, signal.vk_semaphore, nullptr, &surface.image_index));
+    VKCHECK(vkAcquireNextImageKHR(device, surface->vk_swapchain, UINT64_MAX, signal.vk_semaphore, nullptr, &surface->image_index));
 
-    return surface.image_index;
+    return surface->image_index;
 }

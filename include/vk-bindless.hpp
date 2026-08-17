@@ -20,7 +20,7 @@ enum SamplerType : uint32_t {
 struct device_buffer;
 
 struct bindless_model {
-    [[nodiscard]] device_buffer& get_uniform_buffer(enum UniformTypes type) const;
+    [[nodiscard]] device_buffer* get_uniform_buffer(enum UniformTypes type) const;
 
     void                    init();
 

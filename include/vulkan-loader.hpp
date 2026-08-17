@@ -5,6 +5,7 @@
 
 #if _WIN32
 #include <vulkan/vulkan_core.h>
+#define VULKAN_H_ 1 // Fake vulkan.h include
 typedef unsigned long DWORD;
 typedef const wchar_t* LPCWSTR;
 typedef void* HANDLE;
@@ -90,6 +91,7 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkCmdPipelineBarrier)           \
     X(vkCmdPipelineBarrier2)          \
     X(vkCmdPushConstants)             \
+    X(vkCmdPushDataEXT)               \
     X(vkCmdClearColorImage)           \
     X(vkCmdBeginRenderPass)           \
     X(vkCmdBeginRendering)            \
@@ -97,6 +99,8 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkCmdBindVertexBuffers)         \
     X(vkCmdBindIndexBuffer)           \
     X(vkCmdBindDescriptorSets)        \
+    X(vkCmdBindResourceHeapEXT)       \
+    X(vkCmdBindSamplerHeapEXT)        \
     X(vkCmdSetViewport)               \
     X(vkCmdSetScissor)                \
     X(vkCmdCopyBuffer)                \
@@ -125,6 +129,8 @@ typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES;
     X(vkCreateDescriptorPool)         \
     X(vkAllocateDescriptorSets)       \
     X(vkUpdateDescriptorSets)         \
+    X(vkWriteResourceDescriptorsEXT)  \
+    X(vkWriteSamplerDescriptorsEXT)   \
     X(vkGetBufferDeviceAddress)       \
     X(vkGetBufferMemoryRequirements)  \
     X(vkGetImageMemoryRequirements)   \

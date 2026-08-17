@@ -37,8 +37,6 @@ class vkdevice {
 
     handle<device_surface>   create_surface(const surface_desc& desc);
 
-    handle<device_semaphore> create_semaphore(const semaphore_desc& desc, const char* name);
-
     void                     destroy_texture(handle<device_texture> handle);
 
     void                     destroy_sampler(handle<device_sampler> handle);
@@ -47,8 +45,6 @@ class vkdevice {
 
     void                     destroy_pipeline(handle<device_pipeline> handle);
 
-    void                     destroy_semaphore(handle<device_semaphore> handle);
-
     void                     destroy_surface(handle<device_surface> handle);
 
     template<typename buffer_type>
@@ -56,48 +52,32 @@ class vkdevice {
         allocate_command_buffers(static_cast<command_buffer*>(buffers), count, queue_type, name);
     }
 
-    [[nodiscard]] inline device_texture& get_texture(handle<device_texture> handle) {
-        return textures[handle];
+    [[nodiscard]] inline device_texture* get_texture(handle<device_texture> handle) {
+        return &textures[handle];
     }
 
-    [[nodiscard]] inline device_sampler& get_sampler(handle<device_sampler> handle) {
-        return samplers[handle];
+    [[nodiscard]] inline device_sampler* get_sampler(handle<device_sampler> handle) {
+        return &samplers[handle];
     }
 
-    [[nodiscard]] inline device_buffer& get_buffer(handle<device_buffer> handle) {
-        return buffers[handle];
+    [[nodiscard]] inline device_buffer* get_buffer(handle<device_buffer> handle) {
+        return &buffers[handle];
     }
 
-    [[nodiscard]] inline const device_pipeline& get_pipeline(handle<device_pipeline> handle) const {
-        return pipelines[handle];
+    [[nodiscard]] inline const device_pipeline* get_pipeline(handle<device_pipeline> handle) const {
+        return &pipelines[handle];
     }
 
-    [[nodiscard]] inline device_surface& get_surface(handle<device_surface> handle) {
-        return surfaces[handle];
+    [[nodiscard]] inline device_surface* get_surface(handle<device_surface> handle) {
+        return &surfaces[handle];
     }
 
-    [[nodiscard]] inline device_semaphore& get_semaphore(handle<device_semaphore> handle) {
-        return semaphores[handle];
-    }
-
-    [[nodiscard]] inline const bindless_model& get_bindingmodel() const {
-        return bindless;
-    }
-
-    const freelist<device_texture>& get_textures() const {
-        return textures;
+    inline VmaAllocator get_allocator() const {
+        return gpu_allocator;
     }
 
     inline VkDevice get_device() const {
         return device;
-    }
-
-    inline VmaAllocator get_allocator() {
-        return gpu_allocator;
-    }
-
-    inline const VkPhysicalDeviceLimits& get_device_limits() const {
-        return physical_device_props.properties.limits;
     }
 
     // uint64_t submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle);
@@ -108,6 +88,8 @@ class vkdevice {
     void present(handle<device_surface> surface_handle);
 
     void wait();
+
+    void wait_for_fence(u64 value);
 
     private:
     vkdevice() = default;
@@ -122,15 +104,9 @@ class vkdevice {
 
     void                        create_device();
 
-    void                        create_memory_allocator();
-
-    void                        create_command_pools();
-
-    void                        pick_physical_device();
+    void                        create_heaps(VkPhysicalDeviceDescriptorHeapPropertiesEXT& descriptor_heap_props);
 
     bool                        device_support_features(VkPhysicalDevice physical_dev);
-
-    void                        create_debug_layer_callback();
 
     queue                       queues[static_cast<uint32_t>(QueueType::MAX)];
 
@@ -139,9 +115,15 @@ class vkdevice {
     VkPhysicalDeviceProperties2 physical_device_props;
     VkDevice                    device;
 
-    VmaAllocator                gpu_allocator;
+    handle<device_buffer>       image_heap; // TODO: Dont use handle for internally used resources
+    handle<device_buffer>       sampler_heap;
 
-    bindless_model              bindless;
+    static constexpr size_t     max_images_count = UINT16_MAX;
+    static constexpr size_t     max_samplers_count = 16U;
+
+    static size_t               
+
+    VmaAllocator                gpu_allocator;
 
     static constexpr size_t     max_allocable_command_buffers  = 16;
     static constexpr size_t     max_submitable_command_buffers = 16;
@@ -151,9 +133,8 @@ class vkdevice {
     freelist<device_buffer>     buffers;
     freelist<device_pipeline>   pipelines;
     freelist<device_surface>    surfaces;
-    freelist<device_semaphore>  semaphores;
 
-    device_semaphore            timeline_semaphore;
+    device_semaphore            fence;
 
     static vkdevice             render_device;
 
