@@ -124,6 +124,8 @@ void command_buffer::copy(handle<device_buffer> buffer_handle, ::handle<device_t
 }
 
 void graphics_command_buffer::dispatch(const dispatch_params& params, const void* data, size_t size) const {
+    assert(size <= descriptor_heap_props.maxPushDataSize);
+
     const device_pipeline* pipeline = vkdevice::get().get_pipeline(params.pipeline);
     vkCmdBindPipeline(vk_command_buffer, pipeline->bind_point, pipeline->vk_pipeline);
 
@@ -204,6 +206,8 @@ void graphics_command_buffer::begin_renderpass(const renderpass_params& params) 
 }
 
 void graphics_command_buffer::draw(const draw_params& params, const void* data, size_t size) const {
+    assert(size <= descriptor_heap_props.maxPushDataSize);
+
     const device_pipeline* pipeline = vkdevice::get().get_pipeline(params.pipeline);
     vkCmdBindPipeline(vk_command_buffer, pipeline->bind_point, pipeline->vk_pipeline);
 
@@ -222,6 +226,8 @@ void graphics_command_buffer::draw(const draw_params& params, const void* data, 
 }
 
 void graphics_command_buffer::draw_indexed(const draw_indexed_params& params, const void* data, size_t size) const {
+    assert(size <= descriptor_heap_props.maxPushDataSize);
+
     const device_pipeline* pipeline = vkdevice::get().get_pipeline(params.pipeline);
     vkCmdBindPipeline(vk_command_buffer, pipeline->bind_point, pipeline->vk_pipeline);
 

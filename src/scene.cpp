@@ -51,10 +51,10 @@
 // }
 
 
-metadata::metadata(const camera &cam, uint32_t width, uint32_t height)
+metadata::metadata(const camera &cam, u16 width, u16 height)
     : cam(cam), width(width), height(height) {}
 
-scene::scene(const camera& cam, uint32_t width, uint32_t height)
+scene::scene(const camera& cam, u16 width, u16 height)
     // :model("../models/sponza/Sponza.gltf"), meta(cam, width, height) {
     // :model("../models/BistroInterior/BistroInterior.gltf"), meta(cam, width, height) {
     // :model("../models/BistroExterior/BistroExterior.gltf"), meta(cam, width, height) {

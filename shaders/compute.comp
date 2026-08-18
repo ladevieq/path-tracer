@@ -98,15 +98,9 @@ layout(descriptor_heap) uniform sampler samplers[];
 layout(push_constant) uniform registers {
     camera cam;
 
-    uint max_bounce;
-    uint min_bounce;
-    uint width;
-    uint height;
-
+    uint max_min_feat_downscale;
+    uint width_height;
     uint sample_index;
-    uint enable_dof;
-    uint debug_bvh;
-    int downscale_factor;
 
     nodes_array bvh;
     indices_array indices_arr;
@@ -125,7 +119,7 @@ vec3 ray_color(ray r, uint seed) {
     vec3 radiance = vec3(0.0);
     vec3 throughput = vec3(1.0);
 
-    for (uint bounce = 0; bounce < regs.max_bounce; bounce++) {
+    for (uint bounce = 0; bounce < uint(regs.max_min_feat_downscale & 0xff); bounce++) {
         if (!hit_node(r, info))
             return throughput * vec3(1.0);
 
@@ -235,7 +229,7 @@ vec3 ray_color(ray r, uint seed) {
         // Russian Roulette
         // As the throughput gets smaller, the ray is more likely to get terminated early.
         // Survivors have their value boosted to make up for fewer samples being in the average.
-        if (bounce > regs.min_bounce) {
+        if (bounce > uint(regs.max_min_feat_downscale & 0xff00)) {
             float probability = min(0.95f, luminance(throughput));
             if (probability < rand(seed)) break;
             throughput /= probability;
@@ -246,13 +240,16 @@ vec3 ray_color(ray r, uint seed) {
 }
 
 ray generate_camera_ray(ivec2 coords, uint seed) {
-    vec2 scene_size = vec2(regs.width - 1, regs.height - 1);
+    uint width = uint(regs.width_height & 0xff);
+    uint height = uint(regs.width_height & 0xff00);
+    vec2 scene_size = vec2(width - 1, height - 1);
     vec2 uv = vec2(coords.x / scene_size.x, 1.0 - coords.y / scene_size.y);
     vec2 rand_disk = disk_vec(vec2(rand(seed), rand(seed)));
     vec2 jittered_uvs = uv + vec2(rand(seed), rand(seed)) / scene_size;
     vec2 lens_disk = vec2(0.0);
 
-    if (regs.enable_dof == 1) {
+    uint features = uint(regs.max_min_feat_downscale & 0xff0000);
+    if ((features & 1) == 1) {
         lens_disk = rand_disk * regs.cam.lens_radius;
     }
 
@@ -263,16 +260,22 @@ ray generate_camera_ray(ivec2 coords, uint seed) {
 }
 
 void main() {
-    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(regs.width, regs.height))))
-        return;
+    uint width = uint(regs.width_height & 0xff);
+    uint height = uint(regs.width_height & 0xff00);
 
-    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * regs.downscale_factor;
+    if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(width, height))))
+        return;
+    return;
+
+    int downscale_factor = int(regs.max_min_feat_downscale & 0xff000000);
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * downscale_factor;
 
     uint seed = uint(coords.x * uint(1973) + coords.y * uint(9277) + regs.sample_index * uint(26699)) | uint(1);
     ray r = generate_camera_ray(coords, seed);
 
     vec3 out_color = vec3(0.0);
-    if (regs.debug_bvh == 1) {
+    uint features = uint(regs.max_min_feat_downscale & 0xff0000);
+    if ((features & 2) == 2) {
         out_color = hit_aabbs(r) * vec3(0.001, 0.0, 0.0);
     } else {
         out_color = ray_color(r, seed);

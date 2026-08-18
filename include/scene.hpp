@@ -3,22 +3,27 @@
 
 class Buffer;
 
+enum FEATURES_BIT_INDEX: u8 {
+    DOF,
+    BVH_DEBUG_VIEW,
+};
+
 struct metadata {
     camera cam;
 
-    uint32_t max_bounce = 3;
-    uint32_t min_bounce = 1;
+    u8 max_bounce = 3;
+    u8 min_bounce = 1;
 
-    uint32_t width;
-    uint32_t height;
+    u8 features = 0b0; // 0: dof, 1: bvh debug view
+    u8 downscale_factor = 1;
 
-    uint32_t sample_index = 1;
+    u16 width;
+    u16 height;
 
-    uint32_t enable_dof = (uint32_t)false;
-    uint32_t debug_bvh  = (uint32_t)false;
-    int32_t downscale_factor = 1;
+    u32 sample_index = 1;
 
-    metadata(const camera &cam, uint32_t width, uint32_t height);
+
+    metadata(const camera &cam, u16 width, u16 height);
 };
 
 class scene {
@@ -26,7 +31,7 @@ class scene {
     gltf model;
 
 public:
-    scene(const camera& cam, uint32_t width, uint32_t height);
+    scene(const camera& cam, u16 width, u16 height);
     void deinit();
 
     metadata meta;

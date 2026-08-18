@@ -120,14 +120,28 @@ void ui(scene* scene, float frame_time) {
     }
 
     if (ImGui::CollapsingHeader("Scene")) {
-        ImGui::SliderInt("Max bounce", reinterpret_cast<int*>(&scene->meta.max_bounce), 5, 100);
-        ImGui::SliderInt("Min bounce", reinterpret_cast<int*>(&scene->meta.min_bounce), 1, 5);
+        int max_bounce = 0;
+        ImGui::SliderInt("Max bounce", &max_bounce, 5, 100);
+        scene->meta.max_bounce = (u8)max_bounce;
 
-        ImGui::Checkbox("DOF", reinterpret_cast<bool*>(&scene->meta.enable_dof));
-        ImGui::Checkbox("Debug BVH", reinterpret_cast<bool*>(&scene->meta.debug_bvh));
-        if (ImGui::SliderInt("Scale facotr", reinterpret_cast<int*>(&scene->meta.downscale_factor), 1, 20)) {
+        int min_bounce = 0;
+        ImGui::SliderInt("Min bounce", &min_bounce, 1, 5);
+        scene->meta.min_bounce = (u8)min_bounce;
+
+        scene->meta.features = 0U;
+        bool enable_dof = false;
+        ImGui::Checkbox("DOF", &enable_dof);
+        scene->meta.features |= enable_dof << FEATURES_BIT_INDEX::DOF;
+
+        bool enable_bvh_debug_view = false;
+        ImGui::Checkbox("Debug BVH", &enable_bvh_debug_view);
+        scene->meta.features |= enable_bvh_debug_view << FEATURES_BIT_INDEX::BVH_DEBUG_VIEW;
+
+        int downscale_factor = 0;
+        if (ImGui::SliderInt("Scale factor", &downscale_factor, 1, 20)) {
             scene->meta.sample_index = 1U;
         }
+        scene->meta.downscale_factor = (u8)downscale_factor;
     }
 
     ImGui::End();
@@ -676,7 +690,6 @@ int main() {
             }
 
             {
-                // TODO: Pack this fields
                 struct params {
                     struct metadata meta;
                     uintptr_t bvh_buffer;
