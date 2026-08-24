@@ -59,7 +59,7 @@ if %MSVC% EQU 1 (
 if %RELEASE% EQU 0 (
     set C_FLAGS=%DEBUG_C_FLAGS% %C_FLAGS%
     set L_FLAGS=%DEBUG_L_FLAGS% %L_FLAGS%
-    set SHADERS_C_FLAGS = -O0 -g %SHADERS_C_FLAGS%
+    set SHADERS_C_FLAGS=-O0 -g %SHADERS_C_FLAGS%
 ) else (
     set C_FLAGS=%RELEASE_C_FLAGS% %C_FLAGS%
     set SHADERS_C_FLAGS=-O %SHADERS_C_FLAGS%
@@ -103,6 +103,6 @@ link %L_FLAGS% /DEBUG /OUT:%BUILD_DIR%\main.exe %BUILD_DIR%\main.obj %BUILD_DIR%
 
 set shaders=ui.vert ui.frag test.comp compute.comp api-test-ui.vert api-test-ui.frag tonemapping.comp transmittance_lut.comp
 (for %%s in (%shaders%) do (
-    echo glslc.exe -o %BUILD_DIR%\shaders\%%s.spv %SHADER_FLAGS% shaders\%%s
+    echo glslc.exe -o %BUILD_DIR%\shaders\%%s.spv %SHADERS_C_FLAGS% shaders\%%s
     glslc.exe -o %BUILD_DIR%\shaders\%%s.spv %SHADERS_C_FLAGS% shaders\%%s
 ))
