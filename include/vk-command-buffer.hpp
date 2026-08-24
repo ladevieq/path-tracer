@@ -56,8 +56,6 @@ struct command_buffer {
 
     VkCommandBuffer vk_command_buffer;
     QueueType       queue_type;
-
-    // TODO: Add relevant fields in order to bind heaps
 };
 
 // General purpose queue

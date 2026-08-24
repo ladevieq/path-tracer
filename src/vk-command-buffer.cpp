@@ -8,7 +8,7 @@ void command_buffer::start() const {
         .pInheritanceInfo = nullptr
     };
 
-    VKCHECK(vkBeginCommandBuffer(vk_command_buffer, &begin_info));
+    VK_CHECK(vkBeginCommandBuffer(vk_command_buffer, &begin_info));
 
     {
         device_buffer* image_heap_buffer = vkdevice::get().get_buffer(image_heap);
@@ -21,7 +21,7 @@ void command_buffer::start() const {
             .sType               = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
             .pNext               = nullptr,
             .heapRange           = heap_range,
-            .reservedRangeOffset = 0U,
+            .reservedRangeOffset = image_heap_buffer->size - descriptor_heap_props.minResourceHeapReservedRange,
             .reservedRangeSize   = descriptor_heap_props.minResourceHeapReservedRange,
         };
 
@@ -40,7 +40,7 @@ void command_buffer::start() const {
             .sType               = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
             .pNext               = nullptr,
             .heapRange           = heap_range,
-            .reservedRangeOffset = 0U,
+            .reservedRangeOffset = sampler_heap_buffer->size - descriptor_heap_props.minSamplerHeapReservedRange,
             .reservedRangeSize   = descriptor_heap_props.minSamplerHeapReservedRange,
         };
 
@@ -49,7 +49,7 @@ void command_buffer::start() const {
 }
 
 void command_buffer::stop() const {
-    VKCHECK(vkEndCommandBuffer(vk_command_buffer));
+    VK_CHECK(vkEndCommandBuffer(vk_command_buffer));
 }
 
 void command_buffer::barrier(handle<device_texture> texture_handle, VkPipelineStageFlags2 stage, VkAccessFlags2 access, VkImageLayout layout) const {
@@ -147,10 +147,10 @@ void graphics_command_buffer::dispatch(const dispatch_params& params, const void
 }
 
 void graphics_command_buffer::begin_renderpass(const renderpass_params& params) const {
-    std::vector<VkRenderingAttachmentInfo> attachments_info(params.color_attachments_count);
+    VkRenderingAttachmentInfo* attachments_info = static_cast<VkRenderingAttachmentInfo*>(_malloca(sizeof(VkRenderingAttachmentInfo) * params.color_attachments_count));
 
-    for (auto index{ 0U }; index < params.color_attachments_count; index++) {
-        auto& attachment_info              = attachments_info[index];
+    for (u32 index = 0U; index < params.color_attachments_count; index++) {
+        VkRenderingAttachmentInfo& attachment_info  = attachments_info[index];
         device_texture* attachment         = vkdevice::get().get_texture(params.color_attachments[index]);
 
         attachment_info.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -194,8 +194,8 @@ void graphics_command_buffer::begin_renderpass(const renderpass_params& params) 
         .renderArea           = scissor,
         .layerCount           = 1U,
         .viewMask             = 0U,
-        .colorAttachmentCount = static_cast<uint32_t>(attachments_info.size()),
-        .pColorAttachments    = attachments_info.data(),
+        .colorAttachmentCount = static_cast<uint32_t>(params.color_attachments_count),
+        .pColorAttachments    = attachments_info,
         .pDepthAttachment     = nullptr,
         .pStencilAttachment   = nullptr,
     };

@@ -27,11 +27,13 @@ layout(buffer_reference) readonly buffer vertices {
 
 layout(push_constant) uniform registers {
     vertices vertex_buffer;
-    vec2 scale;
-    vec2 translate;
-    uint texture_index;
-} regs;
+    // vec2 scale;
+    // vec2 translate;
+    // uint texture_index;
+    // uint padding;
+};
 
 void main() {
-    o_Color = In.color * texture(sampler2D(textures[nonuniformEXT(regs.texture_index)], samplers[nonuniformEXT(0U)]), In.uv.xy);
+    // o_Color = In.color * texture(sampler2D(textures[nonuniformEXT(texture_index)], samplers[nonuniformEXT(0U)]), In.uv.xy);
+    o_Color = vec4(1.f, 0.f, 0.f, 1.f);
 }

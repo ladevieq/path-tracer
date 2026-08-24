@@ -27,10 +27,9 @@
 
 #include <simdjson.h>
 
-#define ENABLE_RENDERDOC 1
+#define ENABLE_RENDERDOC 0
 #if ENABLE_RENDERDOC
 #include <renderdoc_app.h>
-
 
 #define RD_START_CAPTURE if(rdoc_api != nullptr) rdoc_api->StartFrameCapture(nullptr, nullptr)
 #define RD_END_CAPTURE if(rdoc_api != nullptr) rdoc_api->EndFrameCapture(nullptr, nullptr)
@@ -254,6 +253,7 @@ int main() {
         .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        .name = "ImGui vertex buffer",
 #else
         #endif
     });
@@ -264,6 +264,7 @@ int main() {
         .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        .name = "ImGui index buffer",
 #else
 #endif
     });
@@ -457,15 +458,23 @@ int main() {
     });
 
 #if VK
-    u32 acc_storage_index = render_device.get_texture(acc_handle)->get_storage_index();
-    u32 result_storage_index = render_device.get_texture(result_handle)->get_storage_index();
+    // u32 acc_storage_index = render_device.get_texture(acc_handle)->get_storage_index();
+    // u32 result_storage_index = render_device.get_texture(result_handle)->get_storage_index();
 #endif
 
     const device_texture* ui_texture = render_device.get_texture(ui_texture_handle);
-    const device_texture* transmittance_lut = render_device.get_texture(transmittance_lut_handle);
+    // const device_texture* transmittance_lut = render_device.get_texture(transmittance_lut_handle);
     debug_texture_list.push_back(transmittance_lut_handle);
 
     io.Fonts->SetTexID(reinterpret_cast<void*>(static_cast<uintptr_t>(ui_texture->get_sampled_index())));
+
+    handle<device_sampler> default_sampler = vkdevice::get().create_sampler(sampler_desc{
+        .mag_filter          = VK_FILTER_LINEAR,
+        .min_filter          = VK_FILTER_LINEAR,
+        .address_mode_u      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .address_mode_v      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .address_mode_w      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    });
 
 
 #if VK
@@ -481,71 +490,71 @@ int main() {
     // API test code
     // =============
     RD_START_CAPTURE;
-    graphics_command_buffers[0].start();
+    // graphics_command_buffers[0].start();
 
 #if VK
-    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    graphics_command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // graphics_command_buffers[0].barrier(ui_texture_handle, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 #endif
 
-    graphics_command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
-    graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, buffer_offset);
-    graphics_command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, ui_offset);
+    // graphics_command_buffers[0].copy(staging_buffer_handle, gpu_texture_handle);
+    // graphics_command_buffers[0].copy(staging_buffer_handle, second_texture, buffer_offset);
+    // graphics_command_buffers[0].copy(staging_buffer_handle, ui_texture_handle, ui_offset);
 #if VK
-    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
-    graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    // graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
+    // graphics_command_buffers[0].barrier(second_texture, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL);
 
 
-    {
-        {
-            struct params {
-                u32 input1;
-                u32 input2;
-                u32 output;
-                u32 pad;
-            } params = {
-                .input1 = render_device.get_texture(second_texture)->get_storage_index(),
-                .input2 = render_device.get_texture(gpu_texture_handle)->get_storage_index(),
-                .output = render_device.get_texture(output_texture_handle)->get_storage_index(),
-            };
+    // {
+    //     {
+    //         struct params {
+    //             u32 input1;
+    //             u32 input2;
+    //             u32 output;
+    //             u32 pad;
+    //         } params = {
+    //             .input1 = render_device.get_texture(second_texture)->get_storage_index(),
+    //             .input2 = render_device.get_texture(gpu_texture_handle)->get_storage_index(),
+    //             .output = render_device.get_texture(output_texture_handle)->get_storage_index(),
+    //         };
 
-            graphics_command_buffers[0].dispatch({
-                .pipeline = compute,
-                .group_size = { .vec = { static_cast<u32>(image_width), static_cast<u32>(image_height), 1U }},
-                .local_group_size = { .vec = { 8U, 8U, 1U }},
-            },
-            &params, sizeof(struct params));
-        }
+    //         graphics_command_buffers[0].dispatch({
+    //             .pipeline = compute,
+    //             .group_size = { .vec = { static_cast<u32>(image_width), static_cast<u32>(image_height), 1U }},
+    //             .local_group_size = { .vec = { 8U, 8U, 1U }},
+    //         },
+    //         &params, sizeof(struct params));
+    //     }
 
-        {
-            struct params {
-                u32 lut_id;
-                u32 width;
-                u32 height;
-                u32 pad;
-            } params = {
-                .lut_id = transmittance_lut->get_storage_index(),
-                .width = transmittance_lut->width,
-                .height = transmittance_lut->height,
-            };
+    //     {
+    //         struct params {
+    //             u32 lut_id;
+    //             u32 width;
+    //             u32 height;
+    //             u32 pad;
+    //         } params = {
+    //             .lut_id = transmittance_lut->get_storage_index(),
+    //             .width = transmittance_lut->width,
+    //             .height = transmittance_lut->height,
+    //         };
 
-            graphics_command_buffers[0].dispatch({
-                .pipeline = transmittance_lut_compute,
-                .group_size = { .vec = { 1024U, 1024U, 1U }},
-                .local_group_size = { .vec { 8U, 8U, 1U }},
-            },
-            &params, sizeof(struct params));
-        }
-    }
+    //         graphics_command_buffers[0].dispatch({
+    //             .pipeline = transmittance_lut_compute,
+    //             .group_size = { .vec = { 1024U, 1024U, 1U }},
+    //             .local_group_size = { .vec { 8U, 8U, 1U }},
+    //         },
+    //         &params, sizeof(struct params));
+    //     }
+    // }
 
-    graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    // graphics_command_buffers[0].barrier(gpu_texture_handle, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 #endif
 
-    graphics_command_buffers[0].stop();
+    // graphics_command_buffers[0].stop();
 
-    render_device.submit(graphics_command_buffers.data(), 1);
-    render_device.wait();
+    // render_device.submit(graphics_command_buffers.data(), 1);
+    // render_device.wait();
 
     RD_END_CAPTURE;
 
@@ -690,53 +699,53 @@ int main() {
             }
 
             {
-                struct params {
-                    struct metadata meta;
-                    uintptr_t bvh_buffer;
-                    uintptr_t indices_buffer;
-                    uintptr_t positions_buffer;
-                    uintptr_t normals_buffer;
-                    uintptr_t uvs_buffer;
-                    uintptr_t materials_buffer;
-                    u32 output_id;
-                    u32 accumulation_id;
-                } uniforms = {
-                    .meta             = main_scene.meta,
-                    .bvh_buffer       = main_scene.bvh_buffer_address(),
-                    .indices_buffer   = main_scene.indices_buffer_address(),
-                    .positions_buffer = main_scene.positions_buffer_address(),
-                    .normals_buffer   = main_scene.normals_buffer_address(),
-                    .uvs_buffer       = main_scene.uvs_buffer_address(),
-                    .materials_buffer = main_scene.materials_buffer_address(),
-                    .output_id        = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index,
-                    .accumulation_id  = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index,
-                };
+                // struct params {
+                //     struct metadata meta;
+                //     uintptr_t bvh_buffer;
+                //     uintptr_t indices_buffer;
+                //     uintptr_t positions_buffer;
+                //     uintptr_t normals_buffer;
+                //     uintptr_t uvs_buffer;
+                //     uintptr_t materials_buffer;
+                //     u32 output_id;
+                //     u32 accumulation_id;
+                // } uniforms = {
+                //     .meta             = main_scene.meta,
+                //     .bvh_buffer       = main_scene.bvh_buffer_address(),
+                //     .indices_buffer   = main_scene.indices_buffer_address(),
+                //     .positions_buffer = main_scene.positions_buffer_address(),
+                //     .normals_buffer   = main_scene.normals_buffer_address(),
+                //     .uvs_buffer       = main_scene.uvs_buffer_address(),
+                //     .materials_buffer = main_scene.materials_buffer_address(),
+                //     .output_id        = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index,
+                //     .accumulation_id  = (virtual_frame_index == 0U) ? acc_storage_index : result_storage_index,
+                // };
 
-                command_buffer.dispatch({
-                    .pipeline = raytracing,
-                    .group_size = { .vec { window_width / main_scene.meta.downscale_factor, window_height / main_scene.meta.downscale_factor, 1U, } },
-                    .local_group_size = { .vec { 8U, 8U, 1U, } },
-                }, (const void*)&uniforms, sizeof(struct params));
+                // command_buffer.dispatch({
+                //     .pipeline = raytracing,
+                //     .group_size = { .vec { window_width / main_scene.meta.downscale_factor, window_height / main_scene.meta.downscale_factor, 1U, } },
+                //     .local_group_size = { .vec { 8U, 8U, 1U, } },
+                // }, (const void*)&uniforms, sizeof(struct params));
             }
 
-            {
-                struct params {
-                    s32 downscale_factor;
-                    u32 output_id;
-                    u32 accumulation_id;
-                } uniforms = {
-                    // TODO: Refactor backbuffer acquisition
-                    .downscale_factor = main_scene.meta.downscale_factor,
-                    .output_id = render_device.get_texture(backbuffer)->get_storage_index(),
-                    .accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index,
-                };
+            // {
+            //     struct params {
+            //         s32 downscale_factor;
+            //         u32 output_id;
+            //         u32 accumulation_id;
+            //     } uniforms = {
+            //         // TODO: Refactor backbuffer acquisition
+            //         .downscale_factor = main_scene.meta.downscale_factor,
+            //         .output_id = render_device.get_texture(backbuffer)->get_storage_index(),
+            //         .accumulation_id = (virtual_frame_index == 0U) ? result_storage_index : acc_storage_index,
+            //     };
 
-                command_buffer.dispatch({
-                    .pipeline = tonemapping,
-                    .group_size = { .vec { window_width / main_scene.meta.downscale_factor, window_height / main_scene.meta.downscale_factor, 1U, } },
-                    .local_group_size = { .vec { 8U, 8U, 1U, } },
-                }, &uniforms, sizeof(struct params));
-            }
+            //     command_buffer.dispatch({
+            //         .pipeline = tonemapping,
+            //         .group_size = { .vec { window_width / main_scene.meta.downscale_factor, window_height / main_scene.meta.downscale_factor, 1U, } },
+            //         .local_group_size = { .vec { 8U, 8U, 1U, } },
+            //     }, &uniforms, sizeof(struct params));
+            // }
         }
 
         command_buffer.barrier(backbuffer, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -758,24 +767,24 @@ int main() {
             auto* cmd_list = draw_data->CmdLists[index];
 
             for (auto& draw_command : cmd_list->CmdBuffer) {
-                ImTextureID texture_id = draw_command.TexRef.GetTexID();
+                // ImTextureID texture_id = draw_command.TexRef.GetTexID();
                 struct ui_params {
                     u64 vertex_buffer;
-                    float scale[2U];
-                    float translate[2U];
-                    uint32_t texture_index;
-                    u32 padding;
+                    // float scale[2U];
+                    // float translate[2U];
+                    // u32 texture_index;
+                    // u32 padding;
                 } ui_param = {
                     .vertex_buffer = vertex_buffer->device_address,
-                    .scale {
-                        2.f / draw_data->DisplaySize.x,
-                        2.f / draw_data->DisplaySize.y,
-                    },
-                    .translate {
-                        -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
-                        -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
-                    },
-                    .texture_index = *reinterpret_cast<uint32_t*>(&texture_id),
+                    // .scale {
+                    //     2.f / draw_data->DisplaySize.x,
+                    //     2.f / draw_data->DisplaySize.y,
+                    // },
+                    // .translate {
+                    //     -1.f - draw_data->DisplayPos.x * (2.f / draw_data->DisplaySize.x),
+                    //     -1.f - draw_data->DisplayPos.y * (2.f / draw_data->DisplaySize.y),
+                    // },
+                    // .texture_index = *reinterpret_cast<uint32_t*>(&texture_id),
                 };
 
                 command_buffer.draw_indexed({

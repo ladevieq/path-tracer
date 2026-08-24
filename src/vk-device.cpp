@@ -37,14 +37,18 @@ struct physical_device_features {
 static void create_heaps(size_t max_images, size_t max_samplers) {
     // create image heap
     {
+        u64 alignment = descriptor_heap_props.imageDescriptorAlignment < descriptor_heap_props.bufferDescriptorAlignment ?
+            descriptor_heap_props.bufferDescriptorAlignment :
+            descriptor_heap_props.imageDescriptorAlignment;
+
         image_heap = vkdevice::get().create_buffer({
-            .size = descriptor_heap_props.minResourceHeapReservedRange + max_images * descriptor_heap_props.imageDescriptorSize,
+            .size = descriptor_heap_props.minResourceHeapReservedRange + ALIGN(max_images * descriptor_heap_props.imageDescriptorSize, alignment),
             .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
                       VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
                       VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-            // .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .memory_usage = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .name = "image descriptor_heap",
         });
     }
@@ -52,13 +56,13 @@ static void create_heaps(size_t max_images, size_t max_samplers) {
     // create sampler heap
     {
         sampler_heap = vkdevice::get().create_buffer({
-            .size = descriptor_heap_props.minSamplerHeapReservedRange + max_samplers * descriptor_heap_props.samplerDescriptorSize,
+            .size = descriptor_heap_props.minSamplerHeapReservedRange + ALIGN(max_samplers * descriptor_heap_props.samplerDescriptorSize, descriptor_heap_props.samplerDescriptorAlignment),
             .usages = VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
                       VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
                       VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-            // .memory_usage = VMA_MEMORY_USAGE_GPU_ONLY,
+            .memory_usage = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .name = "sampler descriptor_heap",
         });
     }
@@ -81,7 +85,7 @@ static device_semaphore create_semaphore(const semaphore_desc& desc, const char*
         .flags = 0U,
     };
 
-    VKCHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
+    VK_CHECK(vkCreateSemaphore(device, &create_info, nullptr, &semaphore.vk_semaphore));
 
     if (name) {
         VkDebugUtilsObjectNameInfoEXT object_name{
@@ -107,7 +111,7 @@ static VkShaderModule create_shader_module(uint8_t* code, size_t code_size) {
         .pCode    = reinterpret_cast<uint32_t*>(code),
     };
 
-    VKCHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+    VK_CHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
     return shader_module;
 }
 
@@ -163,6 +167,9 @@ void vkdevice::init() {
 void vkdevice::deinit() {
     vkDeviceWaitIdle(device);
 
+    destroy_buffer(image_heap);
+    destroy_buffer(sampler_heap);
+
     vmaDestroyAllocator(gpu_allocator);
 
     for (auto& queue : queues) {
@@ -195,7 +202,7 @@ void vkdevice::wait_for_fence(u64 value) {
         .pValues        = &value,
     };
 
-    VKCHECK(vkWaitSemaphores(device, &semaphore_wait_info, UINT64_MAX));
+    VK_CHECK(vkWaitSemaphores(device, &semaphore_wait_info, UINT64_MAX));
 }
 
 handle<device_texture> vkdevice::create_texture(const texture_desc& desc) {
@@ -251,8 +258,18 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
         .pName = desc.name,
     };
 
-    VKCHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.vk_buffer, &device_buffer.alloc, &alloc_info));
-    vmaSetAllocationName(gpu_allocator, device_buffer.alloc, desc.name);
+    VK_CHECK(vmaCreateBuffer(gpu_allocator, &create_info, &alloc_create_info, &device_buffer.vk_buffer, &device_buffer.alloc, &alloc_info));
+
+    if (desc.name) {
+        VkDebugUtilsObjectNameInfoEXT object_name{
+            .sType          = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext          = nullptr,
+            .objectType     = VK_OBJECT_TYPE_BUFFER,
+            .objectHandle   = reinterpret_cast<uint64_t>(device_buffer.vk_buffer),
+            .pObjectName    = desc.name,
+        };
+        vkSetDebugUtilsObjectNameEXT(device, &object_name);
+    }
 
     if ((desc.usages & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0U) {
         VkBufferDeviceAddressInfo address_info {
@@ -408,7 +425,7 @@ handle<device_pipeline> vkdevice::create_graphics_pipeline(const graphics_pipeli
     };
 
     device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    VKCHECK(vkCreateGraphicsPipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
+    VK_CHECK(vkCreateGraphicsPipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
 
     for(auto& stage_create_info : shader_stages_create_info) {
         vkDestroyShaderModule(device, stage_create_info.module, nullptr);
@@ -459,7 +476,7 @@ handle<device_pipeline> vkdevice::create_compute_pipeline(const compute_pipeline
     };
 
     device_pipeline.bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
-    VKCHECK(vkCreateComputePipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
+    VK_CHECK(vkCreateComputePipelines(device, nullptr, 1U, &create_info, nullptr, &device_pipeline.vk_pipeline));
 
     vkDestroyShaderModule(device, stage_create_info.module, nullptr);
 
@@ -490,7 +507,7 @@ handle<device_surface> vkdevice::create_surface(const surface_desc& desc) {
             .hwnd      = desc.window_handle,
         };
 
-        VKCHECK(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &device_surface.vk_surface));
+        VK_CHECK(vkCreateWin32SurfaceKHR(instance, &create_info, nullptr, &device_surface.vk_surface));
     }
 
     create_swapchain(desc, device_surface);
@@ -589,7 +606,7 @@ uint64_t vkdevice::submit(command_buffer* cmd_buffers, uint32_t count) {
     submit_info.signalSemaphoreInfoCount = sizeof(signal_semaphore_infos) / sizeof(signal_semaphore_infos[0U]);
     submit_info.pSignalSemaphoreInfos = signal_semaphore_infos;
 
-    VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
+    VK_CHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
 
     return fence.value;
 }
@@ -598,7 +615,6 @@ uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, 
     assert((max_submitable_command_buffers - count) >= 0);
     const QueueType queue_type = cmd_buffers[0].queue_type;
 
-    // VkCommandBufferSubmitInfo command_buffers_info[count];
     VkCommandBufferSubmitInfo command_buffers_info[max_submitable_command_buffers];
 
     for (uint32_t index{ 0U }; index < count; index++) {
@@ -654,7 +670,7 @@ uint64_t vkdevice::submit_before_present(handle<device_surface> surface_handle, 
     submit_info.signalSemaphoreInfoCount = sizeof(signal_semaphore_infos) / sizeof(signal_semaphore_infos[0U]);
     submit_info.pSignalSemaphoreInfos = signal_semaphore_infos;
 
-    VKCHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
+    VK_CHECK(vkQueueSubmit2(queues[static_cast<uint32_t>(queue_type)].vk_queue, 1, &submit_info, nullptr));
 
     return fence.value;
 }
@@ -675,9 +691,9 @@ void vkdevice::present(handle<device_surface> surface_handle) {
     present_info.waitSemaphoreCount = 1U;
     present_info.pWaitSemaphores = &semaphore.vk_semaphore;
 
-    VKCHECK(vkQueuePresentKHR(queues[static_cast<uint32_t>(QueueType::GRAPHICS)].vk_queue, &present_info));
+    VK_CHECK(vkQueuePresentKHR(queues[static_cast<uint32_t>(QueueType::GRAPHICS)].vk_queue, &present_info));
 
-    VKCHECK(result);
+    VK_CHECK(result);
     surface->frame_index = (surface->frame_index + 1) % surface->image_count;
 }
 
@@ -695,7 +711,7 @@ void vkdevice::allocate_command_buffers(command_buffer* cmd_buffers, size_t coun
         .commandBufferCount = static_cast<uint32_t>(count),
     };
 
-    VKCHECK(vkAllocateCommandBuffers(device, &allocate_info, command_buffers));
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocate_info, command_buffers));
 
     for (uint32_t index{ 0U }; index < count; index++) {
         cmd_buffers[index].vk_command_buffer = command_buffers[index];
@@ -721,13 +737,13 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
 
     {
         VkBool32 supported = VK_FALSE;
-        VKCHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue.index, vk_surface, &supported));
+        VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue.index, vk_surface, &supported));
 
         assert(supported);
     }
 
     VkSurfaceCapabilitiesKHR surface_capabilities;
-    VKCHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, vk_surface, &surface_capabilities));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, vk_surface, &surface_capabilities));
 
     VkExtent2D extent = surface_capabilities.currentExtent;
     if (extent.width < surface_capabilities.minImageExtent.width) {
@@ -745,10 +761,10 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
     {
         bool supported = false;
         u32 supported_formats_count = 0U;
-        VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, nullptr));
+        VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, nullptr));
 
         VkSurfaceFormatKHR* supported_formats = static_cast<VkSurfaceFormatKHR*>(_malloca(supported_formats_count * sizeof(VkSurfaceFormatKHR)));
-        VKCHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, supported_formats));
+        VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, vk_surface, &supported_formats_count, supported_formats));
 
         for (u32 format_index = 0U; format_index < supported_formats_count; format_index++) {
             VkSurfaceFormatKHR surface_format = supported_formats[format_index];
@@ -765,10 +781,10 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
     {
         bool supported = false;
         u32 supported_present_modes_count = 0U;
-        VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, nullptr));
+        VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, nullptr));
 
         VkPresentModeKHR* supported_present_modes = static_cast<VkPresentModeKHR*>(_malloca(supported_present_modes_count * sizeof(VkPresentModeKHR)));
-        VKCHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, supported_present_modes));
+        VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, vk_surface, &supported_present_modes_count, supported_present_modes));
 
         for (u32 present_mode_index = 0U; present_mode_index < supported_present_modes_count; present_mode_index++) {
             VkPresentModeKHR present_mode = supported_present_modes[present_mode_index];
@@ -805,7 +821,7 @@ void vkdevice::create_swapchain(const surface_desc& desc, device_surface& surfac
             .oldSwapchain          = nullptr,
     };
 
-    VKCHECK(vkCreateSwapchainKHR(device, &create_info, nullptr, &surface.vk_swapchain));
+    VK_CHECK(vkCreateSwapchainKHR(device, &create_info, nullptr, &surface.vk_swapchain));
 
     surface.surface_format = desc.surface_format;
 
@@ -863,7 +879,7 @@ void vkdevice::create_instance() {
         .ppEnabledExtensionNames = instance_extensions,
     };
 
-    VKCHECK(vkCreateInstance(&create_info, nullptr, &instance));
+    VK_CHECK(vkCreateInstance(&create_info, nullptr, &instance));
 
     load_instance_functions(instance);
 }
@@ -897,6 +913,7 @@ void vkdevice::create_device() {
         },
     };
 
+    // select physical device
     {
         u32 physical_devices_count = 0U;
         vkEnumeratePhysicalDevices(instance, &physical_devices_count, nullptr);
@@ -927,6 +944,7 @@ void vkdevice::create_device() {
                 features.physical_device_13_features.dynamicRendering                             == VK_TRUE &&
                 features.physical_device_14_features.maintenance5                                 == VK_TRUE &&
                 features.descriptor_heap_features.descriptorHeap                                  == VK_TRUE &&
+                features.descriptor_heap_features.descriptorHeapCaptureReplay                     == VK_TRUE &&
                 features.shader_untyped_pointers_features.shaderUntypedPointers                   == VK_TRUE) {
 
                 physical_device = physical_dev;
@@ -987,11 +1005,11 @@ void vkdevice::create_device() {
         .pEnabledFeatures        = nullptr,
     };
 
-    VKCHECK(vkCreateDevice(physical_device, &create_info, nullptr, &device));
+    VK_CHECK(vkCreateDevice(physical_device, &create_info, nullptr, &device));
 
     load_device_functions(device);
 
-    for (auto& queue : queues) {
+    for (struct queue& queue : queues) {
         vkGetDeviceQueue(device, queue.index, 0, &queue.vk_queue);
     }
 
@@ -1006,7 +1024,7 @@ void vkdevice::create_device() {
         for (queue& queue : queues) {
             command_pool_create_info.queueFamilyIndex = queue.index;
 
-            VKCHECK(vkCreateCommandPool(device, &command_pool_create_info, nullptr, &queue.command_pool));
+            VK_CHECK(vkCreateCommandPool(device, &command_pool_create_info, nullptr, &queue.command_pool));
         }
     }
 
@@ -1025,7 +1043,7 @@ void vkdevice::create_device() {
             .vulkanApiVersion = VK_API_VERSION_1_2,
         };
 
-        VKCHECK(vmaCreateAllocator(&allocator_create_info, &gpu_allocator));
+        VK_CHECK(vmaCreateAllocator(&allocator_create_info, &gpu_allocator));
     }
 
     create_heaps(max_images_count, max_samplers_count);
@@ -1084,7 +1102,7 @@ void device_texture::init(const texture_desc& desc) {
             .pUserData      = nullptr,
         };
 
-        VKCHECK(vmaCreateImage(gpu_allocator, &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
+        VK_CHECK(vmaCreateImage(gpu_allocator, &create_info, &alloc_create_info, &vk_image, &alloc, nullptr));
         vmaSetAllocationName(gpu_allocator, alloc, desc.name);
     }
 
@@ -1124,12 +1142,12 @@ void device_texture::init(const texture_desc& desc) {
     {
         for (u32 mip_index = 0U; mip_index < mips; mip_index++) {
             image_view_create_info.subresourceRange.baseMipLevel = mip_index;
-            VKCHECK(vkCreateImageView(device, &image_view_create_info, nullptr, &mips_views[mip_index]));
+            VK_CHECK(vkCreateImageView(device, &image_view_create_info, nullptr, &mips_views[mip_index]));
         }
 
         image_view_create_info.subresourceRange.baseMipLevel = 0;
         image_view_create_info.subresourceRange.levelCount   = mips;
-        VKCHECK(vkCreateImageView(device, &image_view_create_info, nullptr, &whole_view));
+        VK_CHECK(vkCreateImageView(device, &image_view_create_info, nullptr, &whole_view));
     }
 
     // TODO: Handle mips views
@@ -1154,9 +1172,11 @@ void device_texture::init(const texture_desc& desc) {
             },
         };
 
+        static u32 strg_index = 0U;
+        strg_index++;
         storage_index = storage_indices.add();
         resources_address[descriptors_count] = {
-            .address = ((u8*)image_heap_buffer->mapped_ptr) + descriptor_heap_props.imageDescriptorSize * (storage_index.id + storage_images_offset),
+            .address = ((u8*)image_heap_buffer->mapped_ptr) + descriptor_heap_props.imageDescriptorSize * (strg_index + storage_images_offset),
             .size    = descriptor_heap_props.imageDescriptorSize,
         };
 
@@ -1172,16 +1192,18 @@ void device_texture::init(const texture_desc& desc) {
             },
         };
 
+        static u32 smpl_index = 0U;
+        smpl_index++;
         sampled_index = sampled_indices.add();
         resources_address[descriptors_count] = {
-            .address = ((u8*)image_heap_buffer->mapped_ptr) + descriptor_heap_props.imageDescriptorSize * (sampled_index.id + sampled_images_offset),
+            .address = ((u8*)image_heap_buffer->mapped_ptr) + descriptor_heap_props.imageDescriptorSize * (smpl_index + sampled_images_offset),
             .size    = descriptor_heap_props.imageDescriptorSize,
         };
 
         descriptors_count++;
     }
 
-    VKCHECK(vkWriteResourceDescriptorsEXT(device, static_cast<uint32_t>(descriptors_count), resource_descriptor_infos, resources_address));
+    VK_CHECK(vkWriteResourceDescriptorsEXT(device, static_cast<uint32_t>(descriptors_count), resource_descriptor_infos, resources_address));
 }
 
 void device_texture::release() {
@@ -1233,18 +1255,17 @@ void device_sampler::init(const sampler_desc& desc) {
         .unnormalizedCoordinates    = desc.unnomalized_coords,
     };
 
-    VKCHECK(vkCreateSampler(device, &sampler_create_info, nullptr, &vk_sampler));
+    VK_CHECK(vkCreateSampler(device, &sampler_create_info, nullptr, &vk_sampler));
 
     sampler_index = sampler_indices.add();
 
-    // TODO: Create previously immutable samplers
     device_buffer* sampler_heap_buffer = render_device.get_buffer(sampler_heap);
 
     VkHostAddressRangeEXT destination_address {
         .address = ((u8*)sampler_heap_buffer->mapped_ptr) + descriptor_heap_props.samplerDescriptorSize * sampler_index.id,
         .size    = descriptor_heap_props.samplerDescriptorSize,
     };
-    VKCHECK(vkWriteSamplerDescriptorsEXT(device, 1U, &sampler_create_info, &destination_address));
+    VK_CHECK(vkWriteSamplerDescriptorsEXT(device, 1U, &sampler_create_info, &destination_address));
 }
 
 
@@ -1261,7 +1282,7 @@ uint32_t vkdevice::acquire_image_index(handle<device_surface> surface_handle) {
         .pValues = &fence.value,
     };
     vkWaitSemaphores(device, &wait_info, UINT64_MAX);
-    VKCHECK(vkAcquireNextImageKHR(device, surface->vk_swapchain, UINT64_MAX, signal.vk_semaphore, nullptr, &surface->image_index));
+    VK_CHECK(vkAcquireNextImageKHR(device, surface->vk_swapchain, UINT64_MAX, signal.vk_semaphore, nullptr, &surface->image_index));
 
     return surface->image_index;
 }
