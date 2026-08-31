@@ -13,14 +13,13 @@ void command_buffer::start() const {
     {
         device_buffer* image_heap_buffer = vkdevice::get().get_buffer(image_heap);
 
-        VkDeviceAddressRangeEXT heap_range {
-            .address = image_heap_buffer->device_address,
-            .size = image_heap_buffer->size,
-        };
         VkBindHeapInfoEXT bind_heap_info = {
             .sType               = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
             .pNext               = nullptr,
-            .heapRange           = heap_range,
+            .heapRange           = {
+                .address             = image_heap_buffer->gpu_ptr,
+                .size                = image_heap_buffer->size,
+            },
             .reservedRangeOffset = image_heap_buffer->size - descriptor_heap_props.minResourceHeapReservedRange,
             .reservedRangeSize   = descriptor_heap_props.minResourceHeapReservedRange,
         };
@@ -31,15 +30,13 @@ void command_buffer::start() const {
     {
         device_buffer* sampler_heap_buffer = vkdevice::get().get_buffer(sampler_heap);
 
-        VkDeviceAddressRangeEXT heap_range {
-            .address = sampler_heap_buffer->device_address,
-            .size = sampler_heap_buffer->size,
-        };
-
         VkBindHeapInfoEXT sampler_bind_heap_info = {
             .sType               = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
             .pNext               = nullptr,
-            .heapRange           = heap_range,
+            .heapRange           = {
+                .address             = sampler_heap_buffer->gpu_ptr,
+                .size                = sampler_heap_buffer->size,
+            },
             .reservedRangeOffset = sampler_heap_buffer->size - descriptor_heap_props.minSamplerHeapReservedRange,
             .reservedRangeSize   = descriptor_heap_props.minSamplerHeapReservedRange,
         };

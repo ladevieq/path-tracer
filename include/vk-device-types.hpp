@@ -30,8 +30,6 @@ struct texture_desc {
 struct device_texture {
     void init(const texture_desc& desc);
 
-    void release();
-
     void                  create_views();
 
     [[nodiscard]] uint32_t get_storage_index() const {
@@ -60,7 +58,6 @@ struct device_texture {
 
     const char*           name = nullptr;
 
-    private:
     handle<void>          storage_index;
     handle<void>          sampled_index;
 
@@ -89,21 +86,6 @@ struct sampler_desc {
     VkBool32                unnomalized_coords  = VK_FALSE;
 };
 
-struct device_sampler {
-    void init(const sampler_desc& desc);
-
-    VkSampler vk_sampler = nullptr;
-
-    [[nodiscard]] uint32_t get_sampler_index() const {
-        return sampler_index.id;
-    }
-
-    private:
-    handle<void> sampler_index;
-
-    static idlist<> sampler_indices;
-};
-
 
 struct buffer_desc {
     size_t                size;
@@ -114,6 +96,7 @@ struct buffer_desc {
 };
 
 struct device_buffer {
+    // TODO: allocate function must be part of another API
     template<typename T>
     T* allocate() {
         u32 alloc_size = sizeof(T);
@@ -122,7 +105,7 @@ struct device_buffer {
         }
 
         offset = allocated_size;
-        T* addr = (T*)(static_cast<uint8_t*>(mapped_ptr) + offset);
+        T* addr = (T*)(static_cast<uint8_t*>(cpu_ptr) + offset);
         allocated_size += alloc_size;
         return addr;
     }
@@ -133,7 +116,7 @@ struct device_buffer {
         }
 
         offset = allocated_size;
-        void* addr = (void*)(static_cast<uint8_t*>(mapped_ptr) + offset);
+        void* addr = (void*)(static_cast<uint8_t*>(cpu_ptr) + offset);
         allocated_size += alloc_size;
         return addr;
     }
@@ -145,12 +128,14 @@ struct device_buffer {
 
     u64                    offset = 0U;
     u64                    allocated_size = 0U;
+    // TODO: END
+
+
     VkBuffer               vk_buffer;
     VmaAllocation          alloc;
-    VkDeviceAddress        device_address = 0U;
-    void*                  mapped_ptr;
+    VkDeviceAddress        gpu_ptr = 0U;
+    void*                  cpu_ptr = nullptr;
     size_t                 size;
-    VkBufferUsageFlagBits2 usages;
 
     const char*            name;
 };
@@ -214,6 +199,4 @@ struct device_surface {
 
     device_semaphore        acquire_semaphores[surface_desc::max_image_count];
     device_semaphore        submit_semaphores[surface_desc::max_image_count];
-
-    uint32_t                acquire_image_index();
 };

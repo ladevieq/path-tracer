@@ -26,7 +26,7 @@ class vkdevice {
 
     handle<device_texture>   create_texture(const texture_desc& desc);
 
-    handle<device_sampler>   create_sampler(const sampler_desc& desc);
+    handle<void>             create_sampler(const sampler_desc& desc);
 
     handle<device_buffer>    create_buffer(const buffer_desc& desc);
 
@@ -37,8 +37,6 @@ class vkdevice {
     handle<device_surface>   create_surface(const surface_desc& desc);
 
     void                     destroy_texture(handle<device_texture> handle);
-
-    void                     destroy_sampler(handle<device_sampler> handle);
 
     void                     destroy_buffer(handle<device_buffer> handle);
 
@@ -55,10 +53,6 @@ class vkdevice {
         return &textures[handle];
     }
 
-    [[nodiscard]] inline device_sampler* get_sampler(handle<device_sampler> handle) {
-        return &samplers[handle];
-    }
-
     [[nodiscard]] inline device_buffer* get_buffer(handle<device_buffer> handle) {
         return &buffers[handle];
     }
@@ -71,8 +65,8 @@ class vkdevice {
         return &surfaces[handle];
     }
 
-    // uint64_t submit(std::span<command_buffer> buffers, handle<device_semaphore> wait_handle, handle<device_semaphore> signal_handle, handle<device_semaphore> fence_handle);
-    uint32_t acquire_image_index(handle<device_surface> surface_handle);
+    handle<device_texture> get_swapchain_image(handle<device_surface> surface_handle);
+
     uint64_t submit_before_present(handle<device_surface> surface_handle, command_buffer* buffers, uint32_t count);
     uint64_t submit(command_buffer* buffers, uint32_t count);
 
@@ -88,8 +82,6 @@ class vkdevice {
 
     void allocate_command_buffers(command_buffer* buffers, size_t count, QueueType type, const char* name);
 
-    void create_swapchain(const surface_desc& desc, device_surface& surface);
-
     // TODO: Wrap in a struct called adapter ?
     void                        create_instance();
 
@@ -101,7 +93,6 @@ class vkdevice {
     static constexpr size_t     max_submitable_command_buffers = 16;
 
     freelist<device_texture>    textures;
-    freelist<device_sampler>    samplers;
     freelist<device_buffer>     buffers;
     freelist<device_pipeline>   pipelines;
     freelist<device_surface>    surfaces;

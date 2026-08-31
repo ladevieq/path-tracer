@@ -46,6 +46,7 @@ struct draw_indexed_params {
     uint32_t instance_count;
 };
 
+// TODO: Single struct with all possible commands and asserts on queue type ?
 struct command_buffer {
     void            start() const;
     void            stop() const;

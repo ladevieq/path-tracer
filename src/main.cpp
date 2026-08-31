@@ -244,6 +244,7 @@ int main() {
         .usages     = D3D12_RESOURCE_FLAG_NONE,
         .heap_type  = D3D12_HEAP_TYPE_UPLOAD,
 #endif
+        .name       = "staging buffer",
     });
     const device_buffer* staging_buffer = render_device.get_buffer(staging_buffer_handle);
 
@@ -297,7 +298,6 @@ int main() {
         .cs_code_size = tonemapping_code_size,
     });
 
-    std::array<VkFormat, 1U> formats { surface->surface_format.format };
     size_t vertex_code_size = 0U;
     uint8_t* vertex_code = read_file("shaders/api-test-ui.vert.spv", &vertex_code_size);
     size_t fragment_code_size = 0U;
@@ -307,8 +307,8 @@ int main() {
         .vs_code_size = vertex_code_size,
         .fs_code = fragment_code,
         .fs_code_size = fragment_code_size,
-        .color_attachments_format = formats.data(),
-        .color_attachments_format_count = formats.size()
+        .color_attachments_format = surface->surface_format.format,
+        .color_attachments_format_count = 1U
     });
 
     size_t transmittance_lut_code_size = 0U;
@@ -328,12 +328,12 @@ int main() {
     int channels;
     uint8_t* data = stbi_load("../models/sponza/466164707995436622.jpg", &image_width, &image_height, &channels, 4);
     size_t size = static_cast<size_t>(image_width) * image_height * 4U;
-    memcpy(staging_buffer->mapped_ptr, data, size);
+    memcpy(staging_buffer->cpu_ptr, data, size);
 
     off_t buffer_offset = image_width * image_height * 4;
     data = stbi_load("../models/sponza/715093869573992647.jpg", &image_width, &image_height, &channels, 4);
     size = static_cast<size_t>(image_width) * image_height * 4U;
-    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer->mapped_ptr) + buffer_offset);
+    auto* addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer->cpu_ptr) + buffer_offset);
     memcpy(addr, data, size);
 
     u8 *pixels = nullptr;
@@ -343,7 +343,7 @@ int main() {
 
     off_t ui_offset = 2L * buffer_offset;
     size = static_cast<size_t>(atlas_width) * atlas_height * 4U;
-    addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer->mapped_ptr) + ui_offset);
+    addr = static_cast<void*>(static_cast<uint8_t*>(staging_buffer->cpu_ptr) + ui_offset);
     memcpy(addr, pixels, size);
 
 
@@ -468,7 +468,7 @@ int main() {
 
     io.Fonts->SetTexID(reinterpret_cast<void*>(static_cast<uintptr_t>(ui_texture->get_sampled_index())));
 
-    handle<device_sampler> default_sampler = vkdevice::get().create_sampler(sampler_desc{
+    handle<void> default_sampler = vkdevice::get().create_sampler(sampler_desc{
         .mag_filter          = VK_FILTER_LINEAR,
         .min_filter          = VK_FILTER_LINEAR,
         .address_mode_u      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
@@ -670,18 +670,17 @@ int main() {
                 ImDrawList* cmd_list = draw_data->CmdLists[index];
 
                 size_t vertex_bytes_size = sizeof(ImDrawVert) * cmd_list->VtxBuffer.size();
-                u8* vtx_ptr = static_cast<uint8_t*>(vertex_buffer->mapped_ptr) + vertex_offset;
+                u8* vtx_ptr = static_cast<uint8_t*>(vertex_buffer->cpu_ptr) + vertex_offset;
                 memcpy(vtx_ptr, cmd_list->VtxBuffer.Data, vertex_bytes_size);
                 vertex_offset += static_cast<off_t>(vertex_bytes_size);
 
                 size_t index_bytes_size = sizeof(ImDrawIdx) * cmd_list->IdxBuffer.size();
-                memcpy(static_cast<uint8_t*>(index_buffer->mapped_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
+                memcpy(static_cast<uint8_t*>(index_buffer->cpu_ptr) + index_offset, cmd_list->IdxBuffer.Data, index_bytes_size);
                 index_offset += static_cast<off_t>(index_bytes_size);
             }
         }
 
-        // TODO: Refactor backbuffer acquisition
-        auto backbuffer = surface->swapchain_images[render_device.acquire_image_index(surface_handle)];
+        handle<device_texture> backbuffer = render_device.get_swapchain_image(surface_handle);
         color_attachment[0] = backbuffer;
 
         // RD_START_CAPTURE;
@@ -775,7 +774,7 @@ int main() {
                     // u32 texture_index;
                     // u32 padding;
                 } ui_param = {
-                    .vertex_buffer = vertex_buffer->device_address,
+                    .vertex_buffer = vertex_buffer->gpu_ptr,
                     // .scale {
                     //     2.f / draw_data->DisplaySize.x,
                     //     2.f / draw_data->DisplaySize.y,
