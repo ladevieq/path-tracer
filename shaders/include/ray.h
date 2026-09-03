@@ -1,7 +1,7 @@
 struct ray {
     vec3 origin;
-    vec3 direction;
     float min_t;
+    vec3 direction;
     float max_t;
 };
 

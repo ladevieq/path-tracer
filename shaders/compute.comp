@@ -224,7 +224,7 @@ vec3 ray_color(ray r, uint seed) {
 
         throughput *= sample_weight;
 
-        r = ray(info.point, ray_dir, 0.001f, 1e15);
+        r = ray(info.point, 0.001f, ray_dir, 1e15);
 
         // Russian Roulette
         // As the throughput gets smaller, the ray is more likely to get terminated early.
@@ -240,8 +240,8 @@ vec3 ray_color(ray r, uint seed) {
 }
 
 ray generate_camera_ray(ivec2 coords, uint seed) {
-    uint width = uint(regs.width_height & 0xff);
-    uint height = uint(regs.width_height & 0xff00);
+    uint width = uint(regs.width_height & 0xffff);
+    uint height = uint(regs.width_height & 0xffff0000);
     vec2 scene_size = vec2(width - 1, height - 1);
     vec2 uv = vec2(coords.x / scene_size.x, 1.0 - coords.y / scene_size.y);
     vec2 rand_disk = disk_vec(vec2(rand(seed), rand(seed)));
@@ -256,7 +256,7 @@ ray generate_camera_ray(ivec2 coords, uint seed) {
     vec3 offset = lens_disk.x * regs.cam.right.xyz + lens_disk.y * regs.cam.up.xyz;
     vec3 proj_plane_pos = regs.cam.first_pixel.xyz + jittered_uvs.x * regs.cam.horizontal.xyz + jittered_uvs.y * regs.cam.vertical.xyz;
 
-    return ray(regs.cam.position.xyz + offset, proj_plane_pos.xyz - regs.cam.position.xyz - offset, 0.001f, 1e15);
+    return ray(regs.cam.position.xyz + offset, 0.001f, proj_plane_pos.xyz - regs.cam.position.xyz - offset, 1e15);
 }
 
 void main() {
@@ -265,7 +265,6 @@ void main() {
 
     if (any(greaterThanEqual(gl_GlobalInvocationID.xy, uvec2(width, height))))
         return;
-    return;
 
     int downscale_factor = int(regs.max_min_feat_downscale & 0xff000000);
     ivec2 coords = ivec2(gl_GlobalInvocationID.xy) * downscale_factor;
