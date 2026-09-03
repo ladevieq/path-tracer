@@ -237,7 +237,6 @@ int main() {
 #if VK
         .usages = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 #else
         .map        = true,
         .states     = D3D12_RESOURCE_STATE_COPY_SOURCE,
@@ -251,9 +250,8 @@ int main() {
     const handle<device_buffer> vertex_buffer_handle = render_device.create_buffer({
         .size = MB * sizeof(uint32_t),
 #if VK
-        .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+        .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         .name = "ImGui vertex buffer",
 #else
         #endif
@@ -264,7 +262,6 @@ int main() {
 #if VK
         .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT,
         .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         .name = "ImGui index buffer",
 #else
 #endif
@@ -307,7 +304,7 @@ int main() {
         .vs_code_size = vertex_code_size,
         .fs_code = fragment_code,
         .fs_code_size = fragment_code_size,
-        .color_attachments_format = surface->surface_format.format,
+        .color_attachments_format = &surface->surface_format.format,
         .color_attachments_format_count = 1U
     });
 

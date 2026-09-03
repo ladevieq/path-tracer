@@ -41,8 +41,6 @@ static void create_heaps(size_t max_images, size_t max_samplers) {
             .usages = VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
                       VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .name = "image descriptor_heap",
         });
     }
@@ -54,8 +52,6 @@ static void create_heaps(size_t max_images, size_t max_samplers) {
             .usages = VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT |
                       VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             .name = "sampler descriptor_heap",
         });
     }
@@ -94,14 +90,14 @@ static device_semaphore create_semaphore(const semaphore_desc& desc, const char*
 }
 
 
-static VkShaderModule create_shader_module(uint8_t* code, size_t code_size) {
+static VkShaderModule create_shader_module(const uint8_t* code, size_t code_size) {
     VkShaderModule shader_module;
     VkShaderModuleCreateInfo create_info{
         .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .pNext    = nullptr,
         .flags    = 0U,
         .codeSize = code_size,
-        .pCode    = reinterpret_cast<uint32_t*>(code),
+        .pCode    = reinterpret_cast<const uint32_t*>(code),
     };
 
     VK_CHECK(vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
@@ -260,9 +256,9 @@ handle<device_buffer> vkdevice::create_buffer(const buffer_desc& desc) {
         .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
     };
 
+    VmaAllocationCreateFlags flags = (desc.memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ? (VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) : 0U;
     VmaAllocationCreateInfo alloc_create_info{
-        .flags          = desc.memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT ? VMA_ALLOCATION_CREATE_MAPPED_BIT : 0U,
-        .usage          = static_cast<VmaMemoryUsage>(desc.memory_usage),
+        .flags          = flags,
         .requiredFlags  = desc.memory_properties,
     };
 

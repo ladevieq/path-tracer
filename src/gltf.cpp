@@ -158,24 +158,20 @@ static void load_textures(char* path, std::vector<handle<device_texture>>& textu
     //     samplers[sampler_index] = vkrenderer::create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     // }
 
-    vkdevice& device = vkdevice::get();
-
     constexpr auto buffers_count = 2U;
     size_t buffer_size = 256U * MB;
 
     handle<device_buffer> staging_buffers_handle[buffers_count] = {
-        device.create_buffer({
+        vkdevice::get().create_buffer({
             .size = buffer_size,
-            .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .usages = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "image upload staging buffer 0",
         }),
-        device.create_buffer({
+        vkdevice::get().create_buffer({
             .size = buffer_size,
-            .usages = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .usages = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "image upload staging buffer 1",
         }),
     };

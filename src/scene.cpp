@@ -178,79 +178,67 @@ scene::scene(const camera& cam, u16 width, u16 height)
     {
         indices_buffer_handle = vkdevice::get().create_buffer({
             .size = indices.size() * sizeof(indices[0]),
-            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "indices",
         });
         const auto& indices_buffer = vkdevice::get().get_buffer(indices_buffer_handle);
-        void* ptr = indices_buffer->mapped_ptr;
-        memcpy(ptr, indices.data(), indices.size() * sizeof(indices[0]));
+        memcpy(indices_buffer->cpu_ptr, indices.data(), indices.size() * sizeof(indices[0]));
     }
 
     {
         positions_buffer_handle = vkdevice::get().create_buffer({
             .size = positions.size() * sizeof(positions[0]),
-            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "positions",
         });
         const auto& positions_buffer = vkdevice::get().get_buffer(positions_buffer_handle);
-        void* ptr = positions_buffer->mapped_ptr;
-        memcpy(ptr, positions.data(), positions.size() * sizeof(positions[0]));
+        memcpy(positions_buffer->cpu_ptr, positions.data(), positions.size() * sizeof(positions[0]));
     }
 
     {
         normals_buffer_handle = vkdevice::get().create_buffer({
             .size = normals.size() * sizeof(normals[0]),
-            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "normals",
         });
         const auto& normals_buffer = vkdevice::get().get_buffer(normals_buffer_handle);
-        void* ptr = normals_buffer->mapped_ptr;
-        memcpy(ptr, normals.data(), normals.size() * sizeof(normals[0]));
+        memcpy(normals_buffer->cpu_ptr, normals.data(), normals.size() * sizeof(normals[0]));
     }
 
     {
         uvs_buffer_handle = vkdevice::get().create_buffer({
             .size = uvs.size() * sizeof(uvs[0]),
-            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "uvs",
         });
         const auto& uvs_buffer = vkdevice::get().get_buffer(uvs_buffer_handle);
-        void* ptr = uvs_buffer->mapped_ptr;
-        memcpy(ptr, uvs.data(), uvs.size() * sizeof(uvs[0]));
+        memcpy(uvs_buffer->cpu_ptr, uvs.data(), uvs.size() * sizeof(uvs[0]));
     }
 
     {
         bvh_buffer_handle = vkdevice::get().create_buffer({
             .size = packed_nodes.size() * sizeof(packed_nodes[0]),
-            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "bvh",
         });
         const auto& bvh_buffer = vkdevice::get().get_buffer(bvh_buffer_handle);
-        void* ptr = bvh_buffer->mapped_ptr;
-        memcpy(ptr, packed_nodes.data(), packed_nodes.size() * sizeof(packed_nodes[0]));
+        memcpy(bvh_buffer->cpu_ptr, packed_nodes.data(), packed_nodes.size() * sizeof(packed_nodes[0]));
     }
 
     {
         materials_buffer_handle = vkdevice::get().create_buffer({
             .size = materials.size() * sizeof(materials[0]),
-            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT,
+            .usages = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
             .memory_properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .memory_usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
             .name = "materials",
         });
         const auto& materials_buffer = vkdevice::get().get_buffer(materials_buffer_handle);
-        void* ptr = materials_buffer->mapped_ptr;
-        memcpy(ptr, materials.data(), materials.size() * sizeof(materials[0]));
+        memcpy(materials_buffer->cpu_ptr, materials.data(), materials.size() * sizeof(materials[0]));
     }
 }
 

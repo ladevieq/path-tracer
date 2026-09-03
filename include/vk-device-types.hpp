@@ -91,7 +91,6 @@ struct buffer_desc {
     size_t                size;
     VkBufferUsageFlags    usages;
     VkMemoryPropertyFlags memory_properties;
-    uint32_t              memory_usage;
     const char*           name;
 };
 
@@ -141,14 +140,14 @@ struct device_buffer {
 };
 
 struct graphics_pipeline_desc {
-    uint8_t*            vs_code;
+    const uint8_t*      vs_code;
     size_t              vs_code_size;
-    uint8_t*            fs_code;
+    const uint8_t*      fs_code;
     size_t              fs_code_size;
-    VkFormat*           color_attachments_format;
+    const VkFormat*     color_attachments_format;
     size_t              color_attachments_format_count;
-    VkFormat            depth_attachment_format;
-    VkFormat            stencil_attachment_format;
+    const VkFormat      depth_attachment_format;
+    const VkFormat      stencil_attachment_format;
     const char*         name;
 };
 
